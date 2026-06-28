@@ -1,5 +1,77 @@
 # Dev Log
 
+## 2026-06-28 CDT - Phase 2F Workset Context Bundles
+
+### Problem Solved
+
+Given a persisted workset, produce a deterministic, compact, prompt-ready context
+bundle — without calling any AI models. The bundle helps an AI tool understand
+selected files without blindly dumping entire repositories.
+
+### Command Added
+
+`forge workset context <name>` with options:
+- `--root <path>` — override repository root
+- `--max-lines-per-file <n>` — cap excerpt lines per file (default 120)
+- `--include-full` — include full file contents instead of excerpts
+- `--json` — render as JSON (prints to stdout or saves with `--output`)
+- `--output <path>` — write bundle to explicit path
+
+Bundles are saved by default to `.forge/context/<name>-<timestamp>.md`.
+
+### Architecture Decisions
+
+- New package `forge/context/` with five focused modules:
+  - `bundle.py` — orchestrates generation; loads workset via `forge.worksets.store.load`
+  - `summarize.py` — deterministic per-language summarization (Python, Java, TS/JS, Markdown, YAML, TOML, JSON, generic)
+  - `symbols.py` — regex-based symbol extraction (classes, functions, exports)
+  - `excerpt.py` — selects relevant lines (leading lines + query-match context); honors `--max-lines-per-file` and `--include-full`
+  - `render.py` — Markdown and JSON renderers; no output decisions
+- Token estimate: `char_count // 4` (deterministic, no tokenizer dependency)
+- Binary files detected by extension; missing files reported with error field rather than crashing
+- CLI command `workset_context` in `forge/cli/app.py` is thin: resolves root, calls `generate_bundle`, calls renderer, saves or prints
+- `ForgePaths.context_dir` (already defined in Phase 2D) is the default output directory
+
+### Files Added
+
+- `forge/context/__init__.py`
+- `forge/context/bundle.py`
+- `forge/context/summarize.py`
+- `forge/context/symbols.py`
+- `forge/context/excerpt.py`
+- `forge/context/render.py`
+- `tests/test_context_bundle.py` — 26 new tests
+
+### Files Modified
+
+- `forge/cli/app.py` — added `workset context` command
+- `README.md` — updated phase description and command examples
+- `docs/development/DEVELOPMENT_LOG.md` — this entry
+
+### Tests Added
+
+- Python/Java/TypeScript symbol extraction
+- Python/Markdown/YAML/TOML/JSON/Java summarization
+- Excerpt max-lines cap, query-match inclusion, include-full, omit-marker presence
+- Bundle generation: basic, missing file, binary file, token estimate
+- Markdown rendering shape, JSON rendering shape and schema
+- CLI: markdown output, JSON output, max-lines, include-full, --output path, missing workset error
+
+### Known Limitations
+
+- Token estimate is a character-count heuristic (~4 chars/token), not a real tokenizer
+- Symbol extraction uses regex heuristics; complex multi-line signatures may be missed
+- Excerpt logic selects leading lines + query matches; does not score or rank excerpts by relevance
+- No incremental/cached bundles; every invocation re-reads all files
+
+### Next Recommended Phase
+
+**Phase 2G — Context Bundle Diff and Refresh**
+Track which files changed since the last bundle (via mtime or git status), produce
+incremental bundles, and add `forge workset context --refresh` to update an existing
+bundle file in-place. Alternatively: **Phase 2G — Planning**, where context bundles
+feed a deterministic prompt that outlines an implementation plan without executing it.
+
 ## 2026-06-28 CDT - Phase 2E Root Resolver Migration
 
 ### Problem Solved

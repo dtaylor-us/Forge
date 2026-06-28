@@ -2,8 +2,8 @@
 
 Forge is a local-first AI software engineering workbench.
 
-This repository currently implements Phase 2E: centralized root resolution on
-top of the Phase 2D project identity and metadata foundation.
+This repository currently implements Phase 2F: workset context bundles on top
+of the Phase 2E centralized root resolution foundation.
 
 ## Install
 
@@ -105,7 +105,20 @@ forge workset add model-config README.md
 forge workset remove model-config README.md
 forge workset refresh model-config
 forge workset clear model-config --yes
+
+forge workset context model-config
+forge workset context model-config --max-lines-per-file 80
+forge workset context model-config --json
+forge workset context model-config --include-full
+forge workset context model-config --output /tmp/context.md
 ```
+
+`forge workset context <name>` produces a deterministic, model-free context bundle
+for the named workset. The bundle includes per-file statistics, file summaries
+(classes, functions, imports, headings, top-level keys), detected symbols, dependency
+hints, and relevant excerpts around query matches. No AI models are called. Bundles
+are saved to `.forge/context/<name>-<timestamp>.md` and are designed to be pasted
+into AI tools or used by future Forge planning commands.
 
 `forge workset suggest "<query>"` scores and ranks repository files using filename
 terms, path segments, and content matches. Each result includes its score and the
@@ -151,7 +164,7 @@ iteration.
 Future recommendation: add `forge verify` as a single local validation command once
 verification orchestration is part of the active phase.
 
-## Phase 2E Scope
+## Phase 2F Scope
 
 Implemented:
 
@@ -178,9 +191,10 @@ Implemented:
 - `forge workset suggest` with explainable scoring under `forge.worksets`
 - `forge workset create`, `list`, `show`, `add`, `remove`, `refresh`, `clear`
 - persistent workset storage under `.forge/worksets/<name>.json`
+- `forge workset context` — deterministic context bundle generation under `forge.context`
+- context bundles saved to `.forge/context/<name>-<timestamp>.md` (or JSON with `--json`)
 
 Deferred until later phases:
-- file summarization and context compression
 - planning
 - patch generation and application
 - test orchestration

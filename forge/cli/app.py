@@ -13,6 +13,8 @@ from rich.table import Table
 from forge.commands.doctor import CheckResult, run_doctor
 from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
+from forge.context.bundle import generate_bundle, save_bundle_markdown
+from forge.context.render import render_json, render_markdown
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
 from forge.project.initializer import initialize_project
@@ -595,6 +597,64 @@ def workset_refresh(
         raise typer.Exit(code=1) from exc
     count = len(data["files"])
     console.print(f"[green]Refreshed workset[/green] [bold]{name}[/bold] — {count} file(s).")
+
+
+@workset_app.command("context")
+def workset_context(
+    name: Annotated[str, typer.Argument(help="Workset name.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    max_lines_per_file: Annotated[
+        int,
+        typer.Option("--max-lines-per-file", min=1, help="Max excerpt lines per file."),
+    ] = 120,
+    include_full: Annotated[
+        bool,
+        typer.Option("--include-full", help="Include full file contents in excerpts."),
+    ] = False,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON instead of Markdown."),
+    ] = False,
+    output_path: Annotated[
+        Path | None,
+        typer.Option("--output", help="Write bundle to this path instead of default."),
+    ] = None,
+) -> None:
+    """Generate a deterministic context bundle for a workset."""
+    resolved = resolve_root(override=root)
+    paths = ForgePaths.from_root(resolved.root)
+
+    try:
+        bundle = generate_bundle(
+            resolved.root,
+            name,
+            max_lines_per_file=max_lines_per_file,
+            include_full=include_full,
+        )
+    except Exception as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if output_json:
+        rendered = render_json(bundle)
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(rendered, encoding="utf-8")
+            console.print(f"[green]Saved JSON context bundle:[/green] {output_path}")
+        else:
+            console.print_json(rendered)
+        return
+
+    rendered_md = render_markdown(bundle)
+    ts = bundle.generated_at.replace(":", "-").replace("+", "").replace("Z", "")
+    dest = output_path or paths.context_dir / f"{name}-{ts}.md"
+    save_bundle_markdown(bundle, dest, rendered_md)
+    console.print(f"[green]Context bundle saved:[/green] {dest}")
+    n = len(bundle.files)
+    console.print(f"  Files: {n}  Chars: {bundle.total_chars:,}  Tokens: {bundle.total_tokens:,}")
 
 
 @workset_app.command("clear")
