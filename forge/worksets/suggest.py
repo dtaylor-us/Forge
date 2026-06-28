@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from forge.project.resolver import resolve_root
 from forge.repository.files import list_relevant_files
-from forge.repository.ignore import normalize_root
 from forge.worksets.candidate import WorksetCandidate, WorksetSuggestion
 from forge.worksets.scoring import (
     file_category,
@@ -48,7 +48,7 @@ def suggest_candidates(
     include_tests: bool = False,
 ) -> WorksetSuggestion:
     """Return ranked workset candidates for a query using deterministic signals only."""
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     tokens = tokenize_query(query)
 
     if not tokens:

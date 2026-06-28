@@ -217,9 +217,14 @@ def explain_project(
             help="Request timeout in seconds for this explanation.",
         ),
     ] = None,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root to explain (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """Explain the current project using explicit local project context."""
-    prompt = build_project_explanation_prompt(Path.cwd())
+    resolved = resolve_root(override=root)
+    prompt = build_project_explanation_prompt(resolved.root)
     try:
         response = _model_manager().ask(
             prompt=prompt,
@@ -236,28 +241,30 @@ def explain_project(
 @repo_app.command("tree")
 def repo_tree(
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     max_depth: Annotated[
         int,
         typer.Option("--max-depth", min=0, help="Maximum directory depth to print."),
     ] = 3,
 ) -> None:
     """Print a compact repository tree."""
-    for line in generate_tree(root, max_depth=max_depth):
+    resolved = resolve_root(override=root)
+    for line in generate_tree(resolved.root, max_depth=max_depth):
         console.print(line)
 
 
 @repo_app.command("detect")
 def repo_detect(
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """Detect repository characteristics."""
-    detection = detect_repository(root)
+    resolved = resolve_root(override=root)
+    detection = detect_repository(resolved.root)
     table = Table(title="Repository Detection")
     table.add_column("Property")
     table.add_column("Value")
@@ -279,9 +286,9 @@ def repo_detect(
 def repo_grep(
     pattern: Annotated[str, typer.Argument(help="Literal pattern to search for.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     glob_patterns: Annotated[
         list[str] | None,
         typer.Option("--glob", help="File glob to include. Can be repeated."),
@@ -292,9 +299,10 @@ def repo_grep(
     ] = 100,
 ) -> None:
     """Search repository files."""
+    resolved = resolve_root(override=root)
     matches = search_repository(
         pattern,
-        root,
+        resolved.root,
         globs=glob_patterns or [],
         max_results=max_results,
     )
@@ -310,9 +318,9 @@ def repo_grep(
 @repo_app.command("files")
 def repo_files(
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     ext: Annotated[
         str | None,
         typer.Option("--ext", help="Only include files with this extension."),
@@ -323,9 +331,10 @@ def repo_files(
     ] = 200,
 ) -> None:
     """List relevant repository files."""
+    resolved = resolve_root(override=root)
     table = Table(title="Repository Files")
     table.add_column("File")
-    for path in list_relevant_files(root, ext=ext, max_results=max_results):
+    for path in list_relevant_files(resolved.root, ext=ext, max_results=max_results):
         table.add_row(str(path))
     console.print(table)
 
@@ -334,9 +343,9 @@ def repo_files(
 def workset_suggest(
     query: Annotated[str, typer.Argument(help="Natural-language query describing the task.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     max_results: Annotated[
         int,
         typer.Option("--max-results", min=1, help="Maximum candidates to return."),
@@ -351,9 +360,10 @@ def workset_suggest(
     ] = False,
 ) -> None:
     """Suggest relevant files for a task using deterministic scoring."""
+    resolved = resolve_root(override=root)
     suggestion = suggest_candidates(
         query,
-        root,
+        resolved.root,
         max_results=max_results,
         include_tests=include_tests,
     )
@@ -411,9 +421,9 @@ def workset_create(
     name: Annotated[str, typer.Argument(help="Name for the workset.")],
     query: Annotated[str, typer.Option("--query", "-q", help="Query to populate the workset.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     max_results: Annotated[
         int,
         typer.Option("--max-results", min=1, help="Maximum candidates to store."),
@@ -428,9 +438,10 @@ def workset_create(
     ] = False,
 ) -> None:
     """Create a named workset from a deterministic query."""
+    resolved = resolve_root(override=root)
     try:
         data = create_workset(
-            root,
+            resolved.root,
             name,
             query,
             max_results=max_results,
@@ -447,12 +458,13 @@ def workset_create(
 @workset_app.command("list")
 def workset_list(
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """List existing worksets."""
-    names = list_worksets(root)
+    resolved = resolve_root(override=root)
+    names = list_worksets(resolved.root)
     if not names:
         console.print("[yellow]No worksets found.[/yellow]")
         return
@@ -464,7 +476,7 @@ def workset_list(
     table.add_column("Updated")
     for wname in names:
         try:
-            data = get_workset(root, wname)
+            data = get_workset(resolved.root, wname)
             table.add_row(
                 data["name"],
                 data.get("query", ""),
@@ -481,17 +493,18 @@ def workset_list(
 def workset_show(
     name: Annotated[str, typer.Argument(help="Workset name to show.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     output_json: Annotated[
         bool,
         typer.Option("--json", help="Output as JSON."),
     ] = False,
 ) -> None:
     """Show workset metadata and files."""
+    resolved = resolve_root(override=root)
     try:
-        data = get_workset(root, name)
+        data = get_workset(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -532,13 +545,14 @@ def workset_add(
     name: Annotated[str, typer.Argument(help="Workset name.")],
     file: Annotated[str, typer.Argument(help="File path to add (relative to root).")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """Add a file to an existing workset."""
+    resolved = resolve_root(override=root)
     try:
-        add_file(root, name, file)
+        add_file(resolved.root, name, file)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -550,13 +564,14 @@ def workset_remove(
     name: Annotated[str, typer.Argument(help="Workset name.")],
     file: Annotated[str, typer.Argument(help="File path to remove.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """Remove a file from an existing workset."""
+    resolved = resolve_root(override=root)
     try:
-        remove_file(root, name, file)
+        remove_file(resolved.root, name, file)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -567,13 +582,14 @@ def workset_remove(
 def workset_refresh(
     name: Annotated[str, typer.Argument(help="Workset name to refresh.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
 ) -> None:
     """Re-run the saved query and update the workset."""
+    resolved = resolve_root(override=root)
     try:
-        data = refresh_workset(root, name)
+        data = refresh_workset(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -585,22 +601,23 @@ def workset_refresh(
 def workset_clear(
     name: Annotated[str, typer.Argument(help="Workset name to delete.")],
     root: Annotated[
-        Path,
-        typer.Option("--root", help="Repository root to inspect."),
-    ] = Path("."),
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt."),
     ] = False,
 ) -> None:
     """Delete a workset."""
+    resolved = resolve_root(override=root)
     if not yes:
         confirmed = typer.confirm(f"Delete workset {name!r}?")
         if not confirmed:
             console.print("Aborted.")
             return
     try:
-        clear_workset(root, name)
+        clear_workset(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc

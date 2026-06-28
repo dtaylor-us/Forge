@@ -23,7 +23,7 @@ IGNORED_DIR_NAMES = frozenset(
 
 
 def normalize_root(root: Path | str | None = None) -> Path:
-    """Return an absolute repository root path."""
+    """Return an absolute path. Prefer forge.project.resolver.resolve_root() for new code."""
     return Path(root or ".").expanduser().resolve()
 
 

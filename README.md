@@ -2,8 +2,8 @@
 
 Forge is a local-first AI software engineering workbench.
 
-This repository currently implements Phase 2D: repository identity and project
-metadata on top of the Phase 2C persistent worksets foundation.
+This repository currently implements Phase 2E: centralized root resolution on
+top of the Phase 2D project identity and metadata foundation.
 
 ## Install
 
@@ -15,10 +15,23 @@ pip install -e ".[dev]"
 
 ## Commands
 
-Forge behaves like Git: it can be called from any subdirectory inside a repository
-and discovers the repository root automatically. Global configuration lives in
-`~/.forge/`. Project-specific artifacts (worksets, summaries, sessions) live in
-`<repo-root>/.forge/`. Do not store secrets in `.forge/`.
+Forge behaves like Git: call it from any subdirectory inside a repository and it
+discovers the repository root automatically by walking upward until it finds `.git`.
+Global configuration lives in `~/.forge/`. Project-specific artifacts (worksets,
+summaries, sessions) live in `<repo-root>/.forge/`. Do not store secrets in `.forge/`.
+
+Pass `--root <path>` to any command to override automatic root detection.
+If no `.git` directory is found, Forge falls back to the current working directory.
+
+```bash
+cd src/main/java
+forge repo detect           # resolves to the repository root automatically
+
+cd docs
+forge workset suggest "model config"   # searches from the repository root
+
+forge repo tree --root ~/projects/forge --max-depth 2
+```
 
 ```bash
 forge init
@@ -138,10 +151,11 @@ iteration.
 Future recommendation: add `forge verify` as a single local validation command once
 verification orchestration is part of the active phase.
 
-## Phase 2D Scope
+## Phase 2E Scope
 
 Implemented:
 
+- centralized root resolution via `forge.project.resolver.resolve_root()` used by all repo and workset commands
 - `forge init` — initialize `.forge/` project structure and `project.json`
 - `forge project root` — print the resolved repository root
 - `forge project info` — show project identity and detected metadata

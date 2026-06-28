@@ -1,5 +1,97 @@
 # Dev Log
 
+## 2026-06-28 CDT - Phase 2E Root Resolver Migration
+
+### Problem Solved
+
+- Repo and workset commands used `normalize_root()` from `forge.repository.ignore`,
+  which resolved `Path(".")` to the shell's current working directory. Running any
+  command from a nested subdirectory (e.g. `src/main/java`) operated against that
+  subdirectory rather than the repository root, causing worksets to miss root-level
+  files and `.forge/` artifacts to be created in the wrong location.
+- Phase 2E migrates all affected commands to `resolve_root()` from
+  `forge.project.resolver`, which walks upward until it finds `.git` before
+  settling on a root. `--root` overrides still work and take priority.
+
+### Commands Updated
+
+- `forge explain-project` — added `--root` option; resolves root via `resolve_root()`
+- `forge repo tree` — now walks up to `.git` when no `--root` given
+- `forge repo detect` — same
+- `forge repo grep` — same
+- `forge repo files` — same
+- `forge workset suggest` — same
+- `forge workset create` — now writes `.forge/worksets/` under repo root
+- `forge workset list` — reads from resolved repo root
+- `forge workset show` — reads from resolved repo root
+- `forge workset add` — resolves repo root before adding
+- `forge workset remove` — resolves repo root before removing
+- `forge workset refresh` — resolves repo root before refreshing
+- `forge workset clear` — resolves repo root before deleting
+
+### Architecture Decisions
+
+- All CLI command `--root` options changed from `Path` (default `Path(".")`) to
+  `Path | None` (default `None`). This lets `resolve_root(override=root)` distinguish
+  "not provided — walk up" from "explicitly provided — use as-is".
+- CLI commands resolve root first, then pass the concrete `resolved.root` path to
+  service functions. Service functions (`tree.py`, `detect.py`, etc.) continue to
+  use `normalize_root()` internally, which is a no-op on already-absolute paths.
+- `forge.worksets.suggest.suggest_candidates` and `forge.worksets.manager` now import
+  `resolve_root` directly, removing their `normalize_root` imports.
+- `normalize_root()` in `forge.repository.ignore` is preserved for backward
+  compatibility with the repository service modules; its docstring now notes that
+  `resolve_root()` should be preferred for new code.
+
+### Files Modified
+
+- `forge/cli/app.py` — all affected CLI commands
+- `forge/worksets/suggest.py` — replaced `normalize_root` with `resolve_root`
+- `forge/worksets/manager.py` — replaced `normalize_root` with `resolve_root`
+- `forge/repository/ignore.py` — deprecation note on `normalize_root`
+- `README.md` — updated phase scope, root resolution behavior, added examples
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Files Added
+
+- `tests/test_phase2e_root_migration.py` — 17 new tests
+
+### Tests Added
+
+- `forge repo detect` from nested dir resolves to repo root (README.md in important files)
+- `forge repo detect` with `--root` override
+- `forge repo detect` with no `.git` falls back to cwd without crashing
+- `forge repo tree` from nested dir shows root-level README.md
+- `forge repo tree --root` override wins over cwd
+- `forge repo grep` from nested dir finds root-level pattern
+- `forge repo grep --root` override
+- `forge repo files` from nested dir lists root-level source files
+- `forge repo files --root` override
+- `forge workset suggest` from nested dir finds root-level files
+- `forge workset suggest --root` override
+- `forge explain-project --help` shows `--root` option
+- `forge workset create` from nested dir writes `.forge/worksets/` at repo root
+- `forge workset list` from nested dir reads worksets from repo root
+- `forge workset show` from nested dir reads workset from repo root
+- `--root` override wins over unrelated cwd
+- no `.git` fallback uses cwd, does not crash
+
+### Known Limitations
+
+- `normalize_root()` in the repository service modules still exists and is not
+  removed; it is used internally with pre-resolved absolute paths and is harmless.
+- The repo service modules (`tree.py`, `detect.py`, `grep.py`, `files.py`) do not
+  themselves call `resolve_root()`. Root resolution happens at the CLI layer only.
+  Callers of these services directly (e.g. in tests) must pass an already-resolved
+  path if they want `.git`-aware behavior.
+
+### Next Recommended Phase
+
+- Phase 2F: workset context compression — given a persisted workset, produce a
+  compact context bundle (per-file summaries, relevant line ranges, symbol index)
+  stored under `<repo-root>/.forge/context/` and suitable for inclusion in a
+  focused AI prompt without exceeding context limits.
+
 ## 2026-06-28 CDT - Phase 2D Repository Identity & Project Metadata
 
 ### Problem Solved

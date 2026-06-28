@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from forge.repository.ignore import normalize_root
+from forge.project.resolver import resolve_root
 from forge.worksets import suggest_candidates
 from forge.worksets.store import (
     WorksetStoreError,
@@ -59,7 +59,7 @@ def create_workset(
 ) -> dict[str, Any]:
     """Create and persist a workset. Returns the saved data dict."""
     validate_name(name)
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
 
     if exists(root_path, name) and not force:
         raise WorksetStoreError(f"Workset {name!r} already exists. Use --force to overwrite.")
@@ -89,7 +89,7 @@ def create_workset(
 
 def add_file(root: Path | str | None, name: str, file_path: str | Path) -> dict[str, Any]:
     """Add a file to an existing workset. Returns updated data."""
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     data = load(root_path, name)
 
     rel_posix = _validate_file_in_root(root_path, Path(file_path))
@@ -120,7 +120,7 @@ def add_file(root: Path | str | None, name: str, file_path: str | Path) -> dict[
 
 def remove_file(root: Path | str | None, name: str, file_path: str | Path) -> dict[str, Any]:
     """Remove a file from an existing workset. Returns updated data."""
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     data = load(root_path, name)
 
     target = Path(file_path).as_posix()
@@ -134,7 +134,7 @@ def remove_file(root: Path | str | None, name: str, file_path: str | Path) -> di
 
 def refresh_workset(root: Path | str | None, name: str) -> dict[str, Any]:
     """Re-run the saved query and update the workset, preserving manual files."""
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     data = load(root_path, name)
 
     manual_paths = {f["path"] for f in data["files"] if f.get("manual")}
@@ -167,15 +167,15 @@ def refresh_workset(root: Path | str | None, name: str) -> dict[str, Any]:
 
 
 def get_workset(root: Path | str | None, name: str) -> dict[str, Any]:
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     return load(root_path, name)
 
 
 def list_worksets(root: Path | str | None) -> list[str]:
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     return list_names(root_path)
 
 
 def clear_workset(root: Path | str | None, name: str) -> None:
-    root_path = normalize_root(root)
+    root_path = resolve_root(override=root).root
     delete(root_path, name)
