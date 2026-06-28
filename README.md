@@ -2,8 +2,8 @@
 
 Forge is a local-first AI software engineering workbench.
 
-This repository currently implements Phase 2B: deterministic workset candidate
-selection on top of the Phase 2A repository intelligence foundation.
+This repository currently implements Phase 2D: repository identity and project
+metadata on top of the Phase 2C persistent worksets foundation.
 
 ## Install
 
@@ -15,7 +15,23 @@ pip install -e ".[dev]"
 
 ## Commands
 
+Forge behaves like Git: it can be called from any subdirectory inside a repository
+and discovers the repository root automatically. Global configuration lives in
+`~/.forge/`. Project-specific artifacts (worksets, summaries, sessions) live in
+`<repo-root>/.forge/`. Do not store secrets in `.forge/`.
+
 ```bash
+forge init
+
+forge project root
+
+forge project info
+
+forge project paths
+
+cd src/main/java
+forge project root   # still resolves to the repository root
+
 forge version
 forge doctor
 forge config show
@@ -122,10 +138,14 @@ iteration.
 Future recommendation: add `forge verify` as a single local validation command once
 verification orchestration is part of the active phase.
 
-## Phase 2B Scope
+## Phase 2D Scope
 
 Implemented:
 
+- `forge init` — initialize `.forge/` project structure and `project.json`
+- `forge project root` — print the resolved repository root
+- `forge project info` — show project identity and detected metadata
+- `forge project paths` — show all important Forge paths
 - `forge version`
 - `forge doctor`
 - `forge models`

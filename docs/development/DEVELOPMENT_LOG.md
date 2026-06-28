@@ -1,5 +1,93 @@
 # Dev Log
 
+## 2026-06-28 CDT - Phase 2D Repository Identity & Project Metadata
+
+### Problem Solved
+
+- Forge had no concept of which repository it was operating in. Commands used
+  `Path(".")` directly, making root resolution implicit and non-composable.
+  Phase 2D introduces a centralized repository root resolver, a typed path
+  object covering all significant Forge directories, and project metadata
+  persisted in `<repo-root>/.forge/project.json`. This cleanly separates global
+  config (`~/.forge/`) from project artifacts (`<repo-root>/.forge/`).
+
+### Commands Added
+
+- `forge init` — discover repository root, create `.forge/` subdirectory
+  structure (`worksets/`, `summaries/`, `context/`, `architecture/`,
+  `sessions/`, `cache/`), and write `project.json`. `--force` reinitializes
+  without losing `created_at`. `--root` overrides auto-detection.
+- `forge project root` — print the resolved repository root; supports `--root`.
+- `forge project info` — show project name, root, paths, initialized state,
+  detected languages/frameworks/build systems/package managers. Supports
+  `--json` and `--root`.
+- `forge project paths` — show all significant Forge paths (global config,
+  global dir, repo root, project dir, worksets, summaries, context,
+  architecture, sessions, cache). Supports `--json` and `--root`.
+
+### Architecture Decisions
+
+- Added `forge/project/` package with four single-responsibility modules:
+  - `resolver.py` — `ResolvedRoot` dataclass + `resolve_root()`: walks upward
+    looking for `.git`, returns `git_detected` flag, supports `--root` override.
+  - `paths.py` — `ForgePaths` dataclass computed from a resolved root; exposes
+    `to_dict()` for JSON output. `global_forge_dir()` is a top-level helper.
+  - `metadata.py` — `build_metadata()`, `load_metadata()`, `save_metadata()`;
+    schema_version=1; preserves `created_at` on force-reinit via the caller.
+  - `initializer.py` — `initialize_project()`: creates subdirs, calls
+    `detect_repository()` to populate `detected` section, delegates to
+    metadata helpers. Returns `InitResult` (paths, already_existed, forced).
+- CLI commands remain thin wrappers; all logic lives in the `forge.project`
+  package.
+- `resolve_root()` is available for future use by workset, repo, and explain
+  commands to replace ad-hoc `normalize_root()` calls.
+
+### Files Added
+
+- `forge/project/__init__.py`
+- `forge/project/resolver.py`
+- `forge/project/paths.py`
+- `forge/project/metadata.py`
+- `forge/project/initializer.py`
+- `tests/test_project_phase2d.py`
+
+### Files Modified
+
+- `forge/cli/app.py` — added `project_app` Typer group; `forge init`,
+  `forge project root/info/paths` commands
+- `README.md` — updated phase scope, added new commands and separation docs
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Tests Added
+
+- 28 new tests in `tests/test_project_phase2d.py` covering: resolve_root from
+  repo root, from nested subdirectory, no-git fallback, `--root` override with
+  and without `.git`; `ForgePaths` field values and `to_dict()` shape;
+  `build_metadata` schema; save/load round-trip; load returns None when missing;
+  initialize creates all six subdirs; creates project.json; raises on
+  already-exists without --force; force overwrites; force preserves `created_at`;
+  `already_existed` flag; CLI coverage for `forge init`, `forge init --force`,
+  `forge init` already-exists error, `forge project root`, `forge project root`
+  nested, `forge project info` uninitialized and initialized, `forge project
+  info --json` initialized and uninitialized, `forge project paths`,
+  `forge project paths --json`.
+
+### Known Limitations
+
+- Existing repo/workset commands still use `normalize_root()` from
+  `forge.repository.ignore` rather than `resolve_root()`; they do not walk
+  upward to find `.git`. Migrating them is deferred to avoid scope creep.
+- `forge init` does not automatically add `.forge/` to `.gitignore`.
+- No `forge project update` to refresh `detected` metadata without full reinit.
+
+### Next Recommended Phase
+
+- Phase 2E: workset context compression — given a persisted workset, produce a
+  compact context bundle (per-file summaries, relevant line ranges, symbol
+  index) suitable for inclusion in a focused AI prompt without exceeding context
+  limits. Now that `<repo-root>/.forge/` is reliable, context bundles can be
+  stored under `.forge/context/`.
+
 ## 2026-06-28 CDT - Phase 2C Persistent Worksets
 
 ### Problem Solved

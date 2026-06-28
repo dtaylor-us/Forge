@@ -15,6 +15,10 @@ from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
+from forge.project.initializer import initialize_project
+from forge.project.metadata import load_metadata
+from forge.project.paths import ForgePaths
+from forge.project.resolver import resolve_root
 from forge.repository import (
     detect_repository,
     generate_tree,
@@ -44,10 +48,12 @@ config_app = typer.Typer(help="Manage Forge configuration.")
 models_app = typer.Typer(help="Manage configured provider models.")
 repo_app = typer.Typer(help="Inspect the current repository deterministically.")
 workset_app = typer.Typer(help="Build and inspect worksets of relevant files.")
+project_app = typer.Typer(help="Show project identity and Forge path information.")
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
 app.add_typer(workset_app, name="workset")
+app.add_typer(project_app, name="project")
 console = Console()
 
 
@@ -599,6 +605,127 @@ def workset_clear(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
     console.print(f"[green]Deleted workset[/green] [bold]{name}[/bold].")
+
+
+@app.command("init")
+def init(
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Reinitialize even if already initialized."),
+    ] = False,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root to initialize (default: auto-detected)."),
+    ] = None,
+) -> None:
+    """Initialize Forge metadata in the current repository."""
+    resolved = resolve_root(override=root)
+    try:
+        result = initialize_project(resolved, force=force)
+    except FileExistsError as exc:
+        console.print(f"[yellow]{exc}[/yellow]")
+        raise typer.Exit(code=1) from exc
+
+    action = "Reinitialized" if result.already_existed and result.forced else "Initialized"
+    console.print(f"[green]{action} Forge project[/green] at {result.paths.project_forge_dir}")
+    console.print(f"  Repository root: {result.paths.repo_root}")
+    console.print(f"  Git detected:    {resolved.git_detected}")
+
+
+@project_app.command("root")
+def project_root(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Override the repository root."),
+    ] = None,
+) -> None:
+    """Print the resolved repository root."""
+    resolved = resolve_root(override=root)
+    console.print(str(resolved.root))
+
+
+@project_app.command("info")
+def project_info(
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Override the repository root."),
+    ] = None,
+) -> None:
+    """Show project identity and Forge metadata."""
+    resolved = resolve_root(override=root)
+    paths = ForgePaths.from_root(resolved.root)
+    meta = load_metadata(paths.project_forge_dir)
+    initialized = meta is not None
+
+    if output_json:
+        data: dict[str, object] = {
+            "initialized": initialized,
+            "git_detected": resolved.git_detected,
+            "repo_root": str(resolved.root),
+            "project_forge_dir": str(paths.project_forge_dir),
+            "project_metadata_path": str(paths.project_forge_dir / "project.json"),
+        }
+        if meta:
+            data.update(meta)
+        console.print_json(json.dumps(data))
+        return
+
+    detected = meta.get("detected", {}) if meta else {}
+    project_name = meta.get("project_name", resolved.root.name) if meta else resolved.root.name
+    console.print(f"[bold]Project:[/bold] {project_name}")
+    console.print(f"  Repository root:       {resolved.root}")
+    console.print(f"  Git detected:          {resolved.git_detected}")
+    console.print(f"  Forge project dir:     {paths.project_forge_dir}")
+    console.print(f"  Project metadata path: {paths.project_forge_dir / 'project.json'}")
+    console.print(f"  Initialized:           {initialized}")
+    if meta:
+        console.print(f"  Forge version:         {meta.get('forge_version', '-')}")
+        console.print(f"  Created:               {meta.get('created_at', '-')}")
+        console.print(f"  Updated:               {meta.get('updated_at', '-')}")
+    console.print()
+    console.print(f"  Languages:        {_join_values(detected.get('languages', []))}")
+    console.print(f"  Frameworks:       {_join_values(detected.get('frameworks', []))}")
+    console.print(f"  Build systems:    {_join_values(detected.get('build_systems', []))}")
+    console.print(f"  Package managers: {_join_values(detected.get('package_managers', []))}")
+
+
+@project_app.command("paths")
+def project_paths(
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Override the repository root."),
+    ] = None,
+) -> None:
+    """Show important Forge paths."""
+    resolved = resolve_root(override=root)
+    paths = ForgePaths.from_root(resolved.root)
+
+    if output_json:
+        console.print_json(json.dumps(paths.to_dict()))
+        return
+
+    table = Table(title="Forge Paths")
+    table.add_column("Path")
+    table.add_column("Location")
+    table.add_row("Global config", str(paths.global_config_path))
+    table.add_row("Global Forge dir", str(paths.global_forge_dir))
+    table.add_row("Repository root", str(paths.repo_root))
+    table.add_row("Project Forge dir", str(paths.project_forge_dir))
+    table.add_row("Worksets dir", str(paths.worksets_dir))
+    table.add_row("Summaries dir", str(paths.summaries_dir))
+    table.add_row("Context dir", str(paths.context_dir))
+    table.add_row("Architecture dir", str(paths.architecture_dir))
+    table.add_row("Sessions dir", str(paths.sessions_dir))
+    table.add_row("Cache dir", str(paths.cache_dir))
+    console.print(table)
 
 
 def _status(check: CheckResult) -> str:
