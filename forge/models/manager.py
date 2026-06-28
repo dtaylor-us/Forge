@@ -60,10 +60,17 @@ class ModelManager:
         self.validate_model(model)
         return self.config_manager.set_default_model(model)
 
-    def ask(self, prompt: str, model: str | None = None) -> ModelResponse:
+    def ask(
+        self,
+        prompt: str,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
+    ) -> ModelResponse:
         """Ask the configured provider with either an override or the default model."""
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ModelProviderError("Timeout must be greater than zero seconds.")
         config = self.config()
-        provider = self._provider(config)
+        provider = self._provider(config, timeout_seconds=timeout_seconds)
         requested_model = model or config.default_model
         resolved_model = self._provider_model_name(provider, requested_model)
         self._validate_model_exists(provider, resolved_model)
@@ -74,7 +81,11 @@ class ModelManager:
             model=resolved_model,
             prompt=prompt,
         ) as telemetry:
-            response = provider.ask(prompt=prompt, model=resolved_model)
+            response = provider.ask(
+                prompt=prompt,
+                model=resolved_model,
+                timeout_seconds=timeout_seconds,
+            )
             telemetry.log_success(response)
             return response
 
@@ -94,11 +105,18 @@ class ModelManager:
         suggestions = [candidate for candidate in installed if candidate.name in suggestion_names]
         raise ModelNotFoundError(requested_model=model, suggestions=suggestions)
 
-    def _provider(self, config: ForgeConfig) -> ModelProvider:
+    def _provider(
+        self,
+        config: ForgeConfig,
+        timeout_seconds: int | None = None,
+    ) -> ModelProvider:
         provider_config = config.providers.get(config.provider.value, ProviderConfig())
         endpoint = provider_config.endpoint
         if config.provider == ProviderName.OLLAMA:
-            return OllamaProvider(endpoint or "http://localhost:11434")
+            return OllamaProvider(
+                endpoint or "http://localhost:11434",
+                timeout_seconds=timeout_seconds or provider_config.timeout_seconds or 120,
+            )
         if config.provider == ProviderName.OPENAI:
             return OpenAIProvider(
                 os.getenv("OPENAI_API_KEY"),

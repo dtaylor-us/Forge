@@ -40,7 +40,12 @@ class AnthropicProvider:
             if model.get("id")
         ]
 
-    def ask(self, prompt: str, model: str) -> ModelResponse:
+    def ask(
+        self,
+        prompt: str,
+        model: str,
+        timeout_seconds: int | None = None,
+    ) -> ModelResponse:
         payload = self._request(
             "POST",
             "/messages",

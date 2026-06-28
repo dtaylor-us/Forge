@@ -17,9 +17,10 @@ class OllamaProvider:
 
     name = "ollama"
 
-    def __init__(self, host: str) -> None:
+    def __init__(self, host: str, timeout_seconds: int = 120) -> None:
         self.host = host.rstrip("/")
         self.endpoint = self.host
+        self.timeout_seconds = timeout_seconds
 
     def list_models(self) -> list[ModelInfo]:
         payload = self._request("GET", "/api/tags")
@@ -34,11 +35,17 @@ class OllamaProvider:
             if model.get("name")
         ]
 
-    def ask(self, prompt: str, model: str) -> ModelResponse:
+    def ask(
+        self,
+        prompt: str,
+        model: str,
+        timeout_seconds: int | None = None,
+    ) -> ModelResponse:
         payload = self._request(
             "POST",
             "/api/generate",
             {"model": model, "prompt": prompt, "stream": False},
+            timeout_seconds=timeout_seconds,
         )
         response = payload.get("response")
         if not isinstance(response, str):
@@ -58,7 +65,11 @@ class OllamaProvider:
         return model
 
     def _request(
-        self, method: str, path: str, body: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+        timeout_seconds: int | None = None,
     ) -> dict[str, Any]:
         parsed = urlparse(self.host)
         connection_cls = HTTPSConnection if parsed.scheme == "https" else HTTPConnection
@@ -67,12 +78,22 @@ class OllamaProvider:
         request_path = f"{parsed.path.rstrip('/')}{path}" if parsed.path else path
         encoded_body = json.dumps(body).encode("utf-8") if body is not None else None
         headers = {"Content-Type": "application/json"} if body is not None else {}
+        configured_timeout = timeout_seconds or self.timeout_seconds
 
         try:
-            connection = connection_cls(netloc, port=port, timeout=5)
+            connection = connection_cls(netloc, port=port, timeout=configured_timeout)
             connection.request(method, request_path, body=encoded_body, headers=headers)
             response = connection.getresponse()
             data = response.read().decode("utf-8")
+        except TimeoutError as exc:
+            model = body.get("model") if body else None
+            model_detail = f" for model {model}" if isinstance(model, str) else ""
+            raise ModelProviderError(
+                "Ollama request timed out"
+                f"{model_detail} at {self.host} after {configured_timeout} seconds. "
+                "Try a smaller model or increase providers.ollama.timeout_seconds "
+                "in ~/.forge/config.yaml."
+            ) from exc
         except OSError as exc:
             raise ModelProviderError(f"Unable to reach Ollama at {self.host}: {exc}") from exc
         finally:

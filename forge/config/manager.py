@@ -21,6 +21,7 @@ class ProviderConfig:
     """Configuration for one model provider."""
 
     endpoint: str | None = None
+    timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,10 @@ class ForgeConfig:
     default_model: str = "llama3.1:8b"
     providers: dict[str, ProviderConfig] = field(
         default_factory=lambda: {
-            ProviderName.OLLAMA.value: ProviderConfig(endpoint="http://localhost:11434")
+            ProviderName.OLLAMA.value: ProviderConfig(
+                endpoint="http://localhost:11434",
+                timeout_seconds=120,
+            )
         }
     )
 
@@ -91,7 +95,7 @@ class ConfigManager:
 
 def _default_provider_config(provider: ProviderName) -> ProviderConfig:
     if provider == ProviderName.OLLAMA:
-        return ProviderConfig(endpoint="http://localhost:11434")
+        return ProviderConfig(endpoint="http://localhost:11434", timeout_seconds=120)
     if provider == ProviderName.OPENAI:
         return ProviderConfig(endpoint="https://api.openai.com/v1")
     if provider == ProviderName.ANTHROPIC:
@@ -101,14 +105,25 @@ def _default_provider_config(provider: ProviderName) -> ProviderConfig:
 
 def _provider_configs(value: object) -> dict[str, ProviderConfig]:
     if not isinstance(value, dict):
-        return {ProviderName.OLLAMA.value: ProviderConfig(endpoint="http://localhost:11434")}
+        return {
+            ProviderName.OLLAMA.value: ProviderConfig(
+                endpoint="http://localhost:11434",
+                timeout_seconds=120,
+            )
+        }
     providers: dict[str, ProviderConfig] = {}
     for name, raw_config in value.items():
         if not isinstance(raw_config, dict):
             providers[str(name)] = ProviderConfig()
             continue
         endpoint = raw_config.get("endpoint")
-        providers[str(name)] = ProviderConfig(endpoint=str(endpoint) if endpoint else None)
+        timeout_seconds = _optional_positive_int(raw_config.get("timeout_seconds"))
+        if str(name) == ProviderName.OLLAMA.value and timeout_seconds is None:
+            timeout_seconds = 120
+        providers[str(name)] = ProviderConfig(
+            endpoint=str(endpoint) if endpoint else None,
+            timeout_seconds=timeout_seconds,
+        )
     return providers
 
 
@@ -122,7 +137,21 @@ def _render_config(config: ForgeConfig) -> str:
         lines.append(f"  {name}:")
         if provider.endpoint:
             lines.append(f"    endpoint: {provider.endpoint}")
+        if provider.timeout_seconds is not None:
+            lines.append(f"    timeout_seconds: {provider.timeout_seconds}")
     return "\n".join(lines) + "\n"
+
+
+def _optional_positive_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(str(value))
+    except ValueError:
+        return None
+    if parsed <= 0:
+        return None
+    return parsed
 
 
 def _parse_simple_yaml(content: str) -> dict[str, Any]:

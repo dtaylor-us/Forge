@@ -17,6 +17,7 @@ class FakeProvider:
 
     def __init__(self) -> None:
         self.asked_with: tuple[str, str] | None = None
+        self.timeout_seconds: int | None = None
 
     def list_models(self) -> list[ModelInfo]:
         return [
@@ -25,8 +26,14 @@ class FakeProvider:
             ModelInfo(name="llama3.1:8b", provider=self.name),
         ]
 
-    def ask(self, prompt: str, model: str) -> ModelResponse:
+    def ask(
+        self,
+        prompt: str,
+        model: str,
+        timeout_seconds: int | None = None,
+    ) -> ModelResponse:
         self.asked_with = (prompt, model)
+        self.timeout_seconds = timeout_seconds
         return ModelResponse(content="hello", model=model, provider=self.name)
 
     def normalize_model_name(self, model: str) -> str:
@@ -34,8 +41,23 @@ class FakeProvider:
 
 
 class FailingProvider(FakeProvider):
-    def ask(self, prompt: str, model: str) -> ModelResponse:
+    def ask(
+        self,
+        prompt: str,
+        model: str,
+        timeout_seconds: int | None = None,
+    ) -> ModelResponse:
         raise ModelProviderError("boom")
+
+
+class MissingDefaultProvider(FakeProvider):
+    def list_models(self) -> list[ModelInfo]:
+        return [ModelInfo(name="qwen2.5-coder:14b", provider=self.name)]
+
+
+class TaggedOnlyProvider(FakeProvider):
+    def list_models(self) -> list[ModelInfo]:
+        return [ModelInfo(name="llama3.1:8b", provider=self.name)]
 
 
 class FakeLogger:
@@ -65,7 +87,7 @@ def test_ask_uses_configured_default_model(tmp_path, monkeypatch) -> None:
     )
     provider = FakeProvider()
     manager = ModelManager(ConfigManager(config_path))
-    monkeypatch.setattr(manager, "_provider", lambda config: provider)
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
 
     response = manager.ask("Hello")
 
@@ -76,7 +98,7 @@ def test_ask_uses_configured_default_model(tmp_path, monkeypatch) -> None:
 def test_ask_model_override_wins_over_default(tmp_path, monkeypatch) -> None:
     provider = FakeProvider()
     manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
-    monkeypatch.setattr(manager, "_provider", lambda config: provider)
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
 
     response = manager.ask("Hello", model="qwen2.5-coder:32b")
 
@@ -84,10 +106,51 @@ def test_ask_model_override_wins_over_default(tmp_path, monkeypatch) -> None:
     assert provider.asked_with == ("Hello", "qwen2.5-coder:32b")
 
 
+def test_ask_forwards_timeout_override(tmp_path, monkeypatch) -> None:
+    provider = FakeProvider()
+    manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
+
+    manager.ask("Hello", model="qwen2.5-coder:14b", timeout_seconds=240)
+
+    assert provider.timeout_seconds == 240
+
+
+def test_ask_does_not_use_nonexistent_default_model(tmp_path, monkeypatch) -> None:
+    provider = MissingDefaultProvider()
+    manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
+
+    with pytest.raises(ModelNotFoundError) as exc_info:
+        manager.ask("Hello")
+
+    assert exc_info.value.requested_model == "llama3.1:8b"
+    assert provider.asked_with is None
+
+
+def test_untagged_model_name_is_not_silently_resolved_to_tagged_model(
+    tmp_path, monkeypatch
+) -> None:
+    provider = TaggedOnlyProvider()
+    manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
+
+    with pytest.raises(ModelNotFoundError) as exc_info:
+        manager.ask("Hello", model="llama3.1")
+
+    assert exc_info.value.requested_model == "llama3.1"
+    assert [model.name for model in exc_info.value.suggestions] == ["llama3.1:8b"]
+    assert provider.asked_with is None
+
+
 def test_use_model_validates_and_persists(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "config.yaml"
     manager = ModelManager(ConfigManager(config_path))
-    monkeypatch.setattr(manager, "_provider", lambda config: FakeProvider())
+    monkeypatch.setattr(
+        manager,
+        "_provider",
+        lambda config, timeout_seconds=None: FakeProvider(),
+    )
 
     manager.use_model("qwen2.5-coder:14b")
 
@@ -96,7 +159,11 @@ def test_use_model_validates_and_persists(tmp_path, monkeypatch) -> None:
 
 def test_validate_model_reports_close_matches(tmp_path, monkeypatch) -> None:
     manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
-    monkeypatch.setattr(manager, "_provider", lambda config: FakeProvider())
+    monkeypatch.setattr(
+        manager,
+        "_provider",
+        lambda config, timeout_seconds=None: FakeProvider(),
+    )
 
     with pytest.raises(ModelNotFoundError) as exc_info:
         manager.validate_model("qwen2.5-coder:13b")
@@ -109,7 +176,7 @@ def test_ask_logs_metrics_without_prompt_or_response(tmp_path, monkeypatch) -> N
     logger = FakeLogger()
     provider = FakeProvider()
     manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
-    monkeypatch.setattr(manager, "_provider", lambda config: provider)
+    monkeypatch.setattr(manager, "_provider", lambda config, timeout_seconds=None: provider)
     monkeypatch.setattr(manager_module, "logger", logger)
 
     manager.ask("sensitive prompt", model="qwen2.5-coder:14b")

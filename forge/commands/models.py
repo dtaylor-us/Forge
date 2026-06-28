@@ -12,7 +12,14 @@ def list_models(manager: ModelManager | None = None) -> list[ModelInfo]:
 
 
 def ask_model(
-    prompt: str, model: str | None = None, manager: ModelManager | None = None
+    prompt: str,
+    model: str | None = None,
+    timeout_seconds: int | None = None,
+    manager: ModelManager | None = None,
 ) -> ModelResponse:
     """Send a prompt to the configured model provider."""
-    return (manager or ModelManager()).ask(prompt=prompt, model=model)
+    return (manager or ModelManager()).ask(
+        prompt=prompt,
+        model=model,
+        timeout_seconds=timeout_seconds,
+    )
