@@ -67,6 +67,15 @@ forge workset suggest "model manager config"
 forge workset suggest "Spring controller service repository" --max-results 15
 forge workset suggest "timeout regression tests" --include-tests
 forge workset suggest "model config" --json
+
+forge workset create model-config --query "model manager config"
+forge workset list
+forge workset show model-config
+forge workset show model-config --json
+forge workset add model-config README.md
+forge workset remove model-config README.md
+forge workset refresh model-config
+forge workset clear model-config --yes
 ```
 
 `forge workset suggest "<query>"` scores and ranks repository files using filename
@@ -133,10 +142,10 @@ Implemented:
 - `forge repo files`
 - deterministic repository inspection services under `forge.repository`
 - `forge workset suggest` with explainable scoring under `forge.worksets`
+- `forge workset create`, `list`, `show`, `add`, `remove`, `refresh`, `clear`
+- persistent workset storage under `.forge/worksets/<name>.json`
 
 Deferred until later phases:
-
-- persistent workset storage
 - file summarization and context compression
 - planning
 - patch generation and application

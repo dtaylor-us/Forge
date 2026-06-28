@@ -24,6 +24,16 @@ from forge.repository import (
 from forge.utils.logging import configure_logging
 from forge.version import __version__
 from forge.worksets import suggest_candidates
+from forge.worksets.manager import (
+    add_file,
+    clear_workset,
+    create_workset,
+    get_workset,
+    list_worksets,
+    refresh_workset,
+    remove_file,
+)
+from forge.worksets.store import WorksetStoreError
 
 app = typer.Typer(
     name="forge",
@@ -388,6 +398,207 @@ def workset_suggest(
         )
 
     console.print(table)
+
+
+@workset_app.command("create")
+def workset_create(
+    name: Annotated[str, typer.Argument(help="Name for the workset.")],
+    query: Annotated[str, typer.Option("--query", "-q", help="Query to populate the workset.")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+    max_results: Annotated[
+        int,
+        typer.Option("--max-results", min=1, help="Maximum candidates to store."),
+    ] = 20,
+    include_tests: Annotated[
+        bool,
+        typer.Option("--include-tests", help="Include test files in candidates."),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite if workset already exists."),
+    ] = False,
+) -> None:
+    """Create a named workset from a deterministic query."""
+    try:
+        data = create_workset(
+            root,
+            name,
+            query,
+            max_results=max_results,
+            include_tests=include_tests,
+            force=force,
+        )
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    count = len(data["files"])
+    console.print(f"[green]Created workset[/green] [bold]{name}[/bold] with {count} file(s).")
+
+
+@workset_app.command("list")
+def workset_list(
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+) -> None:
+    """List existing worksets."""
+    names = list_worksets(root)
+    if not names:
+        console.print("[yellow]No worksets found.[/yellow]")
+        return
+    table = Table(title="Worksets")
+    table.add_column("Name")
+    table.add_column("Query")
+    table.add_column("Files", justify="right")
+    table.add_column("Created")
+    table.add_column("Updated")
+    for wname in names:
+        try:
+            data = get_workset(root, wname)
+            table.add_row(
+                data["name"],
+                data.get("query", ""),
+                str(len(data.get("files", []))),
+                data.get("created_at", ""),
+                data.get("updated_at", ""),
+            )
+        except WorksetStoreError:
+            table.add_row(wname, "[red]unreadable[/red]", "-", "-", "-")
+    console.print(table)
+
+
+@workset_app.command("show")
+def workset_show(
+    name: Annotated[str, typer.Argument(help="Workset name to show.")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+) -> None:
+    """Show workset metadata and files."""
+    try:
+        data = get_workset(root, name)
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if output_json:
+        console.print_json(json.dumps(data))
+        return
+
+    console.print(f"[bold]Workset:[/bold] {data['name']}")
+    console.print(f"  Query:   {data.get('query', '')}")
+    console.print(f"  Root:    {data.get('root', '')}")
+    console.print(f"  Created: {data.get('created_at', '')}")
+    console.print(f"  Updated: {data.get('updated_at', '')}")
+    console.print()
+
+    table = Table(title=f"Files ({len(data.get('files', []))})")
+    table.add_column("File")
+    table.add_column("Score", justify="right")
+    table.add_column("Category")
+    table.add_column("Manual")
+    table.add_column("Reasons")
+    for f in data.get("files", []):
+        reasons = "; ".join(
+            f"{r['signal']}:{r['detail']} (+{r['points']})" for r in f.get("reasons", [])
+        )
+        table.add_row(
+            f["path"],
+            str(f.get("score", 0)),
+            f.get("category", ""),
+            "yes" if f.get("manual") else "no",
+            reasons,
+        )
+    console.print(table)
+
+
+@workset_app.command("add")
+def workset_add(
+    name: Annotated[str, typer.Argument(help="Workset name.")],
+    file: Annotated[str, typer.Argument(help="File path to add (relative to root).")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+) -> None:
+    """Add a file to an existing workset."""
+    try:
+        add_file(root, name, file)
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Added[/green] {file} to workset [bold]{name}[/bold].")
+
+
+@workset_app.command("remove")
+def workset_remove(
+    name: Annotated[str, typer.Argument(help="Workset name.")],
+    file: Annotated[str, typer.Argument(help="File path to remove.")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+) -> None:
+    """Remove a file from an existing workset."""
+    try:
+        remove_file(root, name, file)
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Removed[/green] {file} from workset [bold]{name}[/bold].")
+
+
+@workset_app.command("refresh")
+def workset_refresh(
+    name: Annotated[str, typer.Argument(help="Workset name to refresh.")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+) -> None:
+    """Re-run the saved query and update the workset."""
+    try:
+        data = refresh_workset(root, name)
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    count = len(data["files"])
+    console.print(f"[green]Refreshed workset[/green] [bold]{name}[/bold] — {count} file(s).")
+
+
+@workset_app.command("clear")
+def workset_clear(
+    name: Annotated[str, typer.Argument(help="Workset name to delete.")],
+    root: Annotated[
+        Path,
+        typer.Option("--root", help="Repository root to inspect."),
+    ] = Path("."),
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompt."),
+    ] = False,
+) -> None:
+    """Delete a workset."""
+    if not yes:
+        confirmed = typer.confirm(f"Delete workset {name!r}?")
+        if not confirmed:
+            console.print("Aborted.")
+            return
+    try:
+        clear_workset(root, name)
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Deleted workset[/green] [bold]{name}[/bold].")
 
 
 def _status(check: CheckResult) -> str:

@@ -1,5 +1,85 @@
 # Dev Log
 
+## 2026-06-28 CDT - Phase 2C Persistent Worksets
+
+### Problem Solved
+
+- Engineers need to save, revisit, and evolve focused file sets across sessions.
+  Phase 2C adds durable named worksets stored as versioned JSON files under
+  `.forge/worksets/` in the repository root. Worksets are project-specific,
+  inspectable, and fully model-independent.
+
+### Commands Added
+
+- `forge workset create <name> --query "<query>"` — run the suggestion engine and
+  persist the result as a named workset; `--force` overwrites an existing workset.
+- `forge workset list` — list all worksets with name, query, file count, and timestamps.
+- `forge workset show <name>` — display workset metadata and file table; `--json`
+  returns the raw JSON document.
+- `forge workset add <name> <file>` — add a file manually; validates existence and
+  root membership; marks the entry `manual: true`.
+- `forge workset remove <name> <file>` — remove a file from the workset.
+- `forge workset refresh <name>` — re-run the saved query and update scores;
+  preserves manually added files that still exist on disk; manually-flagged files
+  that were also re-suggested retain their `manual: true` flag.
+- `forge workset clear <name>` — delete a workset after confirmation; `--yes` skips
+  the prompt.
+
+### Architecture Decisions
+
+- Added `forge/worksets/store.py`: name validation, path resolution
+  (`.forge/worksets/<name>.json`), JSON read/write, list, and delete. No logic above
+  persistence here.
+- Added `forge/worksets/manager.py`: higher-level operations (create, add, remove,
+  refresh, clear, get, list) that call `suggest_candidates` and delegate persistence
+  to `store`. CLI commands remain thin wrappers.
+- Workset JSON uses `schema_version: 1`. Each file entry carries `path` (relative
+  POSIX), `score`, `category`, `reasons` (with `signal`, `detail`, `points`), and a
+  `manual` boolean.
+- `CandidateReason.label` (format `"signal:detail"`) is split on the first `:` when
+  serializing to the JSON reasons shape, matching the spec without modifying the
+  existing candidate data models.
+- Files outside the workset root are rejected at add time via `Path.is_relative_to`.
+- Manually added files that happen to be re-suggested during refresh retain
+  `manual: true` so they survive future refreshes regardless of query drift.
+
+### Files Added
+
+- `forge/worksets/store.py`
+- `forge/worksets/manager.py`
+- `tests/test_workset_persist.py`
+
+### Files Modified
+
+- `forge/cli/app.py` — added `workset create/list/show/add/remove/refresh/clear`
+- `README.md` — updated commands and phase scope
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Tests Added
+
+- 40 new tests in `tests/test_workset_persist.py` covering: name validation (valid,
+  empty, slash, backslash, dotdot, space), store path resolution, create/load,
+  JSON shape/schema version, duplicate create rejection, force overwrite, exists,
+  list_names, add_file (new file, already-present file, duplicate prevention, outside
+  root, missing file), remove_file (present, not-present noop), clear (success,
+  missing), refresh (basic, preserves manual, drops missing manual), relative POSIX
+  normalization, list_worksets, and all eight CLI commands.
+
+### Known Limitations
+
+- Workset files are not tracked by `.gitignore` automatically; teams should decide
+  whether to commit `.forge/worksets/` to version control.
+- `forge workset add` marks already-suggested files as `manual: true`, which means
+  they survive refresh even if the query no longer matches them.
+- No merge strategy when `--force` recreates a workset that had manual additions.
+- Content scanning during refresh reads entire files (inherited from Phase 2B).
+
+### Next Recommended Phase
+
+- Phase 2D: workset context compression — given a persisted workset, produce a
+  compact context bundle (per-file summaries, relevant line ranges, symbol index)
+  suitable for inclusion in a focused AI prompt without exceeding context limits.
+
 ## 2026-06-28 CDT - Phase 2B Workset Candidate Selection
 
 ### Problem Solved
