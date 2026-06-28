@@ -8,7 +8,7 @@ from pathlib import Path
 _GLOBAL_DIR_NAME = ".forge"
 _PROJECT_DIR_NAME = ".forge"
 
-_SUBDIRS = ("worksets", "summaries", "context", "architecture", "sessions", "cache")
+_SUBDIRS = ("worksets", "summaries", "context", "architecture", "sessions", "cache", "plans")
 
 
 def global_forge_dir() -> Path:
@@ -30,6 +30,7 @@ class ForgePaths:
     architecture_dir: Path
     sessions_dir: Path
     cache_dir: Path
+    plans_dir: Path
 
     @classmethod
     def from_root(cls, root: Path) -> ForgePaths:
@@ -46,6 +47,7 @@ class ForgePaths:
             architecture_dir=p / "architecture",
             sessions_dir=p / "sessions",
             cache_dir=p / "cache",
+            plans_dir=p / "plans",
         )
 
     def to_dict(self) -> dict[str, str]:
@@ -60,4 +62,5 @@ class ForgePaths:
             "architecture_dir": str(self.architecture_dir),
             "sessions_dir": str(self.sessions_dir),
             "cache_dir": str(self.cache_dir),
+            "plans_dir": str(self.plans_dir),
         }

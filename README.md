@@ -2,8 +2,8 @@
 
 Forge is a local-first AI software engineering workbench.
 
-This repository currently implements Phase 2F: workset context bundles on top
-of the Phase 2E centralized root resolution foundation.
+This repository currently implements Phase 2G: workset-based implementation planning on top
+of the Phase 2F context bundle foundation.
 
 ## Install
 
@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 Forge behaves like Git: call it from any subdirectory inside a repository and it
 discovers the repository root automatically by walking upward until it finds `.git`.
 Global configuration lives in `~/.forge/`. Project-specific artifacts (worksets,
-summaries, sessions) live in `<repo-root>/.forge/`. Do not store secrets in `.forge/`.
+summaries, sessions, plans) live in `<repo-root>/.forge/`. Do not store secrets in `.forge/`.
 
 Pass `--root <path>` to any command to override automatic root detection.
 If no `.git` directory is found, Forge falls back to the current working directory.
@@ -133,6 +133,45 @@ and `forge repo files` all skip common generated/vendor directories such as `.gi
 Use `--root <path>` with any repo command to inspect a directory other than the
 current working directory.
 
+### Planning Workflow
+
+The recommended workflow for implementation planning:
+
+```bash
+# 1. Suggest relevant files for your task
+forge workset suggest "model manager config"
+
+# 2. Create a persistent workset
+forge workset create model-config --query "model manager config" --max-results 10
+
+# 3. Inspect the context bundle (optional, model-free)
+forge workset context model-config
+
+# 4. Generate an implementation plan
+forge plan "Improve model-not-found diagnostics" --workset model-config
+
+# 5. Save the plan to .forge/plans/
+forge plan "Improve model-not-found diagnostics" --workset model-config --save
+```
+
+`forge plan` options:
+
+```bash
+forge plan "<task>" --workset <name>
+forge plan "<task>" --workset <name> --model qwen2.5-coder:14b
+forge plan "<task>" --workset <name> --timeout 300
+forge plan "<task>" --workset <name> --max-lines-per-file 80
+forge plan "<task>" --workset <name> --include-full
+forge plan "<task>" --workset <name> --save
+forge plan "<task>" --workset <name> --json
+```
+
+`forge plan` calls the configured AI model. The model is instructed to produce a
+structured Markdown plan and is explicitly told not to generate code patches or claim
+files were modified. Plans are advisory and require human review before acting on them.
+
+Saved plans are stored under `.forge/plans/<workset>-<timestamp>.md`.
+
 OpenAI and Anthropic still use the same provider interface and read API keys from the
 environment:
 
@@ -164,7 +203,7 @@ iteration.
 Future recommendation: add `forge verify` as a single local validation command once
 verification orchestration is part of the active phase.
 
-## Phase 2F Scope
+## Phase 2G Scope
 
 Implemented:
 
@@ -172,7 +211,7 @@ Implemented:
 - `forge init` — initialize `.forge/` project structure and `project.json`
 - `forge project root` — print the resolved repository root
 - `forge project info` — show project identity and detected metadata
-- `forge project paths` — show all important Forge paths
+- `forge project paths` — show all important Forge paths (now includes `plans_dir`)
 - `forge version`
 - `forge doctor`
 - `forge models`
@@ -193,9 +232,9 @@ Implemented:
 - persistent workset storage under `.forge/worksets/<name>.json`
 - `forge workset context` — deterministic context bundle generation under `forge.context`
 - context bundles saved to `.forge/context/<name>-<timestamp>.md` (or JSON with `--json`)
+- `forge plan "<task>" --workset <name>` — workset-based implementation planning under `forge.planning`
+- plans saved to `.forge/plans/<workset>-<timestamp>.md` with `--save`
 
 Deferred until later phases:
-- planning
 - patch generation and application
 - test orchestration
-- Git and PR automation

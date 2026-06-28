@@ -2,76 +2,7 @@
 
 ## 2026-06-28 CDT - Phase 2F Workset Context Bundles
 
-### Problem Solved
-
-Given a persisted workset, produce a deterministic, compact, prompt-ready context
-bundle — without calling any AI models. The bundle helps an AI tool understand
-selected files without blindly dumping entire repositories.
-
-### Command Added
-
-`forge workset context <name>` with options:
-- `--root <path>` — override repository root
-- `--max-lines-per-file <n>` — cap excerpt lines per file (default 120)
-- `--include-full` — include full file contents instead of excerpts
-- `--json` — render as JSON (prints to stdout or saves with `--output`)
-- `--output <path>` — write bundle to explicit path
-
-Bundles are saved by default to `.forge/context/<name>-<timestamp>.md`.
-
-### Architecture Decisions
-
-- New package `forge/context/` with five focused modules:
-  - `bundle.py` — orchestrates generation; loads workset via `forge.worksets.store.load`
-  - `summarize.py` — deterministic per-language summarization (Python, Java, TS/JS, Markdown, YAML, TOML, JSON, generic)
-  - `symbols.py` — regex-based symbol extraction (classes, functions, exports)
-  - `excerpt.py` — selects relevant lines (leading lines + query-match context); honors `--max-lines-per-file` and `--include-full`
-  - `render.py` — Markdown and JSON renderers; no output decisions
-- Token estimate: `char_count // 4` (deterministic, no tokenizer dependency)
-- Binary files detected by extension; missing files reported with error field rather than crashing
-- CLI command `workset_context` in `forge/cli/app.py` is thin: resolves root, calls `generate_bundle`, calls renderer, saves or prints
-- `ForgePaths.context_dir` (already defined in Phase 2D) is the default output directory
-
-### Files Added
-
-- `forge/context/__init__.py`
-- `forge/context/bundle.py`
-- `forge/context/summarize.py`
-- `forge/context/symbols.py`
-- `forge/context/excerpt.py`
-- `forge/context/render.py`
-- `tests/test_context_bundle.py` — 26 new tests
-
-### Files Modified
-
-- `forge/cli/app.py` — added `workset context` command
-- `README.md` — updated phase description and command examples
-- `docs/development/DEVELOPMENT_LOG.md` — this entry
-
-### Tests Added
-
-- Python/Java/TypeScript symbol extraction
-- Python/Markdown/YAML/TOML/JSON/Java summarization
-- Excerpt max-lines cap, query-match inclusion, include-full, omit-marker presence
-- Bundle generation: basic, missing file, binary file, token estimate
-- Markdown rendering shape, JSON rendering shape and schema
-- CLI: markdown output, JSON output, max-lines, include-full, --output path, missing workset error
-
-### Known Limitations
-
-- Token estimate is a character-count heuristic (~4 chars/token), not a real tokenizer
-- Symbol extraction uses regex heuristics; complex multi-line signatures may be missed
-- Excerpt logic selects leading lines + query matches; does not score or rank excerpts by relevance
-- No incremental/cached bundles; every invocation re-reads all files
-
-### Next Recommended Phase
-
-**Phase 2G — Context Bundle Diff and Refresh**
-Track which files changed since the last bundle (via mtime or git status), produce
-incremental bundles, and add `forge workset context --refresh` to update an existing
-bundle file in-place. Alternatively: **Phase 2G — Planning**, where context bundles
-feed a deterministic prompt that outlines an implementation plan without executing it.
-
+# 
 ## 2026-06-28 CDT - Phase 2E Root Resolver Migration
 
 ### Problem Solved
@@ -617,3 +548,95 @@ feed a deterministic prompt that outlines an implementation plan without executi
 ### Verification
 
 - Added regression tests for timeout config parsing, CLI timeout forwarding, Ollama timeout error details, and explicit project-context prompting.
+
+## 2026-06-28 — Phase 2G: Workset-Based Planning
+
+### Problem Solved
+
+Forge could build context bundles from worksets but had no way to turn that context
+into an actionable implementation plan. Engineers had to manually paste context into an
+AI tool and prompt it themselves. Phase 2G closes that gap.
+
+### Command Added
+
+```bash
+forge plan "<task>" --workset <name>
+forge plan "<task>" --workset <name> --save
+forge plan "<task>" --workset <name> --model qwen2.5-coder:14b
+forge plan "<task>" --workset <name> --json
+```
+
+### How Planning Works
+
+1. `resolve_root` determines the repository root.
+2. The persisted workset is loaded from `.forge/worksets/<name>.json`.
+3. `generate_bundle` builds a deterministic context bundle (file summaries, symbols,
+   excerpts, dependency hints) — no AI model is called at this stage.
+4. `build_planning_prompt` assembles a structured prompt from the task, workset
+   metadata, and per-file context. The prompt explicitly instructs the model not to
+   generate patches or claim files were modified.
+5. `ModelManager.ask` sends the prompt to the configured provider.
+6. The plan Markdown is printed (or saved to `.forge/plans/` with `--save`).
+
+### Architecture Decisions
+
+- New package `forge/planning/` with single-responsibility modules:
+  - `planner.py` — orchestration; owns `ImplementationPlan` dataclass and `generate_plan`
+  - `prompts.py` — builds the planning prompt from a `ContextBundle`
+  - `render.py` — renders plans as text or JSON
+  - `store.py` — saves plans to `.forge/plans/<workset>-<timestamp>.md`
+- CLI remains thin; all prompt assembly and orchestration lives in `forge.planning`.
+- `ForgePaths` extended with `plans_dir` field (`.forge/plans/`).
+- Model is never called directly from CLI — always routed through `ModelManager`.
+- `PlannerError` wraps workset and model failures for clean CLI exit.
+
+### Files Added
+
+- `forge/planning/__init__.py`
+- `forge/planning/planner.py`
+- `forge/planning/prompts.py`
+- `forge/planning/render.py`
+- `forge/planning/store.py`
+- `tests/test_planning.py` (19 tests)
+
+### Files Modified
+
+- `forge/cli/app.py` — added `plan` command
+- `forge/project/paths.py` — added `plans_dir` to `ForgePaths`
+- `README.md` — updated phase description and planning workflow
+
+### Tests Added
+
+- Prompt includes task, workset name, file summaries, excerpts, model name
+- Prompt instructs model not to modify files or generate patches
+- Planner calls `ModelManager` with selected model
+- Planner uses model override when provided
+- Missing workset raises `PlannerError`
+- Model provider error raises `PlannerError`
+- `--save` writes plan under `.forge/plans/`
+- Plan saved in correct subdirectory
+- `render_plan_text` and `render_plan_json` output shape
+- CLI: success, `--save`, `--json`, `--model` override, missing workset
+
+### Verification
+
+- `python3 -m pytest` passed with 219 tests (19 new).
+- `python3 -m ruff check .` passed.
+- `python3 -m black --check .` passed.
+
+### Known Limitations
+
+- Plan quality depends on the configured model and workset size; large worksets may
+  exceed context windows for smaller models.
+- `--save` does not deduplicate — running the same plan twice creates two files.
+- The footer instructs the model to include plan/workset/model attribution, but model
+  compliance is not validated.
+
+### Recommended Phase 2H
+
+**Workset-aware patch scaffolding**: given a completed plan, generate a structured
+edit scaffold (file → proposed changes) that can be reviewed and applied. This should
+be a read-only scaffold (not applied automatically) and should build on the `forge.planning`
+package already in place. Key additions: `forge scaffold "<task>" --plan <path>`,
+a `forge/scaffold/` package, and a unified diff or file-edit representation that can
+later feed `forge apply`.

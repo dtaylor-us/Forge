@@ -17,6 +17,9 @@ from forge.context.bundle import generate_bundle, save_bundle_markdown
 from forge.context.render import render_json, render_markdown
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
+from forge.planning import PlannerError, generate_plan
+from forge.planning.render import render_plan_json, render_plan_text
+from forge.planning.store import save_plan
 from forge.project.initializer import initialize_project
 from forge.project.metadata import load_metadata
 from forge.project.paths import ForgePaths
@@ -815,6 +818,70 @@ def _status(check: CheckResult) -> str:
 
 def _join_values(values: list[str]) -> str:
     return ", ".join(values) if values else "-"
+
+
+@app.command("plan")
+def plan_command(
+    task: Annotated[str, typer.Argument(help="Implementation task to plan.")],
+    workset: Annotated[str, typer.Option("--workset", "-w", help="Persisted workset name.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model override for this request."),
+    ] = None,
+    timeout_seconds: Annotated[
+        int | None,
+        typer.Option("--timeout", help="Request timeout in seconds."),
+    ] = None,
+    max_lines_per_file: Annotated[
+        int,
+        typer.Option("--max-lines-per-file", min=1, help="Max excerpt lines per file."),
+    ] = 120,
+    include_full: Annotated[
+        bool,
+        typer.Option("--include-full", help="Include full file contents in context."),
+    ] = False,
+    save: Annotated[
+        bool,
+        typer.Option("--save", help="Save the plan to .forge/plans/."),
+    ] = False,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+) -> None:
+    """Generate an implementation plan using a persisted workset."""
+    resolved = resolve_root(override=root)
+    paths = ForgePaths.from_root(resolved.root)
+
+    try:
+        result = generate_plan(
+            resolved.root,
+            task,
+            workset,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            max_lines_per_file=max_lines_per_file,
+            include_full=include_full,
+            model_manager=_model_manager(),
+        )
+    except PlannerError as exc:
+        console.print(f"[red]Planning error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if save:
+        saved = save_plan(result, paths.project_forge_dir)
+        result.saved_path = saved
+        console.print(f"[green]Plan saved:[/green] {saved}")
+
+    if output_json:
+        console.print_json(render_plan_json(result))
+        return
+
+    console.print(render_plan_text(result))
 
 
 def main() -> None:
