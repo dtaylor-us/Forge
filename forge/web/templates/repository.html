@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %} — Repository{% endblock %}
+{% block breadcrumb %}Repository{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row mb-6">
+  <div>
+    <div class="page-header-eyebrow">Codebase Intelligence</div>
+    <h1 class="page-title">Repository</h1>
+    <p class="page-desc">Detected stack, structure, and full-text search across your repository.</p>
+  </div>
+</div>
+
+<!-- Detection cards -->
+<div class="grid grid-4 mb-6">
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--orange-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="code-2" style="width:14px;height:14px;color:var(--orange);"></i>
+      </div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Languages</span>
+    </div>
+    <div class="tech-cards">
+      {% for lang in detection.languages %}
+      <span class="tech-chip">{{ lang }}</span>
+      {% else %}
+      <span style="font-size:12.5px;color:var(--text-3);">None detected</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--blue-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="package" style="width:14px;height:14px;color:var(--blue);"></i>
+      </div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Frameworks</span>
+    </div>
+    <div class="tech-cards">
+      {% for fw in detection.frameworks %}
+      <span class="tech-chip">{{ fw }}</span>
+      {% else %}
+      <span style="font-size:12.5px;color:var(--text-3);">None detected</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--green-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="folder-open" style="width:14px;height:14px;color:var(--green);"></i>
+      </div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Source roots</span>
+    </div>
+    <div class="tech-cards">
+      {% for root in detection.source_roots %}
+      <code style="font-size:11.5px;">{{ root }}</code>
+      {% else %}
+      <span style="font-size:12.5px;color:var(--text-3);">None detected</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--amber-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="flask-conical" style="width:14px;height:14px;color:var(--amber);"></i>
+      </div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Test roots</span>
+    </div>
+    <div class="tech-cards">
+      {% for root in detection.test_roots %}
+      <code style="font-size:11.5px;">{{ root }}</code>
+      {% else %}
+      <span style="font-size:12.5px;color:var(--text-3);">None detected</span>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<div class="grid grid-2 mb-6">
+
+  <!-- File tree -->
+  <div class="card card-flush">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <i data-lucide="folder-tree" style="width:14px;height:14px;color:var(--text-3);"></i>
+      <span class="section-title">File Tree</span>
+    </div>
+    <div class="tree-view">
+      {% for line in tree %}
+      <div>{% if line.startswith('  ') or line.startswith('│') or line.startswith('├') or line.startswith('└') %}<span style="color:var(--text-3);">{{ line | e }}</span>{% elif '/' in line or line.endswith(':') %}<span class="tree-dir">{{ line | e }}</span>{% else %}{{ line | e }}{% endif %}</div>
+      {% else %}
+      <span style="color:var(--text-3);">No tree available.</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">Full-text Search</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="repo-query" type="text" placeholder="Search across all files…" style="flex:1;" onkeydown="if(event.key==='Enter')searchRepo()">
+        <button class="btn btn-primary" onclick="searchRepo()">
+          <i data-lucide="search"></i>
+        </button>
+      </div>
+    </div>
+
+    <div id="repo-results-wrap" style="display:none;">
+      <div class="card card-flush">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span class="section-title">Results</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearResults()"><i data-lucide="x"></i></button>
+        </div>
+        <pre id="repo-results" style="border:none;border-radius:0;max-height:440px;background:none;margin:0;padding:14px 16px;font-size:12px;"></pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function searchRepo() {
+  const q = document.getElementById('repo-query').value.trim();
+  if (!q) return;
+  const wrap = document.getElementById('repo-results-wrap');
+  const results = document.getElementById('repo-results');
+  wrap.style.display = 'block';
+  results.textContent = 'Searching…';
+  try {
+    const res = await fetch(`/api/repository/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    results.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    results.textContent = 'Search failed.';
+    showToast('Search failed', 'error');
+  }
+}
+
+function clearResults() {
+  document.getElementById('repo-results-wrap').style.display = 'none';
+  document.getElementById('repo-query').value = '';
+}
+</script>
+{% endblock %}

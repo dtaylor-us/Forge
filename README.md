@@ -15,7 +15,7 @@ Forge is a local-first engineering workbench for understanding repositories, bui
 | --- | --- |
 | Providers | Ollama, OpenAI, Anthropic |
 | Platforms | macOS and Linux with Python 3.12+; Windows is not yet verified |
-| Interface | `forge` CLI |
+| Interface | `forge` CLI and local FastAPI web UI |
 | Project state | Local `.forge/` directory inside each repository |
 | Global config | `~/.forge/config.yaml` |
 
@@ -45,6 +45,7 @@ Forge is not just another AI CLI. It focuses on the engineering context that mus
 | Planning | Available | Generates advisory implementation plans from a task and workset using the configured model. |
 | Model management | Available | Lists configured provider models and persists a default model. |
 | Engineering memory search | Available | Lists, shows, searches, relates, and rebuilds local memory items. |
+| Local web UI | Available | Browser interface for project inspection, repository detection, worksets, context bundles, planning, and memory. |
 | Patch generation | Planned | Not implemented. Forge does not apply code changes from plans today. |
 | Test orchestration | Planned | Not implemented as a first-class `forge verify` command today. |
 
@@ -128,6 +129,7 @@ forge workset suggest "authentication"
 forge workset create auth --query "authentication"
 forge workset context auth
 forge plan "Add GitHub OAuth" --workset auth
+forge web
 ```
 
 | Command | What it does |
@@ -140,6 +142,42 @@ forge plan "Add GitHub OAuth" --workset auth
 | `forge workset create auth --query "authentication"` | Persists the suggested files as `.forge/worksets/auth.json`. |
 | `forge workset context auth` | Writes a deterministic context bundle under `.forge/context/`. |
 | `forge plan "Add GitHub OAuth" --workset auth` | Calls the configured model to produce an advisory implementation plan. |
+| `forge web` | Starts the local browser UI at `http://127.0.0.1:8765`. |
+
+## Local Web UI
+
+Forge includes a local-only web interface for engineers who prefer to inspect and operate Forge from a browser.
+
+```bash
+forge web
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8765
+```
+
+By default, the server binds to `127.0.0.1` and uses the resolved repository root. It reads and writes the same project-local `.forge/` artifacts as the CLI: project metadata, worksets, context bundles, saved plans, and engineering memory.
+
+```bash
+forge web --host 127.0.0.1 --port 8765 --root /path/to/repo --reload
+```
+
+If you bind to `0.0.0.0`, Forge prints a warning because that may expose the local tool on your network. The web UI does not implement authentication or remote sharing.
+
+Screens available in the MVP:
+
+| Screen | Purpose |
+| --- | --- |
+| Dashboard | Project summary, detected metadata, recent worksets, saved plans, memory items, and quick actions. |
+| Project | Project metadata, Forge paths, initialized state, and project initialization action. |
+| Repository | Repository detection, compact tree, and text search. |
+| Worksets | Suggest, create, inspect, refresh, delete, and generate context bundles. |
+| Planning | Generate advisory plans from a task and persisted workset. |
+| Memory | Search memory, view timeline/details, and create decisions or investigations. |
+
+Screenshot placeholder: `docs/images/forge-web-dashboard.png`
 
 ## Typical Workflow
 
@@ -198,6 +236,14 @@ Engineering memory is local project knowledge stored under `.forge/memory/`. Cur
 | `forge project paths` | Show important Forge paths. |
 | `forge version` | Print the installed Forge version. |
 | `forge doctor` | Check local dependencies and provider readiness. |
+
+### Web UI
+
+| Command | Purpose |
+| --- | --- |
+| `forge web` | Start the local web UI on `http://127.0.0.1:8765`. |
+| `forge web --root /path/to/repo` | Start the UI against an explicit repository root. |
+| `forge web --reload` | Start the UI with Uvicorn reload enabled for local development. |
 
 ### Repository
 

@@ -1,0 +1,16 @@
+{
+  "id": "62e413ab",
+  "type": "decision",
+  "title": "Manual smoke decision",
+  "created_at": "2026-06-28T22:21:01+00:00",
+  "repository": "/Users/derektaylor/projects/forge",
+  "workset": "",
+  "tags": [
+    "decision"
+  ],
+  "summary": "Created through web API smoke verification.",
+  "related_files": [],
+  "related_plans": [],
+  "related_worksets": [],
+  "source_path": ""
+}

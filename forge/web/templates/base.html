@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forge{% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <a href="/" class="sidebar-brand">
+      <div class="brand-logo">F</div>
+      <span class="brand-name">Forge</span>
+      <button class="sidebar-collapse-btn" id="collapseBtn" title="Collapse sidebar" onclick="toggleSidebar(event)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </a>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <a class="nav-item {{ 'active' if active == 'dashboard' else '' }}" href="/" title="Dashboard">
+          <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'repository' else '' }}" href="/repository" title="Repository">
+          <i data-lucide="git-branch"></i><span>Repository</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'worksets' else '' }}" href="/worksets" title="Worksets">
+          <i data-lucide="layers"></i><span>Worksets</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'planning' else '' }}" href="/planning" title="Planning">
+          <i data-lucide="file-pen"></i><span>Planning</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'memory' else '' }}" href="/memory" title="Memory">
+          <i data-lucide="brain"></i><span>Memory</span>
+        </a>
+      </div>
+
+      <div class="nav-section" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+        <a class="nav-item {{ 'active' if active == 'project' else '' }}" href="/project" title="Project">
+          <i data-lucide="folder-open"></i><span>Project</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'architecture' else '' }}" href="#" title="Architecture (coming soon)" style="opacity:0.4; cursor:default;">
+          <i data-lucide="network"></i><span>Architecture</span>
+          <span class="nav-badge">soon</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'settings' else '' }}" href="#" title="Settings" style="opacity:0.4; cursor:default;">
+          <i data-lucide="settings"></i><span>Settings</span>
+        </a>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="nav-item" style="cursor:default; padding: 6px 8px;">
+        <i data-lucide="terminal" style="width:14px;height:14px;color:var(--text-3);"></i>
+        <span style="font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ repo_root }}">{{ repo_root | truncate(22, true, '…') if repo_root else 'No repo' }}</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Workspace ────────────────────────────────────── -->
+  <div class="workspace">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <i data-lucide="hammer" style="width:15px;height:15px;color:var(--orange);"></i>
+        <span class="crumb-sep">/</span>
+        <span class="crumb-active">{% block breadcrumb %}Forge{% endblock %}</span>
+      </div>
+
+      <div class="topbar-search">
+        <button class="topbar-search-btn" onclick="openPalette()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Search…
+          <span class="topbar-search-shortcut">⌘K</span>
+        </button>
+      </div>
+
+      <div class="topbar-actions">
+        {% if active_model is defined and active_model %}
+        <div class="topbar-pill">
+          <i data-lucide="cpu" style="width:12px;height:12px;"></i>
+          <span class="pill-value">{{ active_model }}</span>
+        </div>
+        {% endif %}
+        <div class="topbar-pill">
+          <span class="status-dot"></span>
+          <span class="pill-value">Active</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="page-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- ── Command Palette ──────────────────────────────────────── -->
+<div class="palette-overlay" id="palette" onclick="closePaletteOutside(event)">
+  <div class="palette-box">
+    <div class="palette-input-row">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="palette-input" id="paletteInput" placeholder="Go to page, search…" autocomplete="off" oninput="filterPalette(this.value)">
+    </div>
+    <div class="palette-results" id="paletteResults">
+      <a class="palette-result" href="/">
+        <div class="palette-result-icon"><i data-lucide="layout-dashboard"></i></div>
+        <span class="palette-result-label">Dashboard</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/repository">
+        <div class="palette-result-icon"><i data-lucide="git-branch"></i></div>
+        <span class="palette-result-label">Repository</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/worksets">
+        <div class="palette-result-icon"><i data-lucide="layers"></i></div>
+        <span class="palette-result-label">Worksets</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/planning">
+        <div class="palette-result-icon"><i data-lucide="file-pen"></i></div>
+        <span class="palette-result-label">Planning</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/memory">
+        <div class="palette-result-icon"><i data-lucide="brain"></i></div>
+        <span class="palette-result-label">Memory</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/project">
+        <div class="palette-result-icon"><i data-lucide="folder-open"></i></div>
+        <span class="palette-result-label">Project</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+    </div>
+    <div class="palette-footer">
+      <div class="palette-hint"><kbd>↑↓</kbd> Navigate</div>
+      <div class="palette-hint"><kbd>↵</kbd> Open</div>
+      <div class="palette-hint"><kbd>Esc</kbd> Close</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ──────────────────────────────────────── -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ── Lucide icons
+lucide.createIcons();
+
+// ── Sidebar collapse
+function toggleSidebar(e) {
+  e && e.preventDefault();
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('collapsed');
+  localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+}
+
+(function() {
+  if (localStorage.getItem('sidebarCollapsed') === 'true') {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
+})();
+
+// ── Command palette
+function openPalette() {
+  document.getElementById('palette').classList.add('open');
+  setTimeout(() => document.getElementById('paletteInput').focus(), 50);
+}
+
+function closePalette() {
+  document.getElementById('palette').classList.remove('open');
+  document.getElementById('paletteInput').value = '';
+  filterPalette('');
+}
+
+function closePaletteOutside(e) {
+  if (e.target === document.getElementById('palette')) closePalette();
+}
+
+function filterPalette(q) {
+  const results = document.querySelectorAll('.palette-result');
+  const lq = q.toLowerCase();
+  results.forEach(r => {
+    const label = r.querySelector('.palette-result-label').textContent.toLowerCase();
+    r.style.display = (!lq || label.includes(lq)) ? '' : 'none';
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openPalette();
+  }
+  if (e.key === 'Escape') closePalette();
+});
+
+// ── Toast helper
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toasts');
+  const toast = document.createElement('div');
+  const icon = type === 'success'
+    ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+    : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icon}</span>${message}`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ── Copy helper
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'));
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

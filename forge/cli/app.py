@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -36,6 +37,7 @@ from forge.repository import (
 )
 from forge.utils.logging import configure_logging
 from forge.version import __version__
+from forge.web.app import create_app
 from forge.worksets import suggest_candidates
 from forge.worksets.manager import (
     add_file,
@@ -716,6 +718,39 @@ def init(
     console.print(f"[green]{action} Forge project[/green] at {result.paths.project_forge_dir}")
     console.print(f"  Repository root: {result.paths.repo_root}")
     console.print(f"  Git detected:    {resolved.git_detected}")
+
+
+@app.command("web")
+def web_command(
+    host: Annotated[str, typer.Option("--host", help="Host to bind. Defaults to localhost.")] = (
+        "127.0.0.1"
+    ),
+    port: Annotated[int, typer.Option("--port", min=1, max=65535, help="Port to bind.")] = 8765,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    reload: Annotated[
+        bool, typer.Option("--reload", help="Reload server on code changes.")
+    ] = False,
+) -> None:
+    """Start the local Forge web UI."""
+    resolved = resolve_root(override=root)
+    url = f"http://{host}:{port}"
+    if host == "0.0.0.0":
+        console.print(
+            "[yellow]Warning:[/yellow] binding to 0.0.0.0 may expose Forge on your network."
+        )
+    console.print(f"Forge Web UI running at {url}")
+    console.print(f"Repository root: {resolved.root}")
+
+    import uvicorn
+
+    os.environ["FORGE_WEB_ROOT"] = str(resolved.root)
+    if reload:
+        uvicorn.run("forge.web.app:create_app", host=host, port=port, reload=True, factory=True)
+        return
+    uvicorn.run(create_app(resolved.root), host=host, port=port)
 
 
 @project_app.command("root")

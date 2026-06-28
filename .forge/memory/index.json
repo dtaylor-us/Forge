@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "62e413ab",
+      "type": "decision",
+      "title": "Manual smoke decision",
+      "created_at": "2026-06-28T22:21:01+00:00",
+      "workset": "",
+      "tags": [
+        "decision"
+      ],
+      "repository": "/Users/derektaylor/projects/forge",
+      "summary": "Created through web API smoke verification."
+    },
+    {
+      "id": "1f295fcd",
+      "type": "bug",
+      "title": "Manual smoke investigation",
+      "created_at": "2026-06-28T22:21:02+00:00",
+      "workset": "",
+      "tags": [
+        "investigation"
+      ],
+      "repository": "/Users/derektaylor/projects/forge",
+      "summary": "Created through web API smoke verification."
+    }
+  ]
+}

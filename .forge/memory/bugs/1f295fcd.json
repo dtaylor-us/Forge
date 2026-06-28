@@ -1,0 +1,16 @@
+{
+  "id": "1f295fcd",
+  "type": "bug",
+  "title": "Manual smoke investigation",
+  "created_at": "2026-06-28T22:21:02+00:00",
+  "repository": "/Users/derektaylor/projects/forge",
+  "workset": "",
+  "tags": [
+    "investigation"
+  ],
+  "summary": "Created through web API smoke verification.",
+  "related_files": [],
+  "related_plans": [],
+  "related_worksets": [],
+  "source_path": ""
+}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %} — Error{% endblock %}
+{% block breadcrumb %}Error{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
+  <div style="text-align:center;max-width:400px;">
+    <div style="width:56px;height:56px;border-radius:var(--r-lg);background:var(--red-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <i data-lucide="alert-triangle" style="width:26px;height:26px;color:var(--red);stroke-width:1.5;"></i>
+    </div>
+    <div style="font-size:48px;font-weight:800;letter-spacing:-2px;color:var(--text);margin-bottom:8px;">
+      {{ status_code or '500' }}
+    </div>
+    <div style="font-size:16px;font-weight:600;color:var(--text-2);margin-bottom:8px;">
+      {{ title or 'Something went wrong' }}
+    </div>
+    <div style="font-size:13.5px;color:var(--text-3);line-height:1.6;margin-bottom:24px;">
+      {{ message or detail or 'An unexpected error occurred. Check the server logs for more information.' }}
+    </div>
+    <a href="/" class="btn btn-secondary">
+      <i data-lucide="arrow-left"></i>
+      Back to Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,186 @@
 # Dev Log
 
+## 2026-06-28 — Phase 4.2: Web UI Redesign — Premium Engineering Workbench
+
+### Problem Solved
+
+The Phase 4.1 web UI was a functional CRUD application with a light theme, plain HTML tables, and no design hierarchy. Phase 4.2 transforms the UI into a dark-first engineering workbench that feels closer to Cursor, Linear, or Vercel than a typical internal tool.
+
+### Design System
+
+Complete rewrite of `forge/web/static/styles.css`:
+
+- Dark-first color palette: near-black `#0c0d0f` background, charcoal `#131416` panels, Forge Orange `#f97316` brand accent.
+- Inter typeface loaded via Google Fonts with system-font fallback. Monospace stack for code/paths.
+- Full component library as CSS utility classes: hero cards, metric cards, workset cards, memory timeline, score bars, reason tags, status pills, tech chips, split pane, empty states, toasts, command palette, collapsible sidebar, action buttons.
+- Lucide icon library loaded via CDN for consistent iconography throughout.
+
+### Shell Redesign (`base.html`)
+
+- Persistent collapsible sidebar with `localStorage` state, Forge orange logo mark, Lucide nav icons, "soon" badges for upcoming sections (Architecture, Settings).
+- Topbar with breadcrumb navigation, centered global search bar, Active status pill.
+- Command palette triggered by `⌘K` with keyboard navigation (`↑↓` to move, `↵` to open, `Esc` to dismiss).
+- Global `showToast()` helper available to all pages for success/error feedback.
+- Global `copyText()` helper for clipboard copy actions.
+
+### Pages Redesigned
+
+**Dashboard** — Hero card with project name, initialized status pill, git/language/framework tags, and radial orange glow. 4-column quick action grid. 3-column activity section (Recent Worksets, Recent Plans, Memory Timeline) with proper empty states including illustration icon, description, and CTA button.
+
+**Worksets** — Auto-fill card grid replacing the plain table. Each card shows name, query excerpt, file count, and size. Side panel with Suggest Files form and Create Workset form. Create navigates to the new workset detail after success.
+
+**Workset Detail** — Metric row (file count, top score, category count, status). File table with score bars (visual fill proportional to score), category tags (primary/test/config), and signal reason pills showing signal name and point contribution. Refresh and Generate Context buttons with loading spinners and toast feedback.
+
+**Planning** — Split-pane layout: configuration panel left (task textarea, workset selector, model override, timeout, toggles), plan output panel right. Output renders as formatted markdown via `marked.js` CDN. Toggle between rendered and raw. Copy button. Loading spinner during generation.
+
+**Memory** — Inline search bar at the top of the timeline. Timeline view with colored dots (blue for decisions, amber for investigations) and connecting lines. Side panel with typed New Decision and New Investigation forms, each with distinct icon/color treatment. Search results rendered inline without page reload.
+
+**Memory Detail** — Two-column layout: summary and related files left, metadata sidebar right (ID with copy button, type tag, workset link, tags, created date).
+
+**Repository** — 4 detection cards (Languages, Frameworks, Source Roots, Test Roots), each with a colored icon. Monospace file tree panel. Inline full-text search with result display.
+
+**Project** — Status pills for initialized/git state, tech chip grids for detected stack, copy-to-clipboard on forge directory path.
+
+**Error** — Centered error state with large status code, icon, and back to dashboard button.
+
+### Architecture Notes
+
+- All JavaScript remains page-local vanilla JS. No build pipeline added.
+- `marked.js` CDN added to planning page only for markdown rendering.
+- Lucide icon CDN added to base template for consistent iconography.
+- Sidebar collapse state persisted in `localStorage` across page loads.
+- Toast and copy helpers defined once in `base.html` and available globally.
+- `.claude/launch.json` added to support `preview_start` from Claude Code.
+
+### Files Modified
+
+- `forge/web/static/styles.css` — complete rewrite
+- `forge/web/templates/base.html` — new AppShell with sidebar, topbar, command palette, toasts
+- `forge/web/templates/dashboard.html` — hero card, quick actions, activity grid
+- `forge/web/templates/worksets.html` — card grid, suggest/create side panel
+- `forge/web/templates/workset_detail.html` — metrics, score bars, reason tags
+- `forge/web/templates/planning.html` — split pane, markdown output, copy/raw toggle
+- `forge/web/templates/memory.html` — timeline, inline search, typed create forms
+- `forge/web/templates/memory_detail.html` — two-column detail view
+- `forge/web/templates/repository.html` — detection cards, file tree, inline search
+- `forge/web/templates/project.html` — status pills, tech chips, path copy
+- `forge/web/templates/error.html` — centered error state
+
+---
+
+## 2026-06-28 17:18 CDT - Phase 4.1: Local Web UI MVP
+
+### Problem Solved
+
+Forge was primarily accessible through the CLI. Phase 4.1 adds a local-only browser UI so engineers can inspect project state, repository detection, worksets, context bundles, plans, and engineering memory without duplicating core Forge business logic in web routes.
+
+### Commands Added
+
+```bash
+forge web
+forge web --host 127.0.0.1 --port 8765 --root <path> --reload
+```
+
+`forge web` defaults to `127.0.0.1:8765`, prints the URL and resolved repository root, and warns when binding to `0.0.0.0`.
+
+### Routes And Screens Added
+
+- `GET /` dashboard with project metadata, recent worksets, plans, memory, and quick actions.
+- `GET /project`, `GET /api/project`, `POST /api/project/init`.
+- `GET /repository`, `GET /api/repository/detect`, `GET /api/repository/tree`, `GET /api/repository/search?q=...`.
+- `GET /worksets`, `GET /worksets/{name}`, `GET /api/worksets`, `GET /api/worksets/{name}`.
+- `POST /api/worksets/suggest`, `POST /api/worksets/create`, `POST /api/worksets/{name}/refresh`, `DELETE /api/worksets/{name}`.
+- `POST /api/worksets/{name}/context`.
+- `GET /planning`, `POST /api/plans/generate`.
+- `GET /memory`, `GET /memory/{id}`, `GET /api/memory/search?q=...`, `GET /api/memory/timeline`.
+- `POST /api/memory/add`, `POST /api/decisions/create`, `POST /api/investigations/create`.
+
+### Architecture Decisions
+
+- Added `forge/web/` using FastAPI, Jinja2 templates, static CSS, and minimal page-local JavaScript. No React or frontend build pipeline.
+- Added `forge/services/` application services for project, repository, workset/context, planning, and memory orchestration. Web routes delegate to services, and services call existing Forge core modules.
+- JSON APIs return a consistent envelope: `{"ok": true, "data": ...}` or `{"ok": false, "error": {"message": "...", "type": "..."}}`.
+- The FastAPI app is created through `create_app(root)` and stores the resolved repo root in app state. Reload mode preserves `--root` through `FORGE_WEB_ROOT`.
+- The web UI does not add authentication, remote sharing, patch generation, patch application, or a database.
+- `forge init` now creates `plans/` and `memory/` directories in addition to the earlier project artifact directories.
+- Shared repository ignore rules now skip `.forge/` and `.claude/` so generated project artifacts and local agent worktrees are not suggested as source workset candidates.
+
+### Files Added
+
+- `forge/services/__init__.py`
+- `forge/services/project_service.py`
+- `forge/services/repository_service.py`
+- `forge/services/workset_service.py`
+- `forge/services/planning_service.py`
+- `forge/services/memory_service.py`
+- `forge/web/__init__.py`
+- `forge/web/app.py`
+- `forge/web/deps.py`
+- `forge/web/schemas.py`
+- `forge/web/routes/__init__.py`
+- `forge/web/routes/dashboard.py`
+- `forge/web/routes/project.py`
+- `forge/web/routes/repository.py`
+- `forge/web/routes/worksets.py`
+- `forge/web/routes/planning.py`
+- `forge/web/routes/memory.py`
+- `forge/web/templates/*.html`
+- `forge/web/static/styles.css`
+- `tests/test_web.py`
+
+### Files Modified
+
+- `forge/cli/app.py` — added `forge web` command.
+- `forge/project/initializer.py` — creates `plans/` and `memory/` artifact directories.
+- `forge/repository/ignore.py` — excludes `.forge/` and `.claude/` from repository scans.
+- `pyproject.toml` — added FastAPI, Jinja2, Uvicorn, and TestClient dependencies.
+- `README.md` — documented the local web UI, command usage, security note, and workflows.
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Tests Added
+
+- App factory creation.
+- Dashboard route returns 200.
+- Project API metadata shape.
+- Repository detect, tree, and search APIs.
+- Workset list route/API, suggest, create, detail route/API.
+- Workset suggestions exclude `.forge/` generated artifacts.
+- Context generation API.
+- Planning API with mocked planning service/model path.
+- Memory search and timeline APIs.
+- Decision and investigation creation APIs.
+- Error response shape.
+- Fixed root behavior.
+- `forge web --help`.
+- Public-host warning behavior with Uvicorn mocked.
+
+### Verification
+
+```bash
+.venv/bin/python -m pytest          — 284 passed
+.venv/bin/python -m ruff check .    — All checks passed
+.venv/bin/python -m black --check . — 174 files unchanged
+```
+
+Manual smoke:
+
+- `forge init --force` completed for `/Users/derektaylor/projects/forge`.
+- `forge web` started at `http://127.0.0.1:8765` after sandbox escalation for localhost binding.
+- Dashboard, project API, repository detection API, memory page/timeline/search, workset suggest/create/detail, and context generation returned successful responses.
+- Live planning API returned a normal error envelope because the configured Ollama model timed out with a 1-second smoke timeout; automated planning API coverage uses a mocked planning service and does not require Ollama.
+
+### Known Limitations
+
+- The UI is an MVP with simple server-rendered pages and JSON previews rather than polished interactive components.
+- Planning still depends on the configured model provider at runtime; tests mock planning and do not require Ollama.
+- Context bundle preview is truncated to the first 4,000 rendered characters.
+- Decision and investigation creation capture basic memory items only; richer ADR/bug investigation schemas are not implemented yet.
+- No authentication or remote sharing is implemented. The tool remains local-only.
+
+### Recommended Phase 4.2
+
+Improve the web workflow ergonomics: richer forms with inline validation, better context bundle viewing/download, structured decision and investigation capture, plan history/detail pages, and shared CLI/web service usage for existing CLI commands where it reduces duplication.
+
 ## 2026-06-28 CDT - Phase 3.1: Engineering Memory
 
 ### Problem Solved

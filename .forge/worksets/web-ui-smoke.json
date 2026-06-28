@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "name": "web-ui-smoke",
+  "query": "web ui service",
+  "root": "/Users/derektaylor/projects/forge",
+  "created_at": "2026-06-28T22:21:55+00:00",
+  "updated_at": "2026-06-28T22:21:55+00:00",
+  "include_tests": false,
+  "max_results": 5,
+  "files": [
+    {
+      "path": "forge/services/project_service.py",
+      "score": 29,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "filename matched 'service'",
+          "detail": "filename matched 'service'",
+          "points": 10
+        },
+        {
+          "signal": "content matched 'service', 'ui'",
+          "detail": "content matched 'service', 'ui'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/services/repository_service.py",
+      "score": 29,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "filename matched 'service'",
+          "detail": "filename matched 'service'",
+          "points": 10
+        },
+        {
+          "signal": "content matched 'service', 'ui'",
+          "detail": "content matched 'service', 'ui'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "docs/development/DEVELOPMENT_LOG.md",
+      "score": 26,
+      "category": "doc",
+      "reasons": [
+        {
+          "signal": "content matched 'service', 'ui', 'web'",
+          "detail": "content matched 'service', 'ui', 'web'",
+          "points": 24
+        },
+        {
+          "signal": "documentation file",
+          "detail": "documentation file",
+          "points": 2
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "README.md",
+      "score": 24,
+      "category": "doc",
+      "reasons": [
+        {
+          "signal": "content matched 'ui', 'web'",
+          "detail": "content matched 'ui', 'web'",
+          "points": 16
+        },
+        {
+          "signal": "important project file",
+          "detail": "important project file",
+          "points": 6
+        },
+        {
+          "signal": "documentation file",
+          "detail": "documentation file",
+          "points": 2
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/services/__init__.py",
+      "score": 24,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'service'",
+          "detail": "path matched 'service'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'service', 'web'",
+          "detail": "content matched 'service', 'web'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    }
+  ]
+}

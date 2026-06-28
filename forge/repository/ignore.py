@@ -7,6 +7,8 @@ from pathlib import Path
 IGNORED_DIR_NAMES = frozenset(
     {
         ".git",
+        ".forge",
+        ".claude",
         ".venv",
         "venv",
         "target",

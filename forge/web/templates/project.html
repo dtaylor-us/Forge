@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %} — Project{% endblock %}
+{% block breadcrumb %}Project{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row mb-6">
+  <div>
+    <div class="page-header-eyebrow">Workspace</div>
+    <h1 class="page-title">{{ project.project_name }}</h1>
+    <p class="page-desc">Project configuration, initialization state, and detected metadata.</p>
+  </div>
+  {% if not project.initialized %}
+  <button class="btn btn-primary" onclick="initProject()">
+    <i data-lucide="zap"></i>
+    Initialize project
+  </button>
+  {% else %}
+  <span class="status-pill status-active" style="font-size:13px;padding:6px 14px;">Initialized</span>
+  {% endif %}
+</div>
+
+<div id="project-result-wrap" style="display:none;margin-bottom:16px;">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);">Result</span>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('project-result-wrap').style.display='none'">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <pre id="project-result" style="margin:0;"></pre>
+  </div>
+</div>
+
+<div class="grid grid-2 mb-6">
+
+  <!-- Project info -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--orange-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="folder-open" style="width:14px;height:14px;color:var(--orange);"></i>
+      </div>
+      <span class="section-title">Project Info</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Initialized</div>
+        {% if project.initialized %}
+        <span class="status-pill status-active">Yes</span>
+        {% else %}
+        <span class="status-pill status-warning">No</span>
+        {% endif %}
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Git detected</div>
+        {% if project.git_detected %}
+        <span class="status-pill status-active">Yes</span>
+        {% else %}
+        <span class="status-pill status-inactive">No</span>
+        {% endif %}
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Forge directory</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <code style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ project.paths.project_forge_dir }}</code>
+          <button class="btn btn-ghost btn-sm" onclick="copyText('{{ project.paths.project_forge_dir }}')">
+            <i data-lucide="copy"></i>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Metadata file</div>
+        <code style="font-size:12px;">{{ project.paths.project_forge_dir }}/project.json</code>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Detected stack -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+      <div style="width:28px;height:28px;border-radius:var(--r-sm);background:var(--blue-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="cpu" style="width:14px;height:14px;color:var(--blue);"></i>
+      </div>
+      <span class="section-title">Detected Stack</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Languages</div>
+        <div class="tech-cards">
+          {% for lang in project.detected.languages %}
+          <span class="tech-chip">{{ lang }}</span>
+          {% else %}
+          <span style="font-size:12.5px;color:var(--text-3);">—</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Frameworks</div>
+        <div class="tech-cards">
+          {% for fw in project.detected.frameworks %}
+          <span class="tech-chip">{{ fw }}</span>
+          {% else %}
+          <span style="font-size:12.5px;color:var(--text-3);">—</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Build systems</div>
+        <div class="tech-cards">
+          {% for bs in project.detected.build_systems %}
+          <span class="tech-chip">{{ bs }}</span>
+          {% else %}
+          <span style="font-size:12.5px;color:var(--text-3);">—</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Package managers</div>
+        <div class="tech-cards">
+          {% for pm in project.detected.package_managers %}
+          <span class="tech-chip">{{ pm }}</span>
+          {% else %}
+          <span style="font-size:12.5px;color:var(--text-3);">—</span>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function initProject() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Initializing…';
+  try {
+    const res = await fetch('/api/project/init', {method: 'POST'});
+    const data = await res.json();
+    document.getElementById('project-result').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('project-result-wrap').style.display = 'block';
+    showToast('Project initialized');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) {
+    showToast('Initialization failed', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="zap"></i> Initialize project';
+    lucide.createIcons();
+  }
+}
+</script>
+{% endblock %}

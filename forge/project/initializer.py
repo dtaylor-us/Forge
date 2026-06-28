@@ -9,7 +9,16 @@ from forge.project.paths import ForgePaths
 from forge.project.resolver import ResolvedRoot
 from forge.repository.detect import detect_repository
 
-_SUBDIRS = ("worksets", "summaries", "context", "architecture", "sessions", "cache")
+_SUBDIRS = (
+    "worksets",
+    "summaries",
+    "context",
+    "architecture",
+    "sessions",
+    "cache",
+    "plans",
+    "memory",
+)
 
 
 @dataclass(frozen=True)

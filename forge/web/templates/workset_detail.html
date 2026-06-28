@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %} — {{ workset.name }}{% endblock %}
+{% block breadcrumb %}<a href="/worksets" style="color:var(--text-3);text-decoration:none;">Worksets</a><span style="color:var(--text-4);margin:0 6px;">/</span>{{ workset.name }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row">
+  <div>
+    <div class="page-header-eyebrow">Workset</div>
+    <h1 class="page-title">{{ workset.name }}</h1>
+    {% if workset.query %}
+    <p class="page-desc">{{ workset.query }}</p>
+    {% endif %}
+  </div>
+  <div class="flex gap-2">
+    <button class="btn btn-secondary" onclick="refreshWorkset()">
+      <i data-lucide="refresh-cw"></i>
+      Refresh
+    </button>
+    <button class="btn btn-primary" onclick="generateContext()">
+      <i data-lucide="package"></i>
+      Generate context bundle
+    </button>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="grid grid-4 mb-6">
+  <div class="metric-card">
+    <div class="metric-label">Files</div>
+    <div class="metric-value orange">{{ workset.files | length }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Top score</div>
+    <div class="metric-value">{{ workset.files[0].score if workset.files else '—' }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Categories</div>
+    <div class="metric-value">{{ workset.files | map(attribute='category') | unique | list | length if workset.files else '—' }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Status</div>
+    <div class="metric-value" style="font-size:16px;"><span class="status-pill status-active" style="font-size:13px;">Ready</span></div>
+  </div>
+</div>
+
+<!-- Action result -->
+<div id="action-result-wrap" style="display:none; margin-bottom:16px;">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);">Result</span>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('action-result-wrap').style.display='none'">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <pre id="action-result" style="margin:0;"></pre>
+  </div>
+</div>
+
+<!-- Files Table -->
+<div class="card card-flush">
+  <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+    <span class="section-title">Files in workset</span>
+    <span style="font-size:12px;color:var(--text-3);">Ranked by relevance score</span>
+  </div>
+
+  {% if workset.files %}
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%;">File</th>
+        <th style="width:14%;">Score</th>
+        <th style="width:12%;">Category</th>
+        <th>Signals</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for file in workset.files %}
+    <tr>
+      <td>
+        <code style="font-size:12px;background:none;border:none;padding:0;color:var(--text-2);">{{ file.path }}</code>
+      </td>
+      <td>
+        <div class="score-bar-wrap">
+          <div class="score-bar">
+            <div class="score-bar-fill" style="width:{{ [file.score * 10, 100] | min }}%;"></div>
+          </div>
+          <span class="score-num">{{ file.score }}</span>
+        </div>
+      </td>
+      <td>
+        {% if file.category == 'primary' %}
+        <span class="tag tag-orange">primary</span>
+        {% elif file.category == 'test' %}
+        <span class="tag tag-blue">test</span>
+        {% elif file.category == 'config' %}
+        <span class="tag tag-amber">config</span>
+        {% else %}
+        <span class="tag">{{ file.category }}</span>
+        {% endif %}
+      </td>
+      <td>
+        <div class="reason-list">
+          {% for reason in file.reasons %}
+          <span class="reason-tag" title="{{ reason.detail }}">
+            {{ reason.signal }}
+            <span style="color:var(--orange);font-weight:600;">+{{ reason.points }}</span>
+          </span>
+          {% endfor %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon"><i data-lucide="file-x"></i></div>
+    <div class="empty-state-title">No files scored</div>
+    <div class="empty-state-desc">Refresh the workset to score files against the query.</div>
+    <button class="btn btn-secondary mt-2" onclick="refreshWorkset()">
+      <i data-lucide="refresh-cw"></i>
+      Refresh workset
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function generateContext() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Generating…';
+  try {
+    const res = await fetch('/api/worksets/{{ workset.name }}/context', {
+      method: 'POST', headers: {'content-type': 'application/json'}, body: '{}'
+    });
+    const data = await res.json();
+    document.getElementById('action-result').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('action-result-wrap').style.display = 'block';
+    showToast('Context bundle generated');
+  } catch(e) {
+    showToast('Failed to generate context', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="package"></i> Generate context bundle';
+    lucide.createIcons();
+  }
+}
+
+async function refreshWorkset() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Refreshing…';
+  try {
+    const res = await fetch('/api/worksets/{{ workset.name }}/refresh', {method: 'POST'});
+    const data = await res.json();
+    showToast('Workset refreshed');
+    document.getElementById('action-result').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('action-result-wrap').style.display = 'block';
+    setTimeout(() => window.location.reload(), 1200);
+  } catch(e) {
+    showToast('Failed to refresh workset', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="refresh-cw"></i> Refresh';
+    lucide.createIcons();
+  }
+}
+</script>
+{% endblock %}

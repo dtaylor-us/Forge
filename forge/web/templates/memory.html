@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %} — Memory{% endblock %}
+{% block breadcrumb %}Memory{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row mb-4">
+  <div>
+    <div class="page-header-eyebrow">Knowledge Browser</div>
+    <h1 class="page-title">Memory</h1>
+    <p class="page-desc">Decisions, investigations, and engineering history — searchable and linked to your work.</p>
+  </div>
+</div>
+
+<div style="display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:20px; align-items:start;">
+
+  <!-- Timeline -->
+  <div>
+    <!-- Search bar -->
+    <div class="card mb-4" style="padding:12px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <i data-lucide="search" style="width:15px;height:15px;color:var(--text-3);flex-shrink:0;"></i>
+        <input id="memory-query" type="text" placeholder="Search memory…" style="border:none;background:none;outline:none;flex:1;font-size:14px;color:var(--text);" onkeydown="if(event.key==='Enter')searchMemory()">
+        <button class="btn btn-secondary btn-sm" onclick="searchMemory()">Search</button>
+      </div>
+    </div>
+
+    <!-- Search results -->
+    <div id="search-results-wrap" style="display:none; margin-bottom:16px;">
+      <div class="card card-flush">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span class="section-title">Search results</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearSearch()">
+            <i data-lucide="x"></i> Clear
+          </button>
+        </div>
+        <div id="search-results" style="padding:8px 0;"></div>
+      </div>
+    </div>
+
+    <!-- Timeline list -->
+    <div class="card card-flush">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+        <span class="section-title">Timeline</span>
+      </div>
+      <div style="padding:0 18px;">
+        {% if items %}
+        <div class="timeline">
+          {% for item in items %}
+          <div class="timeline-item">
+            <div class="timeline-dot-col">
+              <div class="timeline-dot {{ item.type }}"></div>
+              {% if not loop.last %}<div class="timeline-line"></div>{% endif %}
+            </div>
+            <div class="timeline-body">
+              {% if item.type == 'decision' %}
+              <div class="timeline-type" style="color:var(--blue);">Decision</div>
+              {% elif item.type == 'investigation' %}
+              <div class="timeline-type" style="color:var(--amber);">Investigation</div>
+              {% else %}
+              <div class="timeline-type" style="color:var(--text-3);">{{ item.type }}</div>
+              {% endif %}
+              <a class="timeline-title" href="/memory/{{ item.id }}">{{ item.title }}</a>
+              <div class="timeline-date">{{ item.created_at }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:40px 24px;">
+          <div class="empty-state-icon"><i data-lucide="brain"></i></div>
+          <div class="empty-state-title">Memory is empty</div>
+          <div class="empty-state-desc">Capture decisions and investigations to build your engineering history.</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Side: Create forms -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <!-- Create Decision -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="width:26px;height:26px;border-radius:var(--r-sm);background:var(--blue-dim);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="check-circle-2" style="width:13px;height:13px;color:var(--blue);"></i>
+        </div>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">New Decision</span>
+      </div>
+      <div class="stack">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Title</label>
+          <input id="decision-title" type="text" placeholder="Use Postgres for persistence">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Summary</label>
+          <textarea id="decision-summary" rows="3" placeholder="Why was this decision made?"></textarea>
+        </div>
+        <button class="btn btn-secondary w-full" onclick="createDecision()">
+          <i data-lucide="plus"></i>
+          Save decision
+        </button>
+      </div>
+    </div>
+
+    <!-- Create Investigation -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="width:26px;height:26px;border-radius:var(--r-sm);background:var(--amber-dim);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="search" style="width:13px;height:13px;color:var(--amber);"></i>
+        </div>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">New Investigation</span>
+      </div>
+      <div class="stack">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Title</label>
+          <input id="investigation-title" type="text" placeholder="Auth token expiry bug">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Summary</label>
+          <textarea id="investigation-summary" rows="3" placeholder="What are you investigating?"></textarea>
+        </div>
+        <button class="btn btn-secondary w-full" onclick="createInvestigation()">
+          <i data-lucide="plus"></i>
+          Save investigation
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function searchMemory() {
+  const q = document.getElementById('memory-query').value.trim();
+  if (!q) return;
+  const wrap = document.getElementById('search-results-wrap');
+  const container = document.getElementById('search-results');
+  container.innerHTML = '<div style="padding:16px;color:var(--text-3);font-size:13px;display:flex;align-items:center;gap:8px;"><div class="spinner"></div> Searching…</div>';
+  wrap.style.display = 'block';
+  try {
+    const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const items = data.items || data.results || data || [];
+    if (!items.length) {
+      container.innerHTML = '<div style="padding:20px 18px;font-size:13px;color:var(--text-3);">No results found.</div>';
+      return;
+    }
+    container.innerHTML = items.map(item => `
+      <a href="/memory/${item.id}" style="display:flex;align-items:center;gap:10px;padding:10px 18px;text-decoration:none;transition:background var(--transition);" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.title}</div>
+          <div style="font-size:11.5px;color:var(--text-3);">${item.type} · ${item.created_at || ''}</div>
+        </div>
+      </a>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="padding:16px 18px;color:var(--red);font-size:13px;">Search failed.</div>';
+  }
+}
+
+function clearSearch() {
+  document.getElementById('search-results-wrap').style.display = 'none';
+  document.getElementById('memory-query').value = '';
+}
+
+async function createDecision() {
+  const title = document.getElementById('decision-title').value.trim();
+  const summary = document.getElementById('decision-summary').value.trim();
+  if (!title) { showToast('Title is required', 'error'); return; }
+  try {
+    const res = await fetch('/api/decisions/create', {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({title, summary})
+    });
+    if (res.ok) {
+      showToast('Decision saved');
+      document.getElementById('decision-title').value = '';
+      document.getElementById('decision-summary').value = '';
+      setTimeout(() => location.reload(), 800);
+    } else { showToast('Failed to save decision', 'error'); }
+  } catch(e) { showToast('Failed to save decision', 'error'); }
+}
+
+async function createInvestigation() {
+  const title = document.getElementById('investigation-title').value.trim();
+  const summary = document.getElementById('investigation-summary').value.trim();
+  if (!title) { showToast('Title is required', 'error'); return; }
+  try {
+    const res = await fetch('/api/investigations/create', {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({title, summary})
+    });
+    if (res.ok) {
+      showToast('Investigation saved');
+      document.getElementById('investigation-title').value = '';
+      document.getElementById('investigation-summary').value = '';
+      setTimeout(() => location.reload(), 800);
+    } else { showToast('Failed to save investigation', 'error'); }
+  } catch(e) { showToast('Failed to save investigation', 'error'); }
+}
+</script>
+{% endblock %}

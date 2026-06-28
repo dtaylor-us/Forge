@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %} — Planning{% endblock %}
+{% block breadcrumb %}Planning{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row mb-4">
+  <div>
+    <div class="page-header-eyebrow">AI Planner</div>
+    <h1 class="page-title">Planning</h1>
+    <p class="page-desc">Generate advisory implementation plans grounded in your workset context.</p>
+  </div>
+</div>
+
+<div class="split-pane" style="align-items:start;">
+
+  <!-- Left: Configuration -->
+  <div class="plan-panel">
+    <div class="plan-panel-header">Configuration</div>
+    <div class="plan-panel-body stack">
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Task</label>
+        <textarea id="plan-task" rows="5" placeholder="Describe what you want to implement or refactor…"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Workset</label>
+        <select id="plan-workset">
+          <option value="">— No workset —</option>
+          {% for item in worksets %}
+          <option value="{{ item.name }}">{{ item.name }} ({{ item.file_count }} files)</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Model override</label>
+        <input id="plan-model" type="text" placeholder="e.g. claude-opus-4-8 (optional)">
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Timeout (seconds)</label>
+        <input id="plan-timeout" type="number" placeholder="120">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+        <label class="form-toggle">
+          <input id="plan-memory" type="checkbox" checked>
+          Use memory context
+        </label>
+        <label class="form-toggle">
+          <input id="plan-save" type="checkbox">
+          Save plan to disk
+        </label>
+      </div>
+
+      <button class="btn btn-primary w-full" onclick="generatePlan()">
+        <i data-lucide="sparkles"></i>
+        Generate plan
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Right: Result -->
+  <div class="plan-result-panel">
+    <div class="plan-result-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="file-text" style="width:15px;height:15px;color:var(--text-3);"></i>
+        <span style="font-size:13px;font-weight:600;color:var(--text-2);">Plan Output</span>
+        <div class="plan-loading" id="planLoading">
+          <div class="spinner"></div>
+          <span>Generating…</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;" id="planActions" style="display:none;">
+        <button class="btn btn-ghost btn-sm" onclick="copyPlan()" id="copyBtn" style="display:none;">
+          <i data-lucide="copy"></i>
+          Copy
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleRaw()" id="rawBtn" style="display:none;">
+          <i data-lucide="code-2"></i>
+          Raw
+        </button>
+      </div>
+    </div>
+
+    <div class="plan-result-body" id="planBody">
+      <div class="plan-empty">
+        <i data-lucide="file-pen"></i>
+        <div class="plan-empty-title">No plan yet</div>
+        <div class="plan-empty-desc">Configure a task and workset, then generate a plan.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+let lastPlanRaw = '';
+let showingRaw = false;
+
+async function generatePlan() {
+  const task = document.getElementById('plan-task').value.trim();
+  if (!task) { showToast('Enter a task description', 'error'); return; }
+
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Generating…';
+  document.getElementById('planLoading').classList.add('visible');
+  document.getElementById('copyBtn').style.display = 'none';
+  document.getElementById('rawBtn').style.display = 'none';
+  document.getElementById('planBody').innerHTML = '<div class="plan-empty"><div class="spinner" style="width:28px;height:28px;border-width:3px;"></div></div>';
+
+  const payload = {
+    task,
+    workset: document.getElementById('plan-workset').value || null,
+    model:   document.getElementById('plan-model').value || null,
+    save:    document.getElementById('plan-save').checked,
+    use_memory: document.getElementById('plan-memory').checked,
+    timeout: parseInt(document.getElementById('plan-timeout').value) || null
+  };
+
+  try {
+    const res = await fetch('/api/plans/generate', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    const planText = data.plan || data.content || JSON.stringify(data, null, 2);
+    lastPlanRaw = planText;
+    showingRaw = false;
+    renderPlan(planText);
+    showToast('Plan generated');
+    document.getElementById('copyBtn').style.display = '';
+    document.getElementById('rawBtn').style.display = '';
+  } catch(e) {
+    document.getElementById('planBody').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed to generate plan. Check the console for details.</div>`;
+    showToast('Failed to generate plan', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="sparkles"></i> Generate plan';
+    document.getElementById('planLoading').classList.remove('visible');
+    lucide.createIcons();
+  }
+}
+
+function renderPlan(text) {
+  const body = document.getElementById('planBody');
+  try {
+    body.innerHTML = `<div class="markdown-body">${marked.parse(text)}</div>`;
+  } catch(e) {
+    body.innerHTML = `<pre style="margin:0;">${text}</pre>`;
+  }
+}
+
+function toggleRaw() {
+  showingRaw = !showingRaw;
+  if (showingRaw) {
+    document.getElementById('planBody').innerHTML = `<pre style="margin:0;border:none;background:none;padding:0;">${lastPlanRaw.replace(/</g,'&lt;')}</pre>`;
+    document.getElementById('rawBtn').innerHTML = '<i data-lucide="eye"></i> Rendered';
+  } else {
+    renderPlan(lastPlanRaw);
+    document.getElementById('rawBtn').innerHTML = '<i data-lucide="code-2"></i> Raw';
+  }
+  lucide.createIcons();
+}
+
+function copyPlan() {
+  copyText(lastPlanRaw);
+}
+</script>
+{% endblock %}

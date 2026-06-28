@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %} — {{ item.title }}{% endblock %}
+{% block breadcrumb %}<a href="/memory" style="color:var(--text-3);text-decoration:none;">Memory</a><span style="color:var(--text-4);margin:0 6px;">/</span>{{ item.title | truncate(40, true, '…') }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row mb-6">
+  <div style="flex:1;min-width:0;">
+    <div class="page-header-eyebrow" style="display:flex;align-items:center;gap:6px;">
+      {% if item.type == 'decision' %}
+      <i data-lucide="check-circle-2" style="width:12px;height:12px;color:var(--blue);"></i>
+      <span style="color:var(--blue);">Decision</span>
+      {% elif item.type == 'investigation' %}
+      <i data-lucide="search" style="width:12px;height:12px;color:var(--amber);"></i>
+      <span style="color:var(--amber);">Investigation</span>
+      {% else %}
+      {{ item.type }}
+      {% endif %}
+    </div>
+    <h1 class="page-title">{{ item.title }}</h1>
+    <p class="page-desc">{{ item.created_at }}</p>
+  </div>
+  <a href="/memory" class="btn btn-secondary">
+    <i data-lucide="arrow-left"></i>
+    Back to Memory
+  </a>
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px;align-items:start;">
+
+  <!-- Main content -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    {% if item.summary %}
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;">Summary</div>
+      <div style="font-size:14px;color:var(--text-2);line-height:1.65;">{{ item.summary }}</div>
+    </div>
+    {% endif %}
+
+    {% if item.related_files %}
+    <div class="card card-flush">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+        <span class="section-title">Related Files</span>
+      </div>
+      <div style="padding:8px 0;">
+        {% for f in item.related_files %}
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 18px;">
+          <i data-lucide="file" style="width:13px;height:13px;color:var(--text-3);flex-shrink:0;"></i>
+          <code style="font-size:12.5px;background:none;border:none;padding:0;color:var(--text-2);">{{ f }}</code>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Sidebar metadata -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">Details</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">ID</div>
+          <code style="font-size:11.5px;">{{ item.id }}</code>
+          <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="copyText('{{ item.id }}')">
+            <i data-lucide="copy"></i>
+          </button>
+        </div>
+
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">Type</div>
+          {% if item.type == 'decision' %}
+          <span class="tag tag-blue">{{ item.type }}</span>
+          {% elif item.type == 'investigation' %}
+          <span class="tag tag-amber">{{ item.type }}</span>
+          {% else %}
+          <span class="tag">{{ item.type }}</span>
+          {% endif %}
+        </div>
+
+        {% if item.workset %}
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">Workset</div>
+          <a href="/worksets/{{ item.workset }}" style="font-size:13px;">{{ item.workset }}</a>
+        </div>
+        {% endif %}
+
+        {% if item.tags %}
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Tags</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">
+            {% for tag in item.tags %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">Created</div>
+          <div style="font-size:13px;color:var(--text-2);">{{ item.created_at }}</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

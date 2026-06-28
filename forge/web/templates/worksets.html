@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %} — Worksets{% endblock %}
+{% block breadcrumb %}Worksets{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row">
+  <div>
+    <div class="page-header-eyebrow">Context Engine</div>
+    <h1 class="page-title">Worksets</h1>
+    <p class="page-desc">Task-scoped file bundles. Forge scores and selects the most relevant files for your work.</p>
+  </div>
+  <button class="btn btn-primary" onclick="showCreatePanel()">
+    <i data-lucide="plus"></i>
+    New Workset
+  </button>
+</div>
+
+<div style="display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:20px; align-items:start;">
+
+  <!-- Workset Cards -->
+  <div>
+    {% if worksets %}
+    <div class="grid grid-auto">
+      {% for item in worksets %}
+      <a class="workset-card" href="/worksets/{{ item.name }}">
+        <div class="workset-card-header">
+          <div class="workset-icon">
+            <i data-lucide="layers"></i>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div class="workset-name">{{ item.name }}</div>
+          </div>
+          <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0;margin-top:2px;"></i>
+        </div>
+        {% if item.query %}
+        <div class="workset-query">{{ item.query }}</div>
+        {% endif %}
+        <div class="workset-meta">
+          <div class="workset-stat">
+            <i data-lucide="file"></i>
+            {{ item.file_count }} file{{ 's' if item.file_count != 1 else '' }}
+          </div>
+          <div class="workset-stat">
+            <i data-lucide="database"></i>
+            {{ (item.total_size / 1024) | round(1) if item.total_size is defined else '—' }} KB
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="empty-state">
+        <div class="empty-state-icon"><i data-lucide="layers"></i></div>
+        <div class="empty-state-title">No worksets yet</div>
+        <div class="empty-state-desc">Worksets scope files to a task. Forge scores each file by relevance so your context stays tight.</div>
+        <button class="btn btn-primary mt-2" onclick="showCreatePanel()">
+          <i data-lucide="plus"></i>
+          Create your first workset
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Side Panel -->
+  <div style="display:flex; flex-direction:column; gap:14px;">
+
+    <!-- Suggest -->
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">
+        Suggest Files
+      </div>
+      <div class="stack">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Task query</label>
+          <input id="suggest-query" type="text" placeholder="Describe your task…">
+        </div>
+        <label class="form-toggle">
+          <input id="suggest-tests" type="checkbox">
+          Include test files
+        </label>
+        <button class="btn btn-secondary w-full" onclick="suggestWorkset()">
+          <i data-lucide="sparkles"></i>
+          Suggest files
+        </button>
+      </div>
+      <div id="suggest-result" style="display:none; margin-top:12px;">
+        <pre id="suggest-output" style="max-height:300px; font-size:11.5px;"></pre>
+      </div>
+    </div>
+
+    <!-- Create -->
+    <div class="card" id="createPanel" style="display:none;">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">
+        Create Workset
+      </div>
+      <div class="stack">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Name</label>
+          <input id="create-name" type="text" placeholder="auth-refactor">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Task query</label>
+          <input id="create-query" type="text" placeholder="Describe the task…">
+        </div>
+        <button class="btn btn-primary w-full" onclick="createWorkset()">
+          <i data-lucide="plus"></i>
+          Create workset
+        </button>
+      </div>
+      <div id="create-result" style="display:none; margin-top:12px;">
+        <pre id="create-output" style="max-height:200px; font-size:11.5px;"></pre>
+      </div>
+    </div>
+
+    <button class="btn btn-secondary w-full" onclick="showCreatePanel()" id="showCreateBtn">
+      <i data-lucide="plus"></i>
+      Create workset
+    </button>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showCreatePanel() {
+  document.getElementById('createPanel').style.display = 'block';
+  document.getElementById('showCreateBtn').style.display = 'none';
+  document.getElementById('create-name').focus();
+}
+
+async function suggestWorkset() {
+  const btn = event.currentTarget;
+  const q = document.getElementById('suggest-query').value.trim();
+  if (!q) return;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Suggesting…';
+  try {
+    const res = await fetch('/api/worksets/suggest', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({query: q, include_tests: document.getElementById('suggest-tests').checked})
+    });
+    const data = await res.json();
+    document.getElementById('suggest-output').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('suggest-result').style.display = 'block';
+  } catch(e) {
+    showToast('Failed to suggest workset', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="sparkles"></i> Suggest files';
+    lucide.createIcons();
+  }
+}
+
+async function createWorkset() {
+  const btn = event.currentTarget;
+  const name = document.getElementById('create-name').value.trim();
+  const query = document.getElementById('create-query').value.trim();
+  if (!name || !query) { showToast('Name and query are required', 'error'); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Creating…';
+  try {
+    const res = await fetch('/api/worksets/create', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({name, query, force: true})
+    });
+    const data = await res.json();
+    showToast(`Workset "${name}" created`);
+    document.getElementById('create-output').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('create-result').style.display = 'block';
+    setTimeout(() => window.location.href = `/worksets/${name}`, 800);
+  } catch(e) {
+    showToast('Failed to create workset', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="plus"></i> Create workset';
+    lucide.createIcons();
+  }
+}
+</script>
+{% endblock %}

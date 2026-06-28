@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "forge-web",
+      "runtimeExecutable": "uvicorn",
+      "runtimeArgs": ["forge.web.app:create_app", "--factory", "--host", "127.0.0.1", "--port", "8000", "--no-access-log"],
+      "port": 8000,
+      "env": {
+        "FORGE_WEB_ROOT": "/Users/derektaylor/projects/forge"
+      }
+    }
+  ]
+}
