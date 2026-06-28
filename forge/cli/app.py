@@ -15,6 +15,10 @@ from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
 from forge.context.bundle import generate_bundle, save_bundle_markdown
 from forge.context.render import render_json, render_markdown
+from forge.memory.manager import MemoryManager
+from forge.memory.search import search_memory
+from forge.memory.similarity import find_similar
+from forge.memory.store import MemoryStoreError
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
 from forge.planning import PlannerError, generate_plan
@@ -54,11 +58,13 @@ models_app = typer.Typer(help="Manage configured provider models.")
 repo_app = typer.Typer(help="Inspect the current repository deterministically.")
 workset_app = typer.Typer(help="Build and inspect worksets of relevant files.")
 project_app = typer.Typer(help="Show project identity and Forge path information.")
+memory_app = typer.Typer(help="Manage the engineering memory knowledge base.")
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
 app.add_typer(workset_app, name="workset")
 app.add_typer(project_app, name="project")
+app.add_typer(memory_app, name="memory")
 console = Console()
 
 
@@ -882,6 +888,169 @@ def plan_command(
         return
 
     console.print(render_plan_text(result))
+
+
+@memory_app.command("list")
+def memory_list(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """List all engineering memory items."""
+    resolved = resolve_root(override=root)
+    mgr = MemoryManager.from_root(resolved.root)
+    items = mgr.list()
+    if output_json:
+        console.print_json(json.dumps([i.to_dict() for i in items]))
+        return
+    if not items:
+        console.print("[yellow]No memory items found.[/yellow]")
+        return
+    table = Table(title="Engineering Memory")
+    table.add_column("ID")
+    table.add_column("Type")
+    table.add_column("Title")
+    table.add_column("Workset")
+    table.add_column("Created")
+    for item in items:
+        table.add_row(item.id, item.type.value, item.title, item.workset, item.created_at)
+    console.print(table)
+
+
+@memory_app.command("show")
+def memory_show(
+    item_id: Annotated[str, typer.Argument(help="Memory item ID.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show a single memory item by ID."""
+    resolved = resolve_root(override=root)
+    mgr = MemoryManager.from_root(resolved.root)
+    try:
+        item = mgr.get(item_id)
+    except MemoryStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    if output_json:
+        console.print_json(json.dumps(item.to_dict()))
+        return
+    console.print(f"[bold]{item.title}[/bold]")
+    console.print(f"  ID:       {item.id}")
+    console.print(f"  Type:     {item.type.value}")
+    console.print(f"  Workset:  {item.workset or '—'}")
+    console.print(f"  Created:  {item.created_at}")
+    if item.tags:
+        console.print(f"  Tags:     {', '.join(item.tags)}")
+    if item.summary:
+        console.print(f"  Summary:  {item.summary}")
+    if item.related_files:
+        console.print(f"  Files:    {', '.join(item.related_files[:5])}")
+    if item.related_plans:
+        console.print(f"  Related plans: {', '.join(item.related_plans)}")
+
+
+@memory_app.command("search")
+def memory_search(
+    query: Annotated[str, typer.Argument(help="Search query.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    max_results: Annotated[int, typer.Option("--max-results", help="Maximum results.")] = 10,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Search engineering memory with a query string."""
+    resolved = resolve_root(override=root)
+    results = search_memory(resolved.root, query, max_results=max_results)
+    if output_json:
+        out = [
+            {
+                "item": r.item.to_dict(),
+                "score": r.score,
+                "reasons": [
+                    {"signal": rs.signal, "detail": rs.detail, "points": rs.points}
+                    for rs in r.reasons
+                ],
+            }
+            for r in results
+        ]
+        console.print_json(json.dumps(out))
+        return
+    if not results:
+        console.print("[yellow]No matching memory items.[/yellow]")
+        return
+    table = Table(title=f"Memory Search: {query!r}")
+    table.add_column("ID")
+    table.add_column("Type")
+    table.add_column("Title")
+    table.add_column("Score", justify="right")
+    table.add_column("Why")
+    for r in results:
+        why = "; ".join(f"{rs.signal}:{rs.detail}" for rs in r.reasons[:2])
+        table.add_row(r.item.id, r.item.type.value, r.item.title, str(r.score), why)
+    console.print(table)
+
+
+@memory_app.command("related")
+def memory_related(
+    query: Annotated[str, typer.Argument(help="Query describing the current context.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    workset: Annotated[str, typer.Option("--workset", help="Workset name for similarity.")] = "",
+    max_results: Annotated[int, typer.Option("--max-results", help="Maximum results.")] = 5,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Find memory items similar to the given query and context."""
+    resolved = resolve_root(override=root)
+    results = find_similar(resolved.root, query, workset=workset, max_results=max_results)
+    if output_json:
+        out = [
+            {
+                "item": r.item.to_dict(),
+                "score": r.score,
+                "reasons": [
+                    {"signal": rs.signal, "detail": rs.detail, "points": rs.points}
+                    for rs in r.reasons
+                ],
+            }
+            for r in results
+        ]
+        console.print_json(json.dumps(out))
+        return
+    if not results:
+        console.print("[yellow]No similar memory items found.[/yellow]")
+        return
+    table = Table(title=f"Related Memory: {query!r}")
+    table.add_column("ID")
+    table.add_column("Type")
+    table.add_column("Title")
+    table.add_column("Score", justify="right")
+    table.add_column("Why")
+    for r in results:
+        why = "; ".join(f"{rs.signal}:{rs.detail}" for rs in r.reasons[:2])
+        table.add_row(r.item.id, r.item.type.value, r.item.title, str(r.score), why)
+    console.print(table)
+
+
+@memory_app.command("rebuild")
+def memory_rebuild(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+) -> None:
+    """Rebuild the memory index from stored item files."""
+    resolved = resolve_root(override=root)
+    mgr = MemoryManager.from_root(resolved.root)
+    count = mgr.rebuild()
+    console.print(f"[green]Memory index rebuilt.[/green] {count} item(s) indexed.")
 
 
 def main() -> None:

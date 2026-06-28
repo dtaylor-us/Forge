@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from forge.context.bundle import ContextBundle
+from forge.memory.search import MemorySearchResult
 
 _PLANNING_SYSTEM_INSTRUCTIONS = """\
 You are a senior software architect producing an implementation plan.
@@ -91,7 +92,12 @@ At the end of the plan, include this footer verbatim:
 """
 
 
-def build_planning_prompt(task: str, bundle: ContextBundle, model: str) -> str:
+def build_planning_prompt(
+    task: str,
+    bundle: ContextBundle,
+    model: str,
+    memory_context: list[MemorySearchResult] | None = None,
+) -> str:
     """Construct the full planning prompt from a task and context bundle."""
     file_table_rows = _build_file_table(bundle)
     file_details = _build_file_details(bundle)
@@ -106,7 +112,36 @@ def build_planning_prompt(task: str, bundle: ContextBundle, model: str) -> str:
         file_table_rows=file_table_rows,
         file_details=file_details,
     )
-    return raw.replace("{model_placeholder}", model)
+    result = raw.replace("{model_placeholder}", model)
+    if memory_context:
+        result = result + "\n\n" + _build_memory_section(memory_context)
+    return result
+
+
+def _build_memory_section(memory_results: list[MemorySearchResult]) -> str:
+    lines = ["## Engineering Memory Context", ""]
+    lines.append(
+        "The following prior engineering artifacts are relevant to this task. "
+        "Use them to inform your plan."
+    )
+    lines.append("")
+    for r in memory_results:
+        item = r.item
+        lines.append(f"### [{item.type.value.upper()}] {item.title} (id: {item.id})")
+        lines.append(f"- **Created:** {item.created_at}")
+        if item.workset:
+            lines.append(f"- **Workset:** {item.workset}")
+        if item.tags:
+            lines.append(f"- **Tags:** {', '.join(item.tags)}")
+        if item.summary:
+            lines.append(f"- **Summary:** {item.summary}")
+        if item.related_files:
+            lines.append(f"- **Related files:** {', '.join(item.related_files[:5])}")
+        if r.reasons:
+            match_desc = "; ".join(f"{r2.signal}({r2.detail})" for r2 in r.reasons[:3])
+            lines.append(f"- **Matched because:** {match_desc}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _build_file_table(bundle: ContextBundle) -> str:
