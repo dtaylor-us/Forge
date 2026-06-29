@@ -95,9 +95,10 @@ def inspect_patch(path: Path) -> Patch:
     """Return metadata and validation for a patch file."""
     errors: list[str]
     affected_files: list[str]
+    raw_content = ""
     try:
-        content = path.read_text(encoding="utf-8")
-        valid, errors, affected_files = validate_patch_content(content)
+        raw_content = path.read_text(encoding="utf-8")
+        valid, errors, affected_files = validate_patch_content(raw_content)
     except UnicodeDecodeError:
         valid = False
         errors = ["Patch file must be valid UTF-8 text."]
@@ -108,6 +109,8 @@ def inspect_patch(path: Path) -> Patch:
         affected_files = []
 
     stat = path.stat()
+    added, removed = count_diff_lines(raw_content if valid else "")
+
     return Patch(
         name=path.name,
         path=path,
@@ -116,6 +119,8 @@ def inspect_patch(path: Path) -> Patch:
         valid=valid,
         validation_errors=errors,
         affected_files=affected_files,
+        added_lines=added,
+        removed_lines=removed,
     )
 
 
@@ -206,6 +211,17 @@ def _safe_artifact_prefix(value: str) -> str:
     result = "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in value)
     result = "-".join(part for part in result.strip("-_").split("-") if part)
     return result[:60] or "implement"
+
+
+def count_diff_lines(content: str) -> tuple[int, int]:
+    """Count added and removed lines in a unified diff."""
+    added = removed = 0
+    for line in content.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            added += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            removed += 1
+    return added, removed
 
 
 def _ensure_trailing_newline(content: str) -> str:

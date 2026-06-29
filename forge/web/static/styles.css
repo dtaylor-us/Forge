@@ -220,6 +220,12 @@ body {
 
 .nav-item.active svg { color: var(--orange); }
 
+.nav-item.nav-disabled {
+  opacity: 0.48;
+  cursor: default;
+  pointer-events: none;
+}
+
 .nav-badge {
   margin-left: auto;
   font-size: 10px;
@@ -468,6 +474,16 @@ body {
 .metric-sub {
   font-size: 12px;
   color: var(--text-3);
+}
+
+.metric-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.metric-link:hover {
+  border-color: var(--border-2);
+  background: var(--surface-2);
 }
 
 /* ── Hero Card ─────────────────────────────────────────────── */
@@ -839,6 +855,12 @@ body {
 
 .action-btn svg { width: 15px; height: 15px; color: var(--orange); stroke-width: 1.75; flex-shrink: 0; }
 
+.action-list {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
 /* ── Tables ────────────────────────────────────────────────── */
 table { width: 100%; border-collapse: collapse; }
 
@@ -868,6 +890,8 @@ tbody td {
 tbody tr:last-child td { border-bottom: none; }
 
 tbody tr:hover td { background: var(--surface-2); }
+
+tbody tr { cursor: default; }
 
 /* ── Forms ─────────────────────────────────────────────────── */
 .form-group { margin-bottom: 14px; }
@@ -1238,6 +1262,168 @@ a:hover { color: var(--orange-2); }
   border: 1px solid var(--border);
 }
 
+/* ── Workbench Workflow Components ────────────────────────── */
+.panel-heading {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px;
+}
+
+.summary-grid.compact {
+  padding: 0;
+}
+
+.summary-value {
+  margin-top: 5px;
+  font-size: 15px;
+  color: var(--text);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.muted {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.pipeline-stack {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px 18px;
+}
+
+.pipeline-node {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.pipeline-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+
+.pipeline-label {
+  min-width: 0;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pipeline-complete {
+  border-color: rgba(34,197,94,0.24);
+  background: var(--green-dim);
+}
+
+.pipeline-complete .pipeline-marker {
+  background: var(--green);
+  color: #fff;
+}
+
+.pipeline-available {
+  border-color: rgba(249,115,22,0.24);
+}
+
+.pipeline-available .pipeline-marker {
+  background: var(--orange);
+  color: #fff;
+}
+
+.pipeline-future {
+  opacity: 0.58;
+}
+
+.artifact-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.8fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.detail-panel {
+  padding: 18px;
+}
+
+.detail-section {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.detail-title {
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.relationship-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.relationship-card span {
+  color: var(--text-3);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.relationship-card strong {
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.table-timeline {
+  padding: 0 18px;
+}
+
 /* ── Command Palette ───────────────────────────────────────── */
 .palette-overlay {
   position: fixed;
@@ -1450,6 +1636,7 @@ details[open] > summary svg.chevron { transform: rotate(90deg); }
     grid-template-columns: 320px minmax(0, 1fr);
   }
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .artifact-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 860px) {
@@ -1457,5 +1644,6 @@ details[open] > summary svg.chevron { transform: rotate(90deg); }
   .sidebar:not(.collapsed) { box-shadow: var(--shadow-lg); }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .split-pane { grid-template-columns: 1fr; }
+  .summary-grid { grid-template-columns: 1fr; }
   .page-content { padding: 18px; }
 }

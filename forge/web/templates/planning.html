@@ -12,6 +12,53 @@
   </div>
 </div>
 
+<div class="card card-flush mb-6">
+  <div class="panel-heading">
+    <span class="section-title">Saved Plan Artifacts</span>
+    <div class="flex gap-2">
+      <a class="btn btn-ghost btn-sm" href="/execution"><i data-lucide="workflow"></i>Execution</a>
+      <a class="btn btn-ghost btn-sm" href="/patches"><i data-lucide="git-pull-request-arrow"></i>Patches</a>
+      <a class="btn btn-ghost btn-sm" href="/artifacts"><i data-lucide="boxes"></i>Artifacts</a>
+    </div>
+  </div>
+  {% if plan_artifacts %}
+  <table>
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Workset</th>
+        <th>Generated</th>
+        <th>Related Context</th>
+        <th>Memory Used</th>
+        <th>Generated Patch</th>
+        <th>Execution Request</th>
+        <th>Future Verification</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for plan in plan_artifacts %}
+      <tr>
+        <td><strong style="color:var(--text);">{{ plan.name }}</strong></td>
+        <td><code>{{ plan.workset_name or "—" }}</code></td>
+        <td>{{ plan.created_at or "—" }}</td>
+        <td><a href="/artifacts">Context</a></td>
+        <td><a href="/memory">Memory</a></td>
+        <td><a href="/patches">Patch Explorer</a></td>
+        <td><a href="/execution">Prepared request</a></td>
+        <td><span class="tag">Coming Soon</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:30px 24px;">
+    <div class="empty-state-icon"><i data-lucide="file-pen"></i></div>
+    <div class="empty-state-title">No saved plan artifacts</div>
+    <div class="empty-state-desc">Generate a plan with Save enabled to connect planning to execution, patches, and artifacts.</div>
+  </div>
+  {% endif %}
+</div>
+
 <div class="split-pane" style="align-items:start;">
 
   <!-- Left: Configuration -->

@@ -11,7 +11,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from forge.project.resolver import resolve_root
-from forge.web.routes import dashboard, memory, planning, project, repository, worksets
+from forge.web.routes import (
+    artifacts,
+    dashboard,
+    execution,
+    memory,
+    patches,
+    planning,
+    project,
+    repository,
+    worksets,
+)
 from forge.web.schemas import error_response
 
 _WEB_DIR = Path(__file__).parent
@@ -32,6 +42,9 @@ def create_app(root: Path | str | None = None) -> FastAPI:
     app.include_router(repository.router)
     app.include_router(worksets.router)
     app.include_router(planning.router)
+    app.include_router(execution.router)
+    app.include_router(artifacts.router)
+    app.include_router(patches.router)
     app.include_router(memory.router)
 
     @app.exception_handler(Exception)

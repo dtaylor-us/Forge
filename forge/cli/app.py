@@ -15,6 +15,7 @@ from forge.commands.doctor import CheckResult, run_doctor
 from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
 from forge.execution import ExecutionServiceError
+from forge.services.apply_service import ApplyError, PolicyBlockedError
 from forge.memory.store import MemoryStoreError
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
@@ -22,10 +23,13 @@ from forge.patches import PatchError
 from forge.planning import PlannerError
 from forge.planning.render import render_plan_json, render_plan_text
 from forge.services import (
+    apply_service,
+    git_service,
     implementation_service,
     memory_service,
     patch_service,
     planning_service,
+    policy_service,
     project_service,
     repository_service,
     verification_service,
@@ -48,6 +52,8 @@ workset_app = typer.Typer(help="Build and inspect worksets of relevant files.")
 project_app = typer.Typer(help="Show project identity and Forge path information.")
 memory_app = typer.Typer(help="Manage the engineering memory knowledge base.")
 patch_app = typer.Typer(help="Inspect and validate saved patches.")
+git_app = typer.Typer(help="Inspect Git repository state.")
+policy_app = typer.Typer(help="Inspect and evaluate engineering policy.")
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
@@ -55,6 +61,8 @@ app.add_typer(workset_app, name="workset")
 app.add_typer(project_app, name="project")
 app.add_typer(memory_app, name="memory")
 app.add_typer(patch_app, name="patch")
+app.add_typer(git_app, name="git")
+app.add_typer(policy_app, name="policy")
 console = Console()
 
 
@@ -124,33 +132,60 @@ def verify(
     ] = None,
     output_json: Annotated[
         bool,
-        typer.Option("--json", help="Output the detected strategy as JSON."),
+        typer.Option("--json", help="Output verification data as JSON."),
     ] = False,
+    patch: Annotated[
+        str | None,
+        typer.Option("--patch", help="Patch metadata to associate with this verification."),
+    ] = None,
+    plan: Annotated[
+        str | None,
+        typer.Option("--plan", help="Plan metadata to associate with this verification."),
+    ] = None,
+    workset: Annotated[
+        str | None,
+        typer.Option("--workset", help="Workset metadata to associate with this verification."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Path to write the verification report JSON."),
+    ] = None,
+    timeout: Annotated[
+        float,
+        typer.Option("--timeout", min=1.0, help="Timeout in seconds for each verification step."),
+    ] = 300.0,
 ) -> None:
-    """Detect repository verification strategy."""
-    if not detect:
-        console.print("[red]Error:[/red] pass --detect to inspect verification strategy.")
-        raise typer.Exit(code=1)
-
+    """Execute repository verification or inspect the detected strategy."""
     resolved = project_service.resolve_project_root(root)
-    result = verification_service.detect(resolved.root)
+    if detect:
+        result = verification_service.detect(resolved.root)
+        if output_json:
+            console.print_json(json.dumps(result))
+            return
+        _render_detection(result)
+        return
+
+    try:
+        report = verification_service.run(
+            resolved.root,
+            timeout=timeout,
+            output_path=output,
+            patch=patch,
+            plan=plan,
+            workset=workset,
+        )
+    except verification_service.VerificationServiceError as exc:
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc), "overall_status": "error"}))
+        else:
+            console.print(f"[red]Verification infrastructure error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
     if output_json:
-        console.print_json(json.dumps(result))
-        return
-
-    strategy = result["strategy"]
-    console.print("[bold]Verification Strategy[/bold]")
-    console.print(f"Ecosystem: {_human_ecosystem(str(strategy['ecosystem']))}")
-    if strategy["ecosystem"] == "unknown":
-        console.print("No deterministic verification strategy detected.")
-        return
-
-    console.print(f"Build: {_first_command(strategy['steps'], 'build')}")
-    console.print(f"Tests: {_first_command(strategy['steps'], 'tests')}")
-    console.print(f"Formatter: {_first_command(strategy['steps'], 'formatter')}")
-    console.print(f"Linter: {_first_command(strategy['steps'], 'linter')}")
-    console.print(f"Package Manager: {strategy['package_manager'] or 'none'}")
-    console.print(f"Confidence: {strategy['confidence']}")
+        console.print_json(json.dumps(report))
+    else:
+        _render_verification_report(report)
+    raise typer.Exit(code=verification_service.exit_code(report))
 
 
 @config_app.command("show")
@@ -862,6 +897,7 @@ def project_paths(
     table.add_row("Plans dir", paths["plans_dir"])
     table.add_row("Memory dir", paths["memory_dir"])
     table.add_row("Patches dir", paths["patches_dir"])
+    table.add_row("Verifications dir", paths["verifications_dir"])
     console.print(table)
 
 
@@ -884,6 +920,81 @@ def _first_command(steps: object, kind: str) -> str:
         if isinstance(step, dict) and step.get("kind") == kind:
             return str(step.get("command") or "none")
     return "none"
+
+
+def _render_detection(result: dict[str, object]) -> None:
+    strategy = result["strategy"]
+    if not isinstance(strategy, dict):
+        console.print("[red]Error:[/red] malformed verification strategy.")
+        return
+    console.print("[bold]Verification Strategy[/bold]")
+    console.print(f"Ecosystem: {_human_ecosystem(str(strategy['ecosystem']))}")
+    if strategy["ecosystem"] == "unknown":
+        console.print("No deterministic verification strategy detected.")
+        return
+
+    console.print(f"Build: {_first_command(strategy['steps'], 'build')}")
+    console.print(f"Tests: {_first_command(strategy['steps'], 'tests')}")
+    console.print(f"Formatter: {_first_command(strategy['steps'], 'formatter')}")
+    console.print(f"Linter: {_first_command(strategy['steps'], 'linter')}")
+    console.print(f"Package Manager: {strategy['package_manager'] or 'none'}")
+    console.print(f"Confidence: {strategy['confidence']}")
+
+
+def _render_verification_report(report: dict[str, object]) -> None:
+    repository = report.get("repository", {})
+    summary = report.get("summary", {})
+    artifact = report.get("artifact", {})
+    steps = report.get("steps", [])
+    by_kind = summary.get("by_kind", {}) if isinstance(summary, dict) else {}
+    repo_name = repository.get("name", "unknown") if isinstance(repository, dict) else "unknown"
+    overall = str(report.get("overall_status", "fail")).upper()
+
+    console.print("[bold]Verification[/bold]")
+    console.print(f"Repository: {repo_name}")
+    console.print(f"Overall: {_status_label(overall)}")
+    console.print()
+
+    table = Table(show_header=False, box=None)
+    table.add_column("Gate")
+    table.add_column("Status")
+    for label, kind in (
+        ("Formatter", "formatter"),
+        ("Linter", "linter"),
+        ("Build", "build"),
+        ("Tests", "tests"),
+    ):
+        table.add_row(label, _status_label(str(by_kind.get(kind, "skipped")).upper()))
+    console.print(table)
+    console.print(f"Duration: {_format_duration(float(report.get('duration') or 0))}")
+    if isinstance(artifact, dict) and artifact.get("path"):
+        console.print(f"Artifact: {artifact['path']}")
+    if isinstance(steps, list):
+        failed = [
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("status") in {"fail", "error"}
+        ]
+        for step in failed:
+            detail = step.get("exception") or step.get("stderr") or step.get("stdout") or ""
+            console.print(
+                f"[red]{step.get('name', 'step')} failed:[/red] {str(detail).strip()[:300]}"
+            )
+
+
+def _status_label(status: str) -> str:
+    if status == "PASS":
+        return "[green]PASS[/green]"
+    if status == "SKIPPED":
+        return "[yellow]SKIPPED[/yellow]"
+    if status == "ERROR":
+        return "[red]ERROR[/red]"
+    return "[red]FAIL[/red]"
+
+
+def _format_duration(seconds: float) -> str:
+    minutes, remainder = divmod(int(seconds), 60)
+    return f"{minutes:02d}:{remainder:02d}"
 
 
 def _human_ecosystem(ecosystem: str) -> str:
@@ -1300,6 +1411,208 @@ def patch_validate(
                 console.print(f"  - {error}")
 
     raise typer.Exit(code=0 if patch["valid"] else 1)
+
+
+@git_app.command("status")
+def git_status(
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show Git repository status."""
+    result = git_service.status()
+
+    if output_json:
+        console.print_json(json.dumps(result))
+        raise typer.Exit(code=0 if result["is_git_repository"] else 1)
+
+    if not result["is_git_repository"]:
+        console.print("[red]Not a git repository.[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"Repository: git")
+    console.print(f"Branch: {result['branch']}")
+    console.print(f"Commit: {result['commit']}")
+    console.print(f"Clean: {'true' if result['clean'] else 'false'}")
+
+    if result["modified_files"]:
+        console.print("\nModified:")
+        for f in result["modified_files"]:
+            console.print(f"  - {f}")
+
+    if result["staged_files"]:
+        console.print("\nStaged:")
+        for f in result["staged_files"]:
+            console.print(f"  - {f}")
+
+    if result["deleted_files"]:
+        console.print("\nDeleted:")
+        for f in result["deleted_files"]:
+            console.print(f"  - {f}")
+
+    if result["untracked_files"]:
+        console.print("\nUntracked:")
+        for f in result["untracked_files"]:
+            console.print(f"  - {f}")
+
+
+@git_app.command("branch")
+def git_branch(
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show current Git branch."""
+    result = git_service.branch()
+
+    if output_json:
+        console.print_json(json.dumps(result))
+        raise typer.Exit(code=0 if result["is_git_repository"] else 1)
+
+    if not result["is_git_repository"]:
+        console.print("[red]Not a git repository.[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"Current branch: {result['branch']}")
+
+
+@policy_app.command("show")
+def policy_show(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show the active engineering policy."""
+    resolved = project_service.resolve_project_root(root)
+    policy = policy_service.show(resolved.root)
+
+    if output_json:
+        console.print_json(json.dumps(policy))
+        raise typer.Exit(code=0)
+
+    for section, fields in policy.items():
+        console.print(f"\n[bold]{section}:[/bold]")
+        for key, value in fields.items():
+            console.print(f"  {key}: {value}")
+
+    raise typer.Exit(code=0)
+
+
+@policy_app.command("check")
+def policy_check(
+    patch_path_or_name: Annotated[
+        str,
+        typer.Argument(help="Saved patch name or path to evaluate."),
+    ],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    verification: Annotated[
+        str | None,
+        typer.Option("--verification", help="Path or name of verification report."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Evaluate a patch against the active engineering policy."""
+    resolved = project_service.resolve_project_root(root)
+    try:
+        result = policy_service.check(resolved.root, patch_path_or_name, verification)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Policy check error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    if output_json:
+        console.print_json(json.dumps(result))
+        evaluation = result["evaluation"]
+        raise typer.Exit(code=0 if evaluation["status"] == "pass" else 1)
+
+    evaluation = result["evaluation"]
+    status = evaluation["status"]
+    color = "green" if status == "pass" else ("yellow" if status == "warn" else "red")
+    console.print(f"\nPolicy evaluation: [{color}]{status.upper()}[/{color}]")
+    console.print(f"Patch: {result['patch']}")
+
+    for check in evaluation["checks"]:
+        icon = "✓" if check["status"] == "pass" else ("⚠" if check["status"] == "warn" else ("–" if check["status"] == "skip" else "✗"))
+        sev_color = "green" if check["status"] == "pass" else ("yellow" if check["status"] in ("warn", "skip") else "red")
+        console.print(f"  [{sev_color}]{icon}[/{sev_color}] {check['name']}: {check['message']}")
+
+    raise typer.Exit(code=0 if status == "pass" else 1)
+
+
+@app.command("apply")
+def apply_command(
+    patch_path_or_name: Annotated[
+        str,
+        typer.Argument(help="Saved patch name or path to apply."),
+    ],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    verification: Annotated[
+        str | None,
+        typer.Option("--verification", help="Path or name of verification report."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Override policy failures if policy allows force."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompt (does not bypass policy)."),
+    ] = False,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Apply a patch after policy evaluation and confirmation."""
+    resolved = project_service.resolve_project_root(root)
+
+    if not yes:
+        confirm = typer.confirm(f"Apply patch '{patch_path_or_name}' to the working tree?")
+        if not confirm:
+            console.print("Apply cancelled.")
+            raise typer.Exit(code=0)
+
+    try:
+        record = apply_service.apply(
+            resolved.root,
+            patch_path_or_name,
+            verification_path=verification,
+            force=force,
+        )
+    except PolicyBlockedError as exc:
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc), "evaluation": exc.evaluation}))
+        else:
+            console.print(f"[red]Policy blocked apply:[/red] {exc}")
+            for check in exc.evaluation.get("checks", []):
+                if check["status"] == "fail":
+                    console.print(f"  ✗ {check['name']}: {check['message']}")
+            console.print("Use [bold]--force[/bold] to override if policy permits.")
+        raise typer.Exit(code=1) from exc
+    except ApplyError as exc:
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Apply failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # noqa: BLE001
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Infrastructure error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    if output_json:
+        console.print_json(json.dumps(record))
+    else:
+        console.print(f"[green]Patch applied:[/green] {record['patch']}")
+        console.print(f"Policy status: {record['policy_status']}")
+        if record.get("affected_files"):
+            console.print(f"Affected files: {', '.join(record['affected_files'])}")
+        if record.get("forced"):
+            console.print("[yellow]Note: policy overridden with --force[/yellow]")
+
+    raise typer.Exit(code=0)
 
 
 def main() -> None:

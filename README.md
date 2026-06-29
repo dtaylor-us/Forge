@@ -226,6 +226,23 @@ forge investigation create "Planning timeout"
 forge memory timeline
 ```
 
+## Inspect Git Repository State
+
+```bash
+forge git status
+
+forge git status --json
+
+forge git branch
+
+forge git branch --json
+```
+
+`forge git status` inspects the current Git repository without modifying any
+file. It reports branch, commit SHA, clean/dirty state, staged files, modified
+files, deleted files, and untracked files. `GitService` centralizes all git
+subprocess calls and is the foundation for future guarded patch application.
+
 ## 🧩 Inspect Saved Patches
 
 ```bash
@@ -255,6 +272,83 @@ apply patches, edit source files directly, run verification, or start repair
 loops. Invalid model output is preserved under `.forge/patches/invalid/` for
 review.
 
+## ✅ Run Engineering Verification
+
+```bash
+forge verify
+
+forge verify --json
+
+forge verify --patch <patch> --plan <plan> --workset <workset>
+
+forge verify --detect
+
+forge verify --detect --json
+```
+
+`forge verify` executes the deterministic verification strategy Forge detects
+for the current working tree. It captures each formatter, linter, build, and
+test step as structured engineering evidence with command, working directory,
+start and completion time, duration, exit code, stdout, stderr, timeout state,
+and status.
+
+Every run writes a JSON report under `.forge/verifications/` unless `--output`
+is provided. Reports are Engineering Artifacts and can be associated with
+metadata for a workset, plan, or patch. Verification continues after recoverable
+step failures so engineers can see all quality gate evidence in one report.
+
+`forge verify --detect` remains available for strategy inspection. It reads
+deterministic repository signals such as
+`pyproject.toml`, `package.json`, lockfiles, `pom.xml`, `build.gradle`,
+`go.mod`, `Cargo.toml`, `.sln`, and `.csproj` files. It returns a structured
+strategy with likely build, test, formatter, linter, package manager, ecosystem,
+and confidence fields.
+
+Verification does not apply patches, edit source files, or start repair loops.
+
+---
+
+# Engineering Policy and Guarded Apply
+
+Forge enforces a policy gate before any patch is applied to the working tree.
+
+```bash
+forge policy show                          # display the active policy
+forge policy check <patch>                 # evaluate patch, verification, and git
+forge apply <patch>                        # guarded apply with confirmation
+forge apply <patch> --yes                  # skip prompt, policy still enforced
+forge apply <patch> --force                # override policy failures if allowed
+forge apply <patch> --verification <path>  # use a specific verification report
+```
+
+`forge apply` runs the following guards in order before touching any file:
+
+1. Validate patch (must be a valid unified diff).
+2. `git apply --check` — dry-run to confirm patch can be applied.
+3. Load the latest verification report from `.forge/verifications/`.
+4. Evaluate the active policy against patch metadata, verification, and git state.
+5. Block if policy fails unless `--force` is used and `policy.apply.allow_force` is true.
+6. Prompt for confirmation unless `--yes` is supplied.
+7. Apply patch via `git apply`. No commit is created.
+8. Persist apply record under `.forge/applications/`.
+
+Policy fields (`patch`, `verification`, `git`, `apply`) may be overridden via
+`.forge/policy.yaml`. Defaults are applied when the file is absent.
+
+`--yes` skips the interactive confirmation prompt but never bypasses policy.
+`--force` may bypass policy failures only when `policy.apply.allow_force` is `true`.
+No model calls occur. No commits are created. No repair loop runs.
+
+Current workflow:
+
+```bash
+forge implement "..." --workset <name>
+forge patch validate <patch>
+forge verify --patch <patch> --workset <name>
+forge policy check <patch>
+forge apply <patch>
+```
+
 Engineering knowledge becomes searchable and influences future planning.
 
 ---
@@ -271,6 +365,8 @@ artifacts Forge already writes:
 - `.forge/plans/*.md`
 - `.forge/memory/**/*.json`
 - `.forge/patches/*.patch`
+- `.forge/verifications/*.json`
+- `.forge/applications/*.json`
 
 The registry does not expose new CLI commands yet. It preserves existing
 storage locations, file formats, and workflows while giving future capabilities
@@ -446,16 +542,53 @@ http://127.0.0.1:8765
 
 # Forge Workbench
 
-The browser interface provides a modern engineering experience.
+The browser interface is the visual command center for Forge's engineering
+workflow. It is presentation-only: routes consume application services and the
+Engineering Artifact Registry, while CLI behavior and backend orchestration stay
+unchanged.
 
 | Workspace | Purpose |
 |-----------|---------|
-| Dashboard | Project overview, recent activity, workflows |
-| Repository | Detection, search, repository structure |
-| Worksets | Build, inspect, refresh, manage worksets |
-| Planning | Generate implementation plans |
-| Engineering Knowledge | Search decisions, investigations, plans, lessons |
+| Dashboard | Repository summary, workflow visualization, engineering metrics, and recent activity |
+| Repository | Engineering overview with detected languages, frameworks, package managers, roots, important files, build systems, and verification placeholders |
+| Worksets | Build, inspect, refresh, and relate task-scoped file sets to plans, patches, context bundles, and artifacts |
+| Planning | Generate implementation plans and browse saved plan artifacts connected to execution, memory, patches, and future verification |
+| Execution | Read-only visualization of the prepared `ExecutionRequest`, selected model, pipeline stages, prompt summary, memory summary, and context summary |
+| Artifacts | Unified Artifact Explorer backed by the read-only registry for repositories, worksets, context bundles, plans, memory entries, patches, and future artifact types |
+| Patches | Patch Explorer for saved unified diffs with affected files, validation state, source metadata, show, validate, and download actions |
+| Engineering Memory | Search decisions, investigations, plans, lessons, and navigate naturally to plans, execution, patches, and worksets |
 | Project | Project metadata and Forge configuration |
+| Verification | CLI verification execution and artifact reports |
+| Architecture | Planned |
+| Workflow History | Planned |
+
+The Workbench uses a common relationship vocabulary:
+
+```text
+Workset
+        |
+        v
+Context Bundle
+        |
+        v
+Plan
+        |
+        v
+Execution Request
+        |
+        v
+Patch
+        |
+        v
+Future Verification
+        |
+        v
+Future Apply
+```
+
+Generated artifacts remain in their existing `.forge/` locations. The UI
+discovers and links them through the Artifact Registry rather than moving files
+or duplicating service logic.
 
 *(Screenshot placeholders)*
 
@@ -465,6 +598,12 @@ docs/images/dashboard.png
 docs/images/worksets.png
 
 docs/images/planning.png
+
+docs/images/execution.png
+
+docs/images/artifacts.png
+
+docs/images/patches.png
 
 docs/images/knowledge.png
 ```
@@ -586,6 +725,7 @@ Forge stores project-local artifacts under:
 | `plans/` | Saved implementation plans |
 | `memory/` | Engineering knowledge |
 | `patches/` | Saved raw diff patches for inspection and validation |
+| `verifications/` | Structured verification report artifacts |
 | `architecture/` | Future architecture artifacts |
 | `sessions/` | Future session history |
 | `cache/` | Local cache |
@@ -605,8 +745,8 @@ Never store secrets under `.forge/`.
 | Web Workbench | ✅ Complete |
 | Guided Engineering Experience | 🚧 In Progress |
 | Architecture Intelligence | ⏳ Planned |
-| Verification Engine | ⏳ Planned |
 | Patch Generation | ✅ Complete |
+| Verification Engine | ✅ Complete |
 | Patch Application | ⏳ Planned |
 | Agent Orchestration | ⏳ Planned |
 | Enterprise Knowledge | ⏳ Planned |

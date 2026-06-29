@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %} — Execution{% endblock %}
+{% block breadcrumb %}Execution{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row">
+  <div>
+    <div class="page-header-eyebrow">Engineering Execution</div>
+    <h1 class="page-title">Execution</h1>
+    <p class="page-desc">Read-only visualization of the prepared ExecutionRequest and canonical execution pipeline.</p>
+  </div>
+  <span class="tag tag-orange">No execution controls yet</span>
+</div>
+
+<div class="grid grid-2 mb-6">
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Execution Pipeline</span>
+      <span class="status-pill status-active">Available</span>
+    </div>
+    <div class="pipeline-stack">
+      {% for stage in pipeline %}
+      <div class="pipeline-node pipeline-available">
+        <div class="pipeline-marker">{{ loop.index }}</div>
+        <div class="pipeline-label">{{ stage.label }}</div>
+        <span class="tag tag-orange">{{ stage.name }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Execution Status</span>
+    </div>
+    <div class="detail-panel">
+      {% if prepared.error %}
+      <div class="empty-state">
+        <div class="empty-state-icon"><i data-lucide="circle-alert"></i></div>
+        <div class="empty-state-title">{{ prepared.status | replace("_", " ") | title }}</div>
+        <div class="empty-state-desc">{{ prepared.error }}</div>
+      </div>
+      {% else %}
+      <div class="detail-section">
+        <span class="status-pill status-active">{{ prepared.status }}</span>
+        <h2 class="detail-title">{{ prepared.task }}</h2>
+        <div class="chip-row">
+          <code>{{ prepared.workset }}</code>
+          <span class="tag tag-blue">{{ prepared.selected_model }}</span>
+        </div>
+      </div>
+      <div class="summary-grid compact">
+        <div><div class="metric-label">Context Files</div><div class="summary-value">{{ prepared.context_summary.file_count }}</div></div>
+        <div><div class="metric-label">Context Tokens</div><div class="summary-value">{{ prepared.context_summary.total_tokens }}</div></div>
+        <div><div class="metric-label">Memory Items</div><div class="summary-value">{{ prepared.memory_summary.count }}</div></div>
+        <div><div class="metric-label">Prompt Chars</div><div class="summary-value">{{ prepared.prompt_summary.chars }}</div></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if not prepared.error %}
+<div class="grid grid-2">
+  <div class="card card-flush">
+    <div class="panel-heading"><span class="section-title">Request Metadata</span></div>
+    <div class="detail-panel">
+      <div class="relationship-card"><span>Task</span><strong>{{ prepared.task }}</strong></div>
+      <div class="relationship-card"><span>Workset</span><strong>{{ prepared.workset }}</strong></div>
+      <div class="relationship-card"><span>Selected Model</span><strong>{{ prepared.selected_model }}</strong></div>
+      <div class="relationship-card"><span>Plan</span><strong>{{ prepared.plan.name }}</strong></div>
+      <div class="relationship-card"><span>Created</span><strong>{{ prepared.created_at }}</strong></div>
+    </div>
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading"><span class="section-title">Prompt Summary</span></div>
+    <div class="detail-panel">
+      <pre>{{ prepared.prompt_summary.preview }}</pre>
+    </div>
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading"><span class="section-title">Memory Summary</span></div>
+    <div class="detail-panel">
+      {% for item in prepared.memory_summary.items %}
+      <div class="relationship-card"><span>{{ item.type }}</span><strong>{{ item.title }}</strong></div>
+      {% else %}
+      <p class="muted">No related memory entries were found for this request.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading"><span class="section-title">Context Summary</span></div>
+    <div class="detail-panel">
+      <div class="relationship-card"><span>Files</span><strong>{{ prepared.context_summary.file_count }}</strong></div>
+      <div class="relationship-card"><span>Characters</span><strong>{{ prepared.context_summary.total_chars }}</strong></div>
+      <div class="relationship-card"><span>Tokens</span><strong>{{ prepared.context_summary.total_tokens }}</strong></div>
+      <div class="relationship-card"><span>Plan Path</span><strong>{{ prepared.plan_summary.saved_path or "Memory/default plan" }}</strong></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

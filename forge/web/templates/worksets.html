@@ -42,8 +42,20 @@
             {{ item.file_count }} file{{ 's' if item.file_count != 1 else '' }}
           </div>
           <div class="workset-stat">
-            <i data-lucide="database"></i>
-            {{ (item.total_size / 1024) | round(1) if item.total_size is defined else '—' }} KB
+            <i data-lucide="calendar"></i>
+            {{ item.created_at or "not saved" }}
+          </div>
+          <div class="workset-stat">
+            <i data-lucide="boxes"></i>
+            {{ item.related_artifacts }} artifacts
+          </div>
+          <div class="workset-stat">
+            <i data-lucide="file-pen"></i>
+            {{ item.related_plans }} plans
+          </div>
+          <div class="workset-stat">
+            <i data-lucide="git-pull-request-arrow"></i>
+            {{ item.related_patches }} patches
           </div>
         </div>
       </a>

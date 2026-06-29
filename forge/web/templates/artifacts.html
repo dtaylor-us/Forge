@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %} — Artifacts{% endblock %}
+{% block breadcrumb %}Artifacts{% endblock %}
+
+{% block content %}
+
+<div class="page-header page-header-row">
+  <div>
+    <div class="page-header-eyebrow">Engineering Artifact Registry</div>
+    <h1 class="page-title">Artifacts</h1>
+    <p class="page-desc">A unified read-only view of repository, workset, context, plan, memory, patch, and execution artifacts.</p>
+  </div>
+</div>
+
+<div class="grid grid-4 mb-6">
+  {% for type, count in type_counts.items() %}
+  <div class="metric-card">
+    <div class="metric-label">{{ type | replace("_", " ") }}</div>
+    <div class="metric-value">{{ count }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="artifact-layout">
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Registry</span>
+      <input id="artifact-search" type="text" placeholder="Search artifacts..." oninput="filterArtifacts()" style="max-width:260px;">
+    </div>
+    {% if artifacts %}
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Name</th>
+          <th>Created</th>
+          <th>Relationships</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="artifact-rows">
+        {% for artifact in artifacts %}
+        <tr class="artifact-row" data-name="{{ artifact.name | lower }}" onclick='selectArtifact({{ artifact | tojson }})'>
+          <td><span class="tag tag-blue">{{ artifact.artifact_type | replace("_", " ") }}</span></td>
+          <td>
+            <div style="font-weight:600;color:var(--text);">{{ artifact.name }}</div>
+            {% if artifact.relative_path %}<code>{{ artifact.relative_path }}</code>{% endif %}
+          </td>
+          <td>{{ artifact.created_at or "—" }}</td>
+          <td>{{ artifact.relationships | length }}</td>
+          <td><span class="status-pill status-active">Available</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon"><i data-lucide="boxes"></i></div>
+      <div class="empty-state-title">No artifacts discovered</div>
+      <div class="empty-state-desc">Initialize the project or create worksets, plans, memory entries, and patches.</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Artifact Detail</span>
+    </div>
+    <div id="artifact-detail" class="detail-panel">
+      <div class="empty-state">
+        <div class="empty-state-icon"><i data-lucide="mouse-pointer-click"></i></div>
+        <div class="empty-state-title">Select an artifact</div>
+        <div class="empty-state-desc">Metadata, origin, relationships, and workflow context appear here.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterArtifacts() {
+  const q = document.getElementById('artifact-search').value.toLowerCase();
+  document.querySelectorAll('.artifact-row').forEach(row => {
+    row.style.display = row.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+
+function selectArtifact(artifact) {
+  const relationships = artifact.relationships || [];
+  document.getElementById('artifact-detail').innerHTML = `
+    <div class="detail-section">
+      <span class="tag tag-blue">${artifact.artifact_type.replaceAll('_', ' ')}</span>
+      <h2 class="detail-title">${escapeHtml(artifact.name)}</h2>
+      <p class="muted">${escapeHtml(artifact.description || 'No description recorded.')}</p>
+    </div>
+    <div class="detail-section">
+      <div class="metric-label">Origin</div>
+      <div class="relationship-card"><span>Service</span><strong>${escapeHtml(artifact.producing_service || 'Unknown')}</strong></div>
+      <div class="relationship-card"><span>Command</span><strong>${escapeHtml(artifact.producing_command || 'Unknown')}</strong></div>
+      <div class="relationship-card"><span>Workset</span><strong>${escapeHtml(artifact.workset_name || 'None')}</strong></div>
+    </div>
+    <div class="detail-section">
+      <div class="metric-label">Relationships</div>
+      ${relationships.length ? relationships.map(r => `<div class="relationship-card"><span>${escapeHtml(r.relationship_type)}</span><strong>${escapeHtml(r.target_id)}</strong></div>`).join('') : '<p class="muted">No explicit relationships.</p>'}
+    </div>
+    <div class="detail-section">
+      <div class="metric-label">Metadata</div>
+      <pre>${escapeHtml(JSON.stringify(artifact.metadata || {}, null, 2))}</pre>
+    </div>
+  `;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+</script>
+{% endblock %}

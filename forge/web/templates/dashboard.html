@@ -4,7 +4,6 @@
 
 {% block content %}
 
-<!-- Hero Card -->
 <div class="hero-card mb-6">
   <div class="hero-eyebrow">
     <i data-lucide="hammer" style="width:13px;height:13px;"></i>
@@ -12,150 +11,128 @@
   </div>
   <h1 class="hero-title">{{ project.project_name }}</h1>
   <p class="hero-sub">
-    Your forge is ready. Explore the repository, build worksets, generate plans, and track decisions.
+    Repository intelligence, worksets, context, plans, execution requests, patches, memory, and artifacts in one engineering flow.
   </p>
   <div class="hero-meta">
-    {% if project.initialized %}
-    <span class="status-pill status-active">Initialized</span>
-    {% else %}
-    <span class="status-pill status-warning">Not initialized</span>
-    {% endif %}
-    {% if project.git_detected %}
-    <div class="hero-tag">
-      <i data-lucide="git-branch" style="width:13px;height:13px;"></i>
-      Git detected
-    </div>
-    {% endif %}
-    {% if project.detected.languages %}
-    <div class="hero-tag">
-      <i data-lucide="code-2" style="width:13px;height:13px;"></i>
-      {{ project.detected.languages | join(", ") }}
-    </div>
-    {% endif %}
-    {% if project.detected.frameworks %}
-    <div class="hero-tag">
-      <i data-lucide="package" style="width:13px;height:13px;"></i>
-      {{ project.detected.frameworks | join(", ") }}
-    </div>
-    {% endif %}
+    <span class="status-pill {{ 'status-active' if project.initialized else 'status-warning' }}">{{ 'Initialized' if project.initialized else 'Not initialized' }}</span>
+    <div class="hero-tag"><i data-lucide="git-branch"></i>{{ 'Git detected' if project.git_detected else 'No git metadata' }}</div>
+    <div class="hero-tag"><i data-lucide="cpu"></i>{{ model_config.provider }} / {{ model_config.default_model }}</div>
+    <div class="hero-tag"><i data-lucide="box"></i>{{ metrics.artifact_count }} artifacts</div>
   </div>
 </div>
 
-<!-- Quick Actions -->
-<div class="mb-6">
-  <div class="section-header mb-3">
-    <span class="section-title">Quick Actions</span>
+<div class="grid grid-2 mb-6">
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Repository Summary</span>
+      <a class="btn btn-ghost btn-sm" href="/repository">Open</a>
+    </div>
+    <div class="summary-grid">
+      <div>
+        <div class="metric-label">Repository</div>
+        <div class="summary-value">{{ project.project_name }}</div>
+      </div>
+      <div>
+        <div class="metric-label">Health</div>
+        <span class="status-pill {{ 'status-active' if project.git_detected and detection.source_roots else 'status-warning' }}">{{ 'Ready' if project.git_detected and detection.source_roots else 'Needs review' }}</span>
+      </div>
+      <div>
+        <div class="metric-label">Languages</div>
+        <div class="chip-row">{% for item in detection.languages %}<span class="tech-chip">{{ item }}</span>{% else %}<span class="muted">None</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="metric-label">Frameworks</div>
+        <div class="chip-row">{% for item in detection.frameworks %}<span class="tech-chip">{{ item }}</span>{% else %}<span class="muted">None</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="metric-label">Package Managers</div>
+        <div class="chip-row">{% for item in detection.package_managers %}<span class="tech-chip">{{ item }}</span>{% else %}<span class="muted">None</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="metric-label">Source Roots</div>
+        <div class="chip-row">{% for item in detection.source_roots %}<code>{{ item }}</code>{% else %}<span class="muted">None</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="metric-label">Test Roots</div>
+        <div class="chip-row">{% for item in detection.test_roots %}<code>{{ item }}</code>{% else %}<span class="muted">None</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="metric-label">Project Initialized</div>
+        <div class="summary-value">{{ 'Yes' if project.initialized else 'No' }}</div>
+      </div>
+    </div>
   </div>
-  <div class="action-grid" style="grid-template-columns: repeat(4, minmax(0,1fr));">
-    <a class="action-btn" href="/repository">
-      <i data-lucide="git-branch"></i>
-      Inspect Repository
-    </a>
-    <a class="action-btn" href="/worksets">
-      <i data-lucide="layers"></i>
-      Manage Worksets
-    </a>
-    <a class="action-btn" href="/planning">
-      <i data-lucide="file-pen"></i>
-      Generate Plan
-    </a>
-    <a class="action-btn" href="/memory">
-      <i data-lucide="brain"></i>
-      Browse Memory
-    </a>
+
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Engineering Workflow</span>
+      <span class="tag tag-orange">AI-native</span>
+    </div>
+    <div class="pipeline-stack">
+      {% for stage in workflow %}
+      <div class="pipeline-node pipeline-{{ stage.status }}">
+        <div class="pipeline-marker">{{ loop.index }}</div>
+        <div class="pipeline-label">{{ stage.label }}</div>
+        <span class="tag {{ 'tag-green' if stage.status == 'complete' else 'tag-orange' if stage.status == 'available' else '' }}">{{ 'Complete' if stage.status == 'complete' else 'Available' if stage.status == 'available' else 'Planned' }}</span>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
-<!-- Three-column activity grid -->
-<div class="grid grid-3 mb-6">
+<div class="grid grid-4 mb-6">
+  <a class="metric-card metric-link" href="/repository"><div class="metric-label">Repositories</div><div class="metric-value">{{ metrics.repositories }}</div></a>
+  <a class="metric-card metric-link" href="/worksets"><div class="metric-label">Worksets</div><div class="metric-value orange">{{ metrics.worksets }}</div></a>
+  <a class="metric-card metric-link" href="/artifacts"><div class="metric-label">Context Bundles</div><div class="metric-value blue">{{ metrics.context_bundles }}</div></a>
+  <a class="metric-card metric-link" href="/planning"><div class="metric-label">Plans</div><div class="metric-value">{{ metrics.plans }}</div></a>
+  <a class="metric-card metric-link" href="/memory"><div class="metric-label">Memory Entries</div><div class="metric-value">{{ metrics.memory_entries }}</div></a>
+  <a class="metric-card metric-link" href="/patches"><div class="metric-label">Patches</div><div class="metric-value green">{{ metrics.patches }}</div></a>
+  <a class="metric-card metric-link" href="/execution"><div class="metric-label">Execution Requests</div><div class="metric-value">{{ metrics.execution_requests }}</div></a>
+  <a class="metric-card metric-link" href="/artifacts"><div class="metric-label">Artifact Count</div><div class="metric-value orange">{{ metrics.artifact_count }}</div></a>
+</div>
 
-  <!-- Recent Worksets -->
+<div class="grid grid-2">
   <div class="card card-flush">
-    <div style="padding: 16px 18px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
-      <span class="section-title">Recent Worksets</span>
-      <a href="/worksets" class="btn btn-ghost btn-sm">View all</a>
+    <div class="panel-heading">
+      <span class="section-title">Recent Engineering Activity</span>
+      <a class="btn btn-ghost btn-sm" href="/artifacts">Artifacts</a>
     </div>
-    <div style="padding: 6px 0;">
-      {% for item in worksets %}
-      <a href="/worksets/{{ item.name }}" style="display:flex; align-items:center; gap:10px; padding:10px 18px; text-decoration:none; transition:background var(--transition);" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-        <div style="width:30px;height:30px;border-radius:var(--r-sm);background:var(--orange-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i data-lucide="layers" style="width:13px;height:13px;color:var(--orange);"></i>
+    <div class="timeline table-timeline">
+      {% for event in activity %}
+      <div class="timeline-item">
+        <div class="timeline-dot-col">
+          <div class="timeline-dot decision"></div>
+          {% if not loop.last %}<div class="timeline-line"></div>{% endif %}
         </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.name }}</div>
-          <div style="font-size:11.5px;color:var(--text-3);">{{ item.file_count }} file{{ 's' if item.file_count != 1 else '' }}</div>
+        <div class="timeline-body">
+          <div class="timeline-type" style="color:var(--orange);">{{ event.status }}</div>
+          <div class="timeline-title">{{ event.artifact }}</div>
+          <div class="timeline-date">{{ event.type }} · {{ event.related_workset }} · {{ event.time }}</div>
         </div>
-      </a>
+      </div>
       {% else %}
-      <div class="empty-state" style="padding:32px 20px;">
-        <div class="empty-state-icon"><i data-lucide="layers"></i></div>
-        <div class="empty-state-title">No worksets yet</div>
-        <div class="empty-state-desc">Create a workset to scope files for a task.</div>
-        <a href="/worksets" class="btn btn-secondary btn-sm mt-2">Create workset</a>
+      <div class="empty-state">
+        <div class="empty-state-icon"><i data-lucide="activity"></i></div>
+        <div class="empty-state-title">No activity yet</div>
+        <div class="empty-state-desc">Create a workset, save a plan, or generate a patch to populate the timeline.</div>
       </div>
       {% endfor %}
     </div>
   </div>
 
-  <!-- Recent Plans -->
   <div class="card card-flush">
-    <div style="padding: 16px 18px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
-      <span class="section-title">Recent Plans</span>
-      <a href="/planning" class="btn btn-ghost btn-sm">New plan</a>
+    <div class="panel-heading">
+      <span class="section-title">What To Do Next</span>
     </div>
-    <div style="padding: 6px 0;">
-      {% for plan in plans %}
-      <div style="display:flex; align-items:center; gap:10px; padding:10px 18px;">
-        <div style="width:30px;height:30px;border-radius:var(--r-sm);background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i data-lucide="file-text" style="width:13px;height:13px;color:var(--text-3);"></i>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12.5px;font-family:var(--font-mono);color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ plan.name }}</div>
-        </div>
-      </div>
-      {% else %}
-      <div class="empty-state" style="padding:32px 20px;">
-        <div class="empty-state-icon"><i data-lucide="file-pen"></i></div>
-        <div class="empty-state-title">No saved plans</div>
-        <div class="empty-state-desc">Generate an advisory plan from a workset.</div>
-        <a href="/planning" class="btn btn-secondary btn-sm mt-2">Generate plan</a>
-      </div>
-      {% endfor %}
+    <div class="action-list">
+      <a class="action-btn" href="/worksets"><i data-lucide="layers"></i>Prepare a workset</a>
+      <a class="action-btn" href="/planning"><i data-lucide="file-pen"></i>Generate or review a plan</a>
+      <a class="action-btn" href="/execution"><i data-lucide="workflow"></i>Inspect prepared execution</a>
+      <a class="action-btn" href="/patches"><i data-lucide="git-pull-request-arrow"></i>Review generated patches</a>
+      <a class="action-btn" href="/memory"><i data-lucide="brain"></i>Capture engineering memory</a>
+      <a class="action-btn" href="/artifacts"><i data-lucide="boxes"></i>Browse artifact relationships</a>
     </div>
   </div>
-
-  <!-- Recent Memory -->
-  <div class="card card-flush">
-    <div style="padding: 16px 18px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
-      <span class="section-title">Memory Timeline</span>
-      <a href="/memory" class="btn btn-ghost btn-sm">View all</a>
-    </div>
-    <div style="padding: 6px 0;">
-      {% for item in memory_items %}
-      <a href="/memory/{{ item.id }}" style="display:flex; align-items:center; gap:10px; padding:10px 18px; text-decoration:none; transition:background var(--transition);" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-        <div style="width:30px;height:30px;border-radius:var(--r-sm);background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          {% if item.type == 'decision' %}
-          <i data-lucide="check-circle-2" style="width:13px;height:13px;color:var(--blue);"></i>
-          {% else %}
-          <i data-lucide="search" style="width:13px;height:13px;color:var(--amber);"></i>
-          {% endif %}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ item.title }}</div>
-          <div style="font-size:11.5px;color:var(--text-3);">{{ item.type }}</div>
-        </div>
-      </a>
-      {% else %}
-      <div class="empty-state" style="padding:32px 20px;">
-        <div class="empty-state-icon"><i data-lucide="brain"></i></div>
-        <div class="empty-state-title">No memory items</div>
-        <div class="empty-state-desc">Capture decisions and investigations as you work.</div>
-        <a href="/memory" class="btn btn-secondary btn-sm mt-2">Add memory</a>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
 </div>
 
 {% endblock %}

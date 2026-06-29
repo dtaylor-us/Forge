@@ -97,6 +97,27 @@ def test_workset_list_route_and_api(tmp_path: Path) -> None:
     assert api.json()["data"]["worksets"] == []
 
 
+def test_workbench_evolution_pages_return_200(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    for path in ("/execution", "/artifacts", "/patches"):
+        response = client.get(path)
+        assert response.status_code == 200
+
+
+def test_artifacts_and_patches_api_shape(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    artifacts = client.get("/api/artifacts")
+    patches = client.get("/api/patches")
+
+    assert artifacts.status_code == 200
+    assert "artifacts" in artifacts.json()["data"]
+    assert "relationships" in artifacts.json()["data"]
+    assert patches.status_code == 200
+    assert "patches" in patches.json()["data"]
+
+
 def test_workset_suggest_api(tmp_path: Path) -> None:
     client = TestClient(create_app(_repo(tmp_path)))
     (tmp_path / ".forge" / "worksets").mkdir(parents=True)

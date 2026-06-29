@@ -18,6 +18,8 @@ class Patch:
     validation_errors: list[str] = field(default_factory=list)
     affected_files: list[str] = field(default_factory=list)
     created_at: str | None = None
+    added_lines: int = 0
+    removed_lines: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -29,4 +31,6 @@ class Patch:
             "valid": self.valid,
             "validation_errors": self.validation_errors,
             "affected_files": self.affected_files,
+            "added_lines": self.added_lines,
+            "removed_lines": self.removed_lines,
         }

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tomllib
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,12 @@ def detect_verification_strategy(root: Path | str | None = None) -> Verification
             [
                 VerificationStep("tests", "cargo test", "tests", VerificationTool.cargo),
                 VerificationStep("linter", "cargo clippy", "linter", VerificationTool.cargo),
-                VerificationStep("formatter", "cargo fmt --check", "formatter", VerificationTool.cargo),
+                VerificationStep(
+                    "formatter",
+                    "cargo fmt --check",
+                    "formatter",
+                    VerificationTool.cargo,
+                ),
             ],
             package_manager="cargo",
             signals=["Cargo.toml"],
@@ -57,7 +63,7 @@ def detect_verification_strategy(root: Path | str | None = None) -> Verification
 
 def _collect_file_names(root: Path) -> set[str]:
     file_names: set[str] = set()
-    for current_root, dir_names, names in os.walk(root):
+    for _current_root, dir_names, names in os.walk(root):
         filter_dir_names(dir_names)
         file_names.update(names)
     return file_names
@@ -89,7 +95,12 @@ def _detect_python(root: Path, file_names: set[str]) -> VerificationStrategy:
         }
     )
     steps: list[VerificationStep] = []
-    if "pytest.ini" in file_names or "pytest" in dependency_names or _pyproject_has_tool(pyproject, "pytest"):
+    has_pytest = (
+        "pytest.ini" in file_names
+        or "pytest" in dependency_names
+        or _pyproject_has_tool(pyproject, "pytest")
+    )
+    if has_pytest:
         steps.append(VerificationStep("tests", "pytest", "tests", VerificationTool.pytest))
     if (
         {"ruff.toml", ".ruff.toml"} & file_names
@@ -121,8 +132,7 @@ def _detect_node(root: Path, file_names: set[str]) -> VerificationStrategy:
     if "build" in scripts:
         steps.append(VerificationStep("build", f"{package_manager} run build", "build", tool))
     if "test" in scripts:
-        command = f"{package_manager} test" if package_manager == "npm" else f"{package_manager} test"
-        steps.append(VerificationStep("tests", command, "tests", tool))
+        steps.append(VerificationStep("tests", f"{package_manager} test", "tests", tool))
     if "lint" in scripts:
         steps.append(VerificationStep("linter", f"{package_manager} run lint", "linter", tool))
     signals = ["package.json"]
@@ -153,7 +163,7 @@ def _detect_maven(root: Path, file_names: set[str]) -> VerificationStrategy:
 
 
 def _detect_gradle(file_names: set[str]) -> VerificationStrategy:
-    command = "./gradlew test" if "gradlew" in file_names else "gradle test"
+    command = "./gradlew build" if "gradlew" in file_names else "gradle build"
     signals = [
         name for name in ("build.gradle", "build.gradle.kts", "gradlew") if name in file_names
     ]
@@ -214,10 +224,10 @@ def _python_dependency_names(root: Path, pyproject: dict[str, Any]) -> set[str]:
     names.update(_dependency_names_from_values(_pyproject_dependency_values(pyproject)))
     requirements = root / "requirements.txt"
     if requirements.exists():
-        try:
-            names.update(_dependency_names_from_values(requirements.read_text(encoding="utf-8").splitlines()))
-        except OSError:
-            pass
+        with suppress(OSError):
+            names.update(
+                _dependency_names_from_values(requirements.read_text(encoding="utf-8").splitlines())
+            )
     setup_py = root / "setup.py"
     if setup_py.exists():
         try:

@@ -28,6 +28,8 @@ class ArtifactType(StrEnum):
     documentation = "documentation"
     adr = "adr"
     workflow = "workflow"
+    policy_evaluation = "policy_evaluation"
+    patch_application = "patch_application"
 
 
 @dataclass(frozen=True)

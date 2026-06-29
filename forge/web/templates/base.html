@@ -34,21 +34,35 @@
         <a class="nav-item {{ 'active' if active == 'planning' else '' }}" href="/planning" title="Planning">
           <i data-lucide="file-pen"></i><span>Planning</span>
         </a>
+        <a class="nav-item {{ 'active' if active == 'execution' else '' }}" href="/execution" title="Execution">
+          <i data-lucide="workflow"></i><span>Execution</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'artifacts' else '' }}" href="/artifacts" title="Artifacts">
+          <i data-lucide="boxes"></i><span>Artifacts</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'patches' else '' }}" href="/patches" title="Patches">
+          <i data-lucide="git-pull-request-arrow"></i><span>Patches</span>
+        </a>
         <a class="nav-item {{ 'active' if active == 'memory' else '' }}" href="/memory" title="Memory">
-          <i data-lucide="brain"></i><span>Memory</span>
+          <i data-lucide="brain"></i><span>Engineering Memory</span>
+        </a>
+        <a class="nav-item {{ 'active' if active == 'project' else '' }}" href="/project" title="Project">
+          <i data-lucide="folder-open"></i><span>Project</span>
         </a>
       </div>
 
       <div class="nav-section" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
-        <a class="nav-item {{ 'active' if active == 'project' else '' }}" href="/project" title="Project">
-          <i data-lucide="folder-open"></i><span>Project</span>
-        </a>
-        <a class="nav-item {{ 'active' if active == 'architecture' else '' }}" href="#" title="Architecture (coming soon)" style="opacity:0.4; cursor:default;">
-          <i data-lucide="network"></i><span>Architecture</span>
+        <a class="nav-item nav-disabled" href="#" title="Verification (coming soon)" aria-disabled="true">
+          <i data-lucide="badge-check"></i><span>Verification</span>
           <span class="nav-badge">soon</span>
         </a>
-        <a class="nav-item {{ 'active' if active == 'settings' else '' }}" href="#" title="Settings" style="opacity:0.4; cursor:default;">
-          <i data-lucide="settings"></i><span>Settings</span>
+        <a class="nav-item nav-disabled" href="#" title="Architecture (planned)" aria-disabled="true">
+          <i data-lucide="network"></i><span>Architecture</span>
+          <span class="nav-badge">planned</span>
+        </a>
+        <a class="nav-item nav-disabled" href="#" title="Workflow History (planned)" aria-disabled="true">
+          <i data-lucide="history"></i><span>Workflow History</span>
+          <span class="nav-badge">planned</span>
         </a>
       </div>
     </nav>
@@ -129,9 +143,24 @@
         <span class="palette-result-label">Planning</span>
         <span class="palette-result-type">Page</span>
       </a>
+      <a class="palette-result" href="/execution">
+        <div class="palette-result-icon"><i data-lucide="workflow"></i></div>
+        <span class="palette-result-label">Execution</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/artifacts">
+        <div class="palette-result-icon"><i data-lucide="boxes"></i></div>
+        <span class="palette-result-label">Artifacts</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/patches">
+        <div class="palette-result-icon"><i data-lucide="git-pull-request-arrow"></i></div>
+        <span class="palette-result-label">Patches</span>
+        <span class="palette-result-type">Page</span>
+      </a>
       <a class="palette-result" href="/memory">
         <div class="palette-result-icon"><i data-lucide="brain"></i></div>
-        <span class="palette-result-label">Memory</span>
+        <span class="palette-result-label">Engineering Memory</span>
         <span class="palette-result-type">Page</span>
       </a>
       <a class="palette-result" href="/project">

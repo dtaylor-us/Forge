@@ -81,6 +81,27 @@
 
 </div>
 
+<div class="grid grid-4 mb-6">
+  <div class="metric-card">
+    <div class="metric-label">Build Systems</div>
+    <div class="chip-row">{% for item in detection.build_systems %}<span class="tech-chip">{{ item }}</span>{% else %}<span class="muted">None</span>{% endfor %}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Package Managers</div>
+    <div class="chip-row">{% for item in detection.package_managers %}<span class="tech-chip">{{ item }}</span>{% else %}<span class="muted">None</span>{% endfor %}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Repository Statistics</div>
+    <div class="metric-value">{{ detection.important_files | length }}</div>
+    <div class="metric-sub">important files</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Verification Strategy</div>
+    <div class="summary-value">Coming Soon</div>
+    <div class="metric-sub">Detection exists in CLI; Workbench controls are planned.</div>
+  </div>
+</div>
+
 <div class="grid grid-2 mb-6">
 
   <!-- File tree -->
@@ -100,6 +121,17 @@
 
   <!-- Search -->
   <div style="display:flex;flex-direction:column;gap:14px;">
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">Important Files</div>
+      <div class="chip-row">
+        {% for file in detection.important_files %}
+        <code>{{ file }}</code>
+        {% else %}
+        <span class="muted">No important files detected.</span>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="card">
       <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">Full-text Search</div>
       <div style="display:flex;gap:8px;align-items:center;">

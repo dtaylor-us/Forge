@@ -30,6 +30,7 @@ def discover_artifacts(root: Path) -> list[Artifact]:
     discovered.extend(_implementation_plan_artifacts(paths))
     discovered.extend(_memory_entry_artifacts(paths))
     discovered.extend(_patch_artifacts(paths))
+    discovered.extend(_verification_artifacts(paths))
     return sorted(discovered, key=lambda artifact: (artifact.artifact_type.value, artifact.name))
 
 
@@ -198,6 +199,60 @@ def _patch_artifacts(paths: ForgePaths) -> Iterable[Artifact]:
         )
 
 
+def _verification_artifacts(paths: ForgePaths) -> Iterable[Artifact]:
+    for path in _json_files(paths.verifications_dir):
+        data = read_json(path)
+        relative_path = relative_to_root(path, paths.repo_root)
+        name = path.stem
+        source_id = artifact_id(ArtifactType.verification, relative_path, name)
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        relationships: list[ArtifactRelationship] = []
+        workset_name = metadata.get("workset") if isinstance(metadata, dict) else None
+        plan = metadata.get("plan") if isinstance(metadata, dict) else None
+        patch = metadata.get("patch") if isinstance(metadata, dict) else None
+        if workset_name:
+            relationships.extend(_workset_relationship(source_id, str(workset_name)))
+        if plan:
+            relationships.append(
+                ArtifactRelationship(
+                    source_id=source_id,
+                    target_id=artifact_id(ArtifactType.implementation_plan, "", str(plan)),
+                    relationship_type="verifies_plan",
+                )
+            )
+        if patch:
+            relationships.append(
+                ArtifactRelationship(
+                    source_id=source_id,
+                    target_id=artifact_id(ArtifactType.patch, "", str(patch)),
+                    relationship_type="verifies_patch",
+                )
+            )
+        yield Artifact(
+            id=source_id,
+            artifact_type=ArtifactType.verification,
+            name=name,
+            description=str(data.get("overall_status") or ""),
+            created_at=_first_step_time(data, "started_at") or file_created_at(path),
+            updated_at=file_updated_at(path),
+            project_root=paths.repo_root,
+            relative_path=relative_path,
+            producing_service="VerificationService",
+            producing_command="forge verify",
+            workset_name=str(workset_name) if workset_name else None,
+            related_plan=str(plan) if plan else None,
+            related_patch=str(patch) if patch else None,
+            metadata={
+                "overall_status": data.get("overall_status"),
+                "duration": data.get("duration"),
+                "summary": data.get("summary", {}),
+                "repository": data.get("repository", {}),
+                "strategy": data.get("strategy", {}),
+            },
+            relationships=tuple(relationships),
+        )
+
+
 def _files(directory: Path, patterns: tuple[str, ...]) -> list[Path]:
     if not directory.exists():
         return []
@@ -259,3 +314,14 @@ def _size(path: Path) -> int:
         return path.stat().st_size
     except OSError:
         return 0
+
+
+def _first_step_time(data: dict[str, Any], key: str) -> str | None:
+    steps = data.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return None
+    first = steps[0]
+    if not isinstance(first, dict):
+        return None
+    value = first.get(key)
+    return str(value) if value else None

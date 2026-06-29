@@ -19,6 +19,7 @@ _SUBDIRS = (
     "plans",
     "memory",
     "patches",
+    "verifications",
 )
 
 

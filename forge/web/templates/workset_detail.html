@@ -44,6 +44,32 @@
   </div>
 </div>
 
+<div class="grid grid-2 mb-6">
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Engineering Relationships</span>
+      <a class="btn btn-ghost btn-sm" href="/artifacts">Artifact Explorer</a>
+    </div>
+    <div class="detail-panel">
+      <div class="relationship-card"><span>Related context bundle</span><strong>{{ related_artifacts | selectattr("artifact_type", "equalto", "context_bundle") | list | length }}</strong></div>
+      <div class="relationship-card"><span>Planning history</span><strong>{{ related_artifacts | selectattr("artifact_type", "equalto", "implementation_plan") | list | length }}</strong></div>
+      <div class="relationship-card"><span>Generated patches</span><strong>{{ related_artifacts | selectattr("artifact_type", "equalto", "patch") | list | length }}</strong></div>
+      <div class="relationship-card"><span>Total related artifacts</span><strong>{{ related_artifacts | length }}</strong></div>
+    </div>
+  </div>
+
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Workflow Links</span>
+    </div>
+    <div class="action-list">
+      <a class="action-btn" href="/planning"><i data-lucide="file-pen"></i>Plan from this workset</a>
+      <a class="action-btn" href="/execution"><i data-lucide="workflow"></i>Inspect execution request</a>
+      <a class="action-btn" href="/patches"><i data-lucide="git-pull-request-arrow"></i>Review generated patches</a>
+    </div>
+  </div>
+</div>
+
 <!-- Action result -->
 <div id="action-result-wrap" style="display:none; margin-bottom:16px;">
   <div class="card">

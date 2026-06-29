@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import HTMLResponse
 
+from forge.artifacts.registry import ArtifactRegistry
 from forge.services import planning_service, workset_service
 from forge.web.deps import repo_root, template_context, templates
 from forge.web.schemas import error_response, success
@@ -15,10 +16,16 @@ JSON_BODY = Body(default_factory=dict)
 
 @router.get("/planning", response_class=HTMLResponse)
 def planning_page(request: Request) -> HTMLResponse:
+    root = repo_root(request)
+    registry = ArtifactRegistry.from_root(root)
+    plan_artifacts = [
+        artifact.to_dict() for artifact in registry.by_type("implementation_plan")
+    ]
     context = template_context(
         request,
         active="planning",
-        worksets=workset_service.list_all(repo_root(request)),
+        worksets=workset_service.list_all(root),
+        plan_artifacts=plan_artifacts,
     )
     return templates(request).TemplateResponse(request, "planning.html", context)
 

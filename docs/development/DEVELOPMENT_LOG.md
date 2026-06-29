@@ -1,5 +1,135 @@
 # Dev Log
 
+## 2026-06-28 — Phase 5.8: Engineering Policies and Guarded Patch Apply
+
+### Completed
+
+- Added `forge/policies/` domain package: `models.py`, `defaults.py`, `evaluator.py`, `service.py`, `__init__.py`.
+- `ForgePolicy` dataclass captures four policy sections: `patch`, `verification`, `git`, `apply`.
+- Default policy enforces: valid patch, max 25 changed files, max 1000 added/removed lines, verification required and must pass, git repo required, clean worktree required, human confirmation required.
+- Optional `.forge/policy.yaml` override; defaults used when file is absent.
+- `PolicyEvaluator` produces a `PolicyEvaluation` with per-check `status` / `message` / `severity`.
+- `PolicyEvaluation` status: `pass | warn | fail`. Failures with `severity=error` block apply.
+- Added `forge/services/policy_service.py` and `forge/services/apply_service.py`.
+- `apply_service.apply()` enforces the full guarded workflow:
+  1. Resolve and validate patch.
+  2. `git apply --check` (dry run) — apply is aborted if this fails.
+  3. Load verification report from `.forge/verifications/` (latest by default).
+  4. Evaluate policy.
+  5. Block on policy failure unless `--force` and `policy.apply.allow_force`.
+  6. Apply patch via `GitService.apply()`.
+  7. Persist apply record under `.forge/applications/`.
+- `GitService` extended with `apply_check(patch_path)` and `apply(patch_path)`. Never commits. Never creates branches.
+- Added `added_lines` and `removed_lines` to `Patch` model and `inspect_patch()`.
+- Added `applications_dir` to `ForgePaths` and `_SUBDIRS`.
+- Added `ArtifactType.policy_evaluation` and `ArtifactType.patch_application`.
+- CLI commands:
+  - `forge policy show [--json]` — display active policy.
+  - `forge policy check <patch> [--json] [--verification <report>]` — evaluate policy.
+  - `forge apply <patch> [--yes] [--force] [--json] [--verification <report>]` — guarded apply.
+- `--yes` skips interactive confirmation but does not bypass policy.
+- `--force` may bypass policy failures only when `policy.apply.allow_force` is true.
+- Apply records include: id, patch name, affected files, verification report, policy status, branch, commit before apply, forced flag.
+- No model calls. No commits. No repair loop.
+- 26 new tests in `tests/test_policy.py`. All 401 tests pass.
+
+## 2026-06-28 — GitService Foundation
+
+### Completed
+
+- Added `forge/git/` domain package: `models.py`, `service.py`, `__init__.py`.
+- `GitService` is read-only. It never applies patches, creates commits, or
+  modifies any file. All `git` subprocess calls are centralized here.
+- `GitStatus` datamodel captures: `is_git_repository`, `root`, `branch`,
+  `commit`, `clean`, `staged_files`, `modified_files`, `deleted_files`,
+  `untracked_files`.
+- Added `forge/services/git_service.py` application service facade.
+- Added `forge git status` and `forge git status --json` CLI commands.
+- Added `forge git branch` and `forge git branch --json` CLI commands.
+- CLI exits non-zero when outside a git repository.
+- Added 14 tests covering: non-git directory, clean repo, dirty repo, staged
+  files, modified files, untracked files, branch detection, JSON output, and
+  CLI error paths.
+
+### Design Note
+
+`GitService` is the intended gateway for future `forge apply`. Before any patch
+is applied to the working tree, the gate must check repository cleanliness
+through `GitService.status()`. No source modification occurs in this phase.
+
+## 2026-06-28 — Engineering Verification Execution
+
+### Completed
+
+- Added `forge verify` execution while preserving `forge verify --detect` for
+  strategy inspection.
+- Added `forge/verification/runner.py`, `executor.py`, `report.py`, and
+  `artifact.py`.
+- Verification now executes detected formatter, linter, build, and test steps
+  through a reusable command runner instead of the CLI.
+- Each step records command, working directory, timestamps, duration, exit code,
+  stdout, stderr, timeout state, exception, and status.
+- Verification continues after recoverable failures and returns deterministic
+  exit codes: `0` for pass, `1` for verification failure, and `2` for
+  infrastructure errors.
+- Added JSON output and optional `--patch`, `--plan`, `--workset`, `--output`,
+  and `--timeout` metadata/configuration flags.
+- Persisted structured reports under `.forge/verifications/` and registered
+  them as Engineering Artifacts with optional workset, plan, and patch
+  relationships.
+- Updated the artifact registry, README, and architecture docs for verification
+  reports.
+
+### Future Workflow
+
+Patch Apply, Repair Loop, Continuous Verification, and Policy Gate workflows
+should consume `VerificationReport` artifacts rather than parsing shell output.
+Verification remains local-first and does not mutate repository source files.
+
+### Verification
+
+- `.venv/bin/ruff check forge tests` passed.
+- `pytest tests/test_verification.py tests/test_artifacts.py tests/test_cli.py`
+  passed with 51 tests.
+
+## 2026-06-28 — Phase 5.6: Forge Workbench UX Evolution
+
+### Completed
+
+- Reorganized the Workbench navigation around engineering workflows: Dashboard,
+  Repository, Worksets, Planning, Execution, Artifacts, Patches, Engineering
+  Memory, Project, and disabled planned surfaces for Verification,
+  Architecture, and Workflow History.
+- Rebuilt the Dashboard as the engineering command center with repository
+  summary, workflow visualization, registry-backed metrics, recent engineering
+  activity, and next-step links.
+- Added a read-only Execution page that visualizes the canonical execution
+  pipeline and the latest prepared `ExecutionRequest` when a saved plan/workset
+  is available.
+- Added a unified Artifact Explorer backed by `ArtifactRegistry`, including
+  artifact type, name, created time, metadata, origin, and relationship detail.
+- Added a Patch Explorer for saved patch artifacts with searchable rows,
+  affected-file counts, validation status, unified diff preview, validate, show,
+  and browser download actions. Verify, Apply, and Repair are visible as coming
+  soon.
+- Expanded Repository, Worksets, Planning, and Engineering Memory pages with
+  workflow-oriented sections and relationship links without duplicating backend
+  logic.
+
+### Architecture Notes
+
+- This phase is presentation-layer only. Web routes remain thin adapters over
+  application services, the Artifact Registry, and domain packages.
+- No CLI behavior changed.
+- No patch application, verification execution, repair loop, or backend workflow
+  history feature was introduced.
+
+### Verification
+
+- `python3 -m pytest tests/test_web.py` passed with 19 tests.
+- `python3 -m pytest` passed with 349 tests.
+- `.venv/bin/ruff check .` passed.
+
 ## 2026-06-28 — Phase 5.3: Unified Engineering Artifact Registry
 
 ### Problem Solved
@@ -1068,7 +1198,29 @@ python3 -m black --check . — 75 files unchanged
 - Do not start Phase 2 yet.
 - Continue hardening Phase 1 foundation before repository scanning: provider-agnostic config, model validation, local model workflows, and command architecture.
 
-# Development Log
+## 2026-06-28 — Engineering Verification Foundation
+
+### Completed
+
+- Added `forge verify --detect` and `forge verify --detect --json`.
+- Added deterministic verification strategy detection for Python, Node npm,
+  Node pnpm, Node yarn, Maven, Gradle, Go, Rust, .NET, and unknown repositories.
+- Added structured verification models and an application service so CLI
+  adapters do not call the detector directly.
+- Kept this phase read-only: no commands are executed, no patches are applied,
+  and no source files are modified by verification detection.
+- Prepared the model shape for future verification reports as engineering
+  artifacts of type `verification`.
+
+### Future Workflow
+
+```bash
+forge implement "..." --workset <name>
+forge patch validate <patch>
+forge verify --detect
+```
+
+Actual verification command execution and repair loops remain future phases.
 
 ## 2026-06-28 - Ask Timeout and Explicit Project Explanation
 
