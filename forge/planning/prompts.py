@@ -99,8 +99,7 @@ def build_planning_prompt(
     memory_context: list[MemorySearchResult] | None = None,
 ) -> str:
     """Construct the full planning prompt from a task and context bundle."""
-    file_table_rows = _build_file_table(bundle)
-    file_details = _build_file_details(bundle)
+    file_table_rows, file_details = build_context_sections(bundle)
 
     raw = _PLAN_TEMPLATE.format(
         system_instructions=_PLANNING_SYSTEM_INSTRUCTIONS,
@@ -114,15 +113,24 @@ def build_planning_prompt(
     )
     result = raw.replace("{model_placeholder}", model)
     if memory_context:
-        result = result + "\n\n" + _build_memory_section(memory_context)
+        result = result + "\n\n" + build_memory_section(memory_context)
     return result
 
 
-def _build_memory_section(memory_results: list[MemorySearchResult]) -> str:
+def build_context_sections(bundle: ContextBundle) -> tuple[str, str]:
+    """Render reusable context sections for planning-adjacent prompts."""
+    return _build_file_table(bundle), _build_file_details(bundle)
+
+
+def build_memory_section(
+    memory_results: list[MemorySearchResult],
+    *,
+    guidance: str = "Use them to inform your plan.",
+) -> str:
+    """Render reusable engineering memory context for planning-adjacent prompts."""
     lines = ["## Engineering Memory Context", ""]
     lines.append(
-        "The following prior engineering artifacts are relevant to this task. "
-        "Use them to inform your plan."
+        "The following prior engineering artifacts are relevant to this task. " f"{guidance}"
     )
     lines.append("")
     for r in memory_results:

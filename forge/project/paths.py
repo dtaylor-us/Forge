@@ -17,6 +17,7 @@ _SUBDIRS = (
     "cache",
     "plans",
     "memory",
+    "patches",
 )
 
 
@@ -41,6 +42,7 @@ class ForgePaths:
     cache_dir: Path
     plans_dir: Path
     memory_dir: Path
+    patches_dir: Path
 
     @classmethod
     def from_root(cls, root: Path) -> ForgePaths:
@@ -59,6 +61,7 @@ class ForgePaths:
             cache_dir=p / "cache",
             plans_dir=p / "plans",
             memory_dir=p / "memory",
+            patches_dir=p / "patches",
         )
 
     def to_dict(self) -> dict[str, str]:
@@ -75,4 +78,5 @@ class ForgePaths:
             "cache_dir": str(self.cache_dir),
             "plans_dir": str(self.plans_dir),
             "memory_dir": str(self.memory_dir),
+            "patches_dir": str(self.patches_dir),
         }

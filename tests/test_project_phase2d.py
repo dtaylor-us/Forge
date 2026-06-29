@@ -78,6 +78,9 @@ def test_forge_paths_from_root(tmp_path: Path) -> None:
     assert paths.architecture_dir == tmp_path / ".forge" / "architecture"
     assert paths.sessions_dir == tmp_path / ".forge" / "sessions"
     assert paths.cache_dir == tmp_path / ".forge" / "cache"
+    assert paths.plans_dir == tmp_path / ".forge" / "plans"
+    assert paths.memory_dir == tmp_path / ".forge" / "memory"
+    assert paths.patches_dir == tmp_path / ".forge" / "patches"
     assert paths.global_forge_dir == Path.home() / ".forge"
     assert paths.global_config_path == Path.home() / ".forge" / "config.yaml"
 
@@ -89,6 +92,7 @@ def test_forge_paths_to_dict(tmp_path: Path) -> None:
     assert d["project_forge_dir"] == str(tmp_path / ".forge")
     assert "global_forge_dir" in d
     assert "worksets_dir" in d
+    assert "patches_dir" in d
 
 
 # ---------------------------------------------------------------------------

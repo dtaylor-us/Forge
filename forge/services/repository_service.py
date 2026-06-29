@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from forge.repository import detect_repository, generate_tree, search_repository
+from forge.repository import (
+    detect_repository,
+    generate_tree,
+    list_relevant_files,
+    search_repository,
+)
 
 
 def detect(root: Path) -> dict[str, Any]:
@@ -28,9 +33,17 @@ def tree(root: Path, *, max_depth: int = 3) -> dict[str, Any]:
     return {"lines": generate_tree(root, max_depth=max_depth)}
 
 
-def search(root: Path, query: str, *, max_results: int = 100) -> dict[str, Any]:
+def search(
+    root: Path,
+    query: str,
+    *,
+    globs: list[str] | None = None,
+    max_results: int = 100,
+) -> dict[str, Any]:
     """Search repository text with deterministic repository search."""
-    matches = search_repository(query, root, max_results=max_results) if query else []
+    matches = (
+        search_repository(query, root, globs=globs or [], max_results=max_results) if query else []
+    )
     return {
         "query": query,
         "matches": [
@@ -41,4 +54,18 @@ def search(root: Path, query: str, *, max_results: int = 100) -> dict[str, Any]:
             }
             for match in matches
         ],
+    }
+
+
+def files(
+    root: Path,
+    *,
+    ext: str | None = None,
+    max_results: int = 200,
+) -> dict[str, Any]:
+    """Return repository files selected by deterministic repository rules."""
+    return {
+        "files": [
+            path.as_posix() for path in list_relevant_files(root, ext=ext, max_results=max_results)
+        ]
     }

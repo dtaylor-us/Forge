@@ -6,11 +6,22 @@ from pathlib import Path
 from typing import Any
 
 from forge.context.bundle import generate_bundle, save_bundle_markdown
-from forge.context.render import render_markdown
+from forge.context.render import render_json, render_markdown
 from forge.project.paths import ForgePaths
 from forge.worksets import suggest_candidates
-from forge.worksets.manager import clear_workset, create_workset, get_workset, list_worksets
-from forge.worksets.manager import refresh_workset as refresh_existing_workset
+from forge.worksets.manager import (
+    add_file,
+    clear_workset,
+    create_workset,
+    get_workset,
+    list_worksets,
+)
+from forge.worksets.manager import (
+    refresh_workset as refresh_existing_workset,
+)
+from forge.worksets.manager import (
+    remove_file as remove_workset_file,
+)
 
 
 def list_all(root: Path) -> list[dict[str, Any]]:
@@ -97,6 +108,16 @@ def refresh(root: Path, name: str) -> dict[str, Any]:
     return refresh_existing_workset(root, name)
 
 
+def add(root: Path, name: str, file_path: str | Path) -> dict[str, Any]:
+    """Add a file to a persisted workset."""
+    return add_file(root, name, file_path)
+
+
+def remove(root: Path, name: str, file_path: str | Path) -> dict[str, Any]:
+    """Remove a file from a persisted workset."""
+    return remove_workset_file(root, name, file_path)
+
+
 def delete(root: Path, name: str) -> dict[str, str]:
     """Delete a persisted workset."""
     clear_workset(root, name)
@@ -109,6 +130,9 @@ def generate_context(
     *,
     max_lines_per_file: int = 120,
     include_full: bool = False,
+    output_path: Path | None = None,
+    output_json: bool = False,
+    save: bool = True,
 ) -> dict[str, Any]:
     """Generate, save, and preview a context bundle for a workset."""
     paths = ForgePaths.from_root(root)
@@ -118,12 +142,20 @@ def generate_context(
         max_lines_per_file=max_lines_per_file,
         include_full=include_full,
     )
-    rendered = render_markdown(bundle)
-    ts = bundle.generated_at.replace(":", "-").replace("+", "").replace("Z", "")
-    dest = paths.context_dir / f"{name}-{ts}.md"
-    save_bundle_markdown(bundle, dest, rendered)
+    rendered = render_json(bundle) if output_json else render_markdown(bundle)
+    dest: Path | None = output_path
+    if dest is None and save:
+        ts = bundle.generated_at.replace(":", "-").replace("+", "").replace("Z", "")
+        dest = paths.context_dir / f"{name}-{ts}.{'json' if output_json else 'md'}"
+    if dest is not None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if output_json:
+            dest.write_text(rendered, encoding="utf-8")
+        else:
+            save_bundle_markdown(bundle, dest, rendered)
     return {
-        "path": str(dest),
+        "path": str(dest) if dest is not None else None,
+        "content": rendered,
         "preview": rendered[:4000],
         "workset_name": bundle.workset_name,
         "file_count": len(bundle.files),

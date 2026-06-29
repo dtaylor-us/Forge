@@ -1,0 +1,447 @@
+{
+  "schema_version": 1,
+  "name": "planning",
+  "query": "planning engine cli command provider abstraction",
+  "root": "/Users/derektaylor/projects/forge",
+  "created_at": "2026-06-28T23:53:30+00:00",
+  "updated_at": "2026-06-28T23:53:30+00:00",
+  "include_tests": false,
+  "max_results": 20,
+  "files": [
+    {
+      "path": "README.md",
+      "score": 48,
+      "category": "doc",
+      "reasons": [
+        {
+          "signal": "content matched 'abstraction', 'cli', 'engine', 'planning', 'provider'",
+          "detail": "content matched 'abstraction', 'cli', 'engine', 'planning', 'provider'",
+          "points": 40
+        },
+        {
+          "signal": "important project file",
+          "detail": "important project file",
+          "points": 6
+        },
+        {
+          "signal": "documentation file",
+          "detail": "documentation file",
+          "points": 2
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/cli/app.py",
+      "score": 48,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'cli'",
+          "detail": "path matched 'cli'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'cli', 'command', 'engine', 'planning', 'provider'",
+          "detail": "content matched 'cli', 'command', 'engine', 'planning', 'provider'",
+          "points": 40
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "docs/development/DEVELOPMENT_LOG.md",
+      "score": 42,
+      "category": "doc",
+      "reasons": [
+        {
+          "signal": "content matched 'cli', 'command', 'engine', 'planning', 'provider'",
+          "detail": "content matched 'cli', 'command', 'engine', 'planning', 'provider'",
+          "points": 40
+        },
+        {
+          "signal": "documentation file",
+          "detail": "documentation file",
+          "points": 2
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/planning/planner.py",
+      "score": 32,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'planning'",
+          "detail": "path matched 'planning'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'engine', 'planning', 'provider'",
+          "detail": "content matched 'engine', 'planning', 'provider'",
+          "points": 24
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/commands/doctor.py",
+      "score": 24,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'command'",
+          "detail": "path matched 'command'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'command', 'provider'",
+          "detail": "content matched 'command', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/commands/models.py",
+      "score": 24,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'command'",
+          "detail": "path matched 'command'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'command', 'provider'",
+          "detail": "content matched 'command', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/planning/prompts.py",
+      "score": 24,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'planning'",
+          "detail": "path matched 'planning'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'engine', 'planning'",
+          "detail": "content matched 'engine', 'planning'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "pyproject.toml",
+      "score": 24,
+      "category": "config",
+      "reasons": [
+        {
+          "signal": "content matched 'cli', 'engine'",
+          "detail": "content matched 'cli', 'engine'",
+          "points": 16
+        },
+        {
+          "signal": "important project file",
+          "detail": "important project file",
+          "points": 6
+        },
+        {
+          "signal": "config file",
+          "detail": "config file",
+          "points": 2
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/services/planning_service.py",
+      "score": 21,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "filename matched 'planning'",
+          "detail": "filename matched 'planning'",
+          "points": 10
+        },
+        {
+          "signal": "content matched 'planning'",
+          "detail": "content matched 'planning'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/web/routes/planning.py",
+      "score": 21,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "filename matched 'planning'",
+          "detail": "filename matched 'planning'",
+          "points": 10
+        },
+        {
+          "signal": "content matched 'planning'",
+          "detail": "content matched 'planning'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/models/__init__.py",
+      "score": 19,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "content matched 'abstraction', 'provider'",
+          "detail": "content matched 'abstraction', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/models/anthropic.py",
+      "score": 19,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "content matched 'cli', 'provider'",
+          "detail": "content matched 'cli', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/models/ollama.py",
+      "score": 19,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "content matched 'cli', 'provider'",
+          "detail": "content matched 'cli', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/models/openai.py",
+      "score": 19,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "content matched 'cli', 'provider'",
+          "detail": "content matched 'cli', 'provider'",
+          "points": 16
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/cli/__init__.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'cli'",
+          "detail": "path matched 'cli'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'cli'",
+          "detail": "content matched 'cli'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/commands/__init__.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'command'",
+          "detail": "path matched 'command'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'command'",
+          "detail": "content matched 'command'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/commands/project_context.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'command'",
+          "detail": "path matched 'command'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'command'",
+          "detail": "content matched 'command'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/planning/__init__.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'planning'",
+          "detail": "path matched 'planning'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'planning'",
+          "detail": "content matched 'planning'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/planning/render.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'planning'",
+          "detail": "path matched 'planning'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'planning'",
+          "detail": "content matched 'planning'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    },
+    {
+      "path": "forge/planning/store.py",
+      "score": 16,
+      "category": "source",
+      "reasons": [
+        {
+          "signal": "path matched 'planning'",
+          "detail": "path matched 'planning'",
+          "points": 5
+        },
+        {
+          "signal": "content matched 'planning'",
+          "detail": "content matched 'planning'",
+          "points": 8
+        },
+        {
+          "signal": "source file",
+          "detail": "source file",
+          "points": 3
+        }
+      ],
+      "manual": false
+    }
+  ]
+}

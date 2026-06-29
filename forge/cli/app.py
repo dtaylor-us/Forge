@@ -14,40 +14,26 @@ from rich.table import Table
 from forge.commands.doctor import CheckResult, run_doctor
 from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
-from forge.context.bundle import generate_bundle, save_bundle_markdown
-from forge.context.render import render_json, render_markdown
-from forge.memory.manager import MemoryManager
-from forge.memory.search import search_memory
-from forge.memory.similarity import find_similar
+from forge.execution import ExecutionServiceError
 from forge.memory.store import MemoryStoreError
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
-from forge.planning import PlannerError, generate_plan
+from forge.patches import PatchError
+from forge.planning import PlannerError
 from forge.planning.render import render_plan_json, render_plan_text
-from forge.planning.store import save_plan
-from forge.project.initializer import initialize_project
-from forge.project.metadata import load_metadata
-from forge.project.paths import ForgePaths
-from forge.project.resolver import resolve_root
-from forge.repository import (
-    detect_repository,
-    generate_tree,
-    list_relevant_files,
-    search_repository,
+from forge.services import (
+    implementation_service,
+    memory_service,
+    patch_service,
+    planning_service,
+    project_service,
+    repository_service,
+    verification_service,
+    workset_service,
 )
 from forge.utils.logging import configure_logging
 from forge.version import __version__
 from forge.web.app import create_app
-from forge.worksets import suggest_candidates
-from forge.worksets.manager import (
-    add_file,
-    clear_workset,
-    create_workset,
-    get_workset,
-    list_worksets,
-    refresh_workset,
-    remove_file,
-)
 from forge.worksets.store import WorksetStoreError
 
 app = typer.Typer(
@@ -61,12 +47,14 @@ repo_app = typer.Typer(help="Inspect the current repository deterministically.")
 workset_app = typer.Typer(help="Build and inspect worksets of relevant files.")
 project_app = typer.Typer(help="Show project identity and Forge path information.")
 memory_app = typer.Typer(help="Manage the engineering memory knowledge base.")
+patch_app = typer.Typer(help="Inspect and validate saved patches.")
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
 app.add_typer(workset_app, name="workset")
 app.add_typer(project_app, name="project")
 app.add_typer(memory_app, name="memory")
+app.add_typer(patch_app, name="patch")
 console = Console()
 
 
@@ -122,6 +110,47 @@ def doctor() -> None:
     console.print(table)
     failed_required = [check for check in checks if check.required and not check.ok]
     raise typer.Exit(code=1 if failed_required else 0)
+
+
+@app.command("verify")
+def verify(
+    detect: Annotated[
+        bool,
+        typer.Option("--detect", help="Detect verification strategy without executing commands."),
+    ] = False,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root to inspect (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output the detected strategy as JSON."),
+    ] = False,
+) -> None:
+    """Detect repository verification strategy."""
+    if not detect:
+        console.print("[red]Error:[/red] pass --detect to inspect verification strategy.")
+        raise typer.Exit(code=1)
+
+    resolved = project_service.resolve_project_root(root)
+    result = verification_service.detect(resolved.root)
+    if output_json:
+        console.print_json(json.dumps(result))
+        return
+
+    strategy = result["strategy"]
+    console.print("[bold]Verification Strategy[/bold]")
+    console.print(f"Ecosystem: {_human_ecosystem(str(strategy['ecosystem']))}")
+    if strategy["ecosystem"] == "unknown":
+        console.print("No deterministic verification strategy detected.")
+        return
+
+    console.print(f"Build: {_first_command(strategy['steps'], 'build')}")
+    console.print(f"Tests: {_first_command(strategy['steps'], 'tests')}")
+    console.print(f"Formatter: {_first_command(strategy['steps'], 'formatter')}")
+    console.print(f"Linter: {_first_command(strategy['steps'], 'linter')}")
+    console.print(f"Package Manager: {strategy['package_manager'] or 'none'}")
+    console.print(f"Confidence: {strategy['confidence']}")
 
 
 @config_app.command("show")
@@ -236,7 +265,7 @@ def explain_project(
     ] = None,
 ) -> None:
     """Explain the current project using explicit local project context."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     prompt = build_project_explanation_prompt(resolved.root)
     try:
         response = _model_manager().ask(
@@ -263,8 +292,8 @@ def repo_tree(
     ] = 3,
 ) -> None:
     """Print a compact repository tree."""
-    resolved = resolve_root(override=root)
-    for line in generate_tree(resolved.root, max_depth=max_depth):
+    resolved = project_service.resolve_project_root(root)
+    for line in repository_service.tree(resolved.root, max_depth=max_depth)["lines"]:
         console.print(line)
 
 
@@ -276,22 +305,19 @@ def repo_detect(
     ] = None,
 ) -> None:
     """Detect repository characteristics."""
-    resolved = resolve_root(override=root)
-    detection = detect_repository(resolved.root)
+    resolved = project_service.resolve_project_root(root)
+    detection = repository_service.detect(resolved.root)
     table = Table(title="Repository Detection")
     table.add_column("Property")
     table.add_column("Value")
-    table.add_row("Root path", str(detection.root_path))
-    table.add_row("Languages", _join_values(detection.languages))
-    table.add_row("Build systems", _join_values(detection.build_systems))
-    table.add_row("Package managers", _join_values(detection.package_managers))
-    table.add_row("Frameworks", _join_values(detection.frameworks))
-    source_roots = [str(path) for path in detection.source_roots]
-    test_roots = [str(path) for path in detection.test_roots]
-    important_files = [str(path) for path in detection.important_files]
-    table.add_row("Likely source roots", _join_values(source_roots))
-    table.add_row("Likely test roots", _join_values(test_roots))
-    table.add_row("Important files", _join_values(important_files))
+    table.add_row("Root path", detection["root_path"])
+    table.add_row("Languages", _join_values(detection["languages"]))
+    table.add_row("Build systems", _join_values(detection["build_systems"]))
+    table.add_row("Package managers", _join_values(detection["package_managers"]))
+    table.add_row("Frameworks", _join_values(detection["frameworks"]))
+    table.add_row("Likely source roots", _join_values(detection["source_roots"]))
+    table.add_row("Likely test roots", _join_values(detection["test_roots"]))
+    table.add_row("Important files", _join_values(detection["important_files"]))
     console.print(table)
 
 
@@ -312,10 +338,10 @@ def repo_grep(
     ] = 100,
 ) -> None:
     """Search repository files."""
-    resolved = resolve_root(override=root)
-    matches = search_repository(
-        pattern,
+    resolved = project_service.resolve_project_root(root)
+    result = repository_service.search(
         resolved.root,
+        pattern,
         globs=glob_patterns or [],
         max_results=max_results,
     )
@@ -323,8 +349,8 @@ def repo_grep(
     table.add_column("File")
     table.add_column("Line", justify="right")
     table.add_column("Match")
-    for match in matches:
-        table.add_row(str(match.path), str(match.line_number), match.line)
+    for match in result["matches"]:
+        table.add_row(match["path"], str(match["line_number"]), match["line"])
     console.print(table)
 
 
@@ -344,11 +370,12 @@ def repo_files(
     ] = 200,
 ) -> None:
     """List relevant repository files."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
+    result = repository_service.files(resolved.root, ext=ext, max_results=max_results)
     table = Table(title="Repository Files")
     table.add_column("File")
-    for path in list_relevant_files(resolved.root, ext=ext, max_results=max_results):
-        table.add_row(str(path))
+    for path in result["files"]:
+        table.add_row(path)
     console.print(table)
 
 
@@ -373,56 +400,43 @@ def workset_suggest(
     ] = False,
 ) -> None:
     """Suggest relevant files for a task using deterministic scoring."""
-    resolved = resolve_root(override=root)
-    suggestion = suggest_candidates(
-        query,
+    resolved = project_service.resolve_project_root(root)
+    suggestion = workset_service.suggest(
         resolved.root,
+        query,
         max_results=max_results,
         include_tests=include_tests,
     )
 
     if output_json:
-        data = {
-            "query": suggestion.query,
-            "tokens": suggestion.tokens,
-            "root": str(suggestion.root),
-            "candidates": [
-                {
-                    "path": str(c.path),
-                    "score": c.score,
-                    "file_category": c.file_category,
-                    "reasons": [{"label": r.label, "score": r.score} for r in c.reasons],
-                    "content_matches": c.content_matches,
-                }
-                for c in suggestion.candidates
-            ],
-        }
-        console.print_json(json.dumps(data))
+        console.print_json(json.dumps(suggestion))
         return
 
-    if not suggestion.candidates:
+    if not suggestion["candidates"]:
         console.print("[yellow]No candidates found for query.[/yellow]")
         return
 
-    console.print(f"[bold]Workset Suggestion:[/bold] {suggestion.query}")
-    console.print(f"[dim]Tokens: {', '.join(suggestion.tokens)}[/dim]")
+    console.print(f"[bold]Workset Suggestion:[/bold] {suggestion['query']}")
+    console.print(f"[dim]Tokens: {', '.join(suggestion['tokens'])}[/dim]")
     console.print()
 
-    table = Table(title=f"Candidates ({len(suggestion.candidates)})")
+    table = Table(title=f"Candidates ({len(suggestion['candidates'])})")
     table.add_column("File", no_wrap=False)
     table.add_column("Score", justify="right")
     table.add_column("Category")
     table.add_column("Reasons")
 
-    for candidate in suggestion.candidates:
-        reason_text = "\n".join(f"{r.label} (+{r.score})" for r in candidate.reasons)
-        if candidate.content_matches:
-            snippets = "\n".join(f"  > {s[:80]}" for s in candidate.content_matches)
+    for candidate in suggestion["candidates"]:
+        reason_text = "\n".join(
+            f"{reason['label']} (+{reason['score']})" for reason in candidate["reasons"]
+        )
+        if candidate["content_matches"]:
+            snippets = "\n".join(f"  > {s[:80]}" for s in candidate["content_matches"])
             reason_text = reason_text + "\n" + snippets
         table.add_row(
-            str(candidate.path),
-            str(candidate.score),
-            candidate.file_category,
+            candidate["path"],
+            str(candidate["score"]),
+            candidate["file_category"],
             reason_text,
         )
 
@@ -451,9 +465,9 @@ def workset_create(
     ] = False,
 ) -> None:
     """Create a named workset from a deterministic query."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        data = create_workset(
+        data = workset_service.create(
             resolved.root,
             name,
             query,
@@ -476,9 +490,9 @@ def workset_list(
     ] = None,
 ) -> None:
     """List existing worksets."""
-    resolved = resolve_root(override=root)
-    names = list_worksets(resolved.root)
-    if not names:
+    resolved = project_service.resolve_project_root(root)
+    worksets = workset_service.list_all(resolved.root)
+    if not worksets:
         console.print("[yellow]No worksets found.[/yellow]")
         return
     table = Table(title="Worksets")
@@ -487,18 +501,17 @@ def workset_list(
     table.add_column("Files", justify="right")
     table.add_column("Created")
     table.add_column("Updated")
-    for wname in names:
-        try:
-            data = get_workset(resolved.root, wname)
-            table.add_row(
-                data["name"],
-                data.get("query", ""),
-                str(len(data.get("files", []))),
-                data.get("created_at", ""),
-                data.get("updated_at", ""),
-            )
-        except WorksetStoreError:
-            table.add_row(wname, "[red]unreadable[/red]", "-", "-", "-")
+    for data in worksets:
+        if data.get("unreadable"):
+            table.add_row(str(data["name"]), "[red]unreadable[/red]", "-", "-", "-")
+            continue
+        table.add_row(
+            str(data["name"]),
+            str(data.get("query", "")),
+            str(data.get("file_count", 0)),
+            str(data.get("created_at", "")),
+            str(data.get("updated_at", "")),
+        )
     console.print(table)
 
 
@@ -515,9 +528,9 @@ def workset_show(
     ] = False,
 ) -> None:
     """Show workset metadata and files."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        data = get_workset(resolved.root, name)
+        data = workset_service.detail(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -563,9 +576,9 @@ def workset_add(
     ] = None,
 ) -> None:
     """Add a file to an existing workset."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        add_file(resolved.root, name, file)
+        workset_service.add(resolved.root, name, file)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -582,9 +595,9 @@ def workset_remove(
     ] = None,
 ) -> None:
     """Remove a file from an existing workset."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        remove_file(resolved.root, name, file)
+        workset_service.remove(resolved.root, name, file)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -600,9 +613,9 @@ def workset_refresh(
     ] = None,
 ) -> None:
     """Re-run the saved query and update the workset."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        data = refresh_workset(resolved.root, name)
+        data = workset_service.refresh(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -635,37 +648,34 @@ def workset_context(
     ] = None,
 ) -> None:
     """Generate a deterministic context bundle for a workset."""
-    resolved = resolve_root(override=root)
-    paths = ForgePaths.from_root(resolved.root)
+    resolved = project_service.resolve_project_root(root)
 
     try:
-        bundle = generate_bundle(
+        result = workset_service.generate_context(
             resolved.root,
             name,
             max_lines_per_file=max_lines_per_file,
             include_full=include_full,
+            output_path=output_path,
+            output_json=output_json,
+            save=not output_json or output_path is not None,
         )
     except Exception as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
     if output_json:
-        rendered = render_json(bundle)
         if output_path:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(rendered, encoding="utf-8")
             console.print(f"[green]Saved JSON context bundle:[/green] {output_path}")
         else:
-            console.print_json(rendered)
+            console.print_json(result["content"])
         return
 
-    rendered_md = render_markdown(bundle)
-    ts = bundle.generated_at.replace(":", "-").replace("+", "").replace("Z", "")
-    dest = output_path or paths.context_dir / f"{name}-{ts}.md"
-    save_bundle_markdown(bundle, dest, rendered_md)
-    console.print(f"[green]Context bundle saved:[/green] {dest}")
-    n = len(bundle.files)
-    console.print(f"  Files: {n}  Chars: {bundle.total_chars:,}  Tokens: {bundle.total_tokens:,}")
+    console.print(f"[green]Context bundle saved:[/green] {result['path']}")
+    console.print(
+        f"  Files: {result['file_count']}  "
+        f"Chars: {result['total_chars']:,}  Tokens: {result['total_tokens']:,}"
+    )
 
 
 @workset_app.command("clear")
@@ -681,14 +691,14 @@ def workset_clear(
     ] = False,
 ) -> None:
     """Delete a workset."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     if not yes:
         confirmed = typer.confirm(f"Delete workset {name!r}?")
         if not confirmed:
             console.print("Aborted.")
             return
     try:
-        clear_workset(resolved.root, name)
+        workset_service.delete(resolved.root, name)
     except WorksetStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -707,16 +717,18 @@ def init(
     ] = None,
 ) -> None:
     """Initialize Forge metadata in the current repository."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        result = initialize_project(resolved, force=force)
+        result = project_service.initialize(resolved.root, force=force)
     except FileExistsError as exc:
         console.print(f"[yellow]{exc}[/yellow]")
         raise typer.Exit(code=1) from exc
 
-    action = "Reinitialized" if result.already_existed and result.forced else "Initialized"
-    console.print(f"[green]{action} Forge project[/green] at {result.paths.project_forge_dir}")
-    console.print(f"  Repository root: {result.paths.repo_root}")
+    action = "Reinitialized" if result["already_existed"] and result["forced"] else "Initialized"
+    console.print(
+        f"[green]{action} Forge project[/green] at " f"{result['paths']['project_forge_dir']}"
+    )
+    console.print(f"  Repository root: {result['paths']['repo_root']}")
     console.print(f"  Git detected:    {resolved.git_detected}")
 
 
@@ -735,7 +747,7 @@ def web_command(
     ] = False,
 ) -> None:
     """Start the local Forge web UI."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     url = f"http://{host}:{port}"
     if host == "0.0.0.0":
         console.print(
@@ -761,7 +773,7 @@ def project_root(
     ] = None,
 ) -> None:
     """Print the resolved repository root."""
-    resolved = resolve_root(override=root)
+    resolved = project_service.resolve_project_root(root)
     console.print(str(resolved.root))
 
 
@@ -777,31 +789,32 @@ def project_info(
     ] = None,
 ) -> None:
     """Show project identity and Forge metadata."""
-    resolved = resolve_root(override=root)
-    paths = ForgePaths.from_root(resolved.root)
-    meta = load_metadata(paths.project_forge_dir)
-    initialized = meta is not None
+    resolved = project_service.resolve_project_root(root)
+    info = project_service.project_info(resolved.root)
+    paths = info["paths"]
+    meta = info["metadata"]
+    initialized = info["initialized"]
 
     if output_json:
         data: dict[str, object] = {
             "initialized": initialized,
-            "git_detected": resolved.git_detected,
-            "repo_root": str(resolved.root),
-            "project_forge_dir": str(paths.project_forge_dir),
-            "project_metadata_path": str(paths.project_forge_dir / "project.json"),
+            "git_detected": info["git_detected"],
+            "repo_root": info["repo_root"],
+            "project_forge_dir": paths["project_forge_dir"],
+            "project_metadata_path": str(Path(paths["project_forge_dir"]) / "project.json"),
         }
         if meta:
             data.update(meta)
         console.print_json(json.dumps(data))
         return
 
-    detected = meta.get("detected", {}) if meta else {}
-    project_name = meta.get("project_name", resolved.root.name) if meta else resolved.root.name
+    detected = info["detected"]
+    project_name = info["project_name"]
     console.print(f"[bold]Project:[/bold] {project_name}")
-    console.print(f"  Repository root:       {resolved.root}")
-    console.print(f"  Git detected:          {resolved.git_detected}")
-    console.print(f"  Forge project dir:     {paths.project_forge_dir}")
-    console.print(f"  Project metadata path: {paths.project_forge_dir / 'project.json'}")
+    console.print(f"  Repository root:       {info['repo_root']}")
+    console.print(f"  Git detected:          {info['git_detected']}")
+    console.print(f"  Forge project dir:     {paths['project_forge_dir']}")
+    console.print(f"  Project metadata path: {Path(paths['project_forge_dir']) / 'project.json'}")
     console.print(f"  Initialized:           {initialized}")
     if meta:
         console.print(f"  Forge version:         {meta.get('forge_version', '-')}")
@@ -826,26 +839,29 @@ def project_paths(
     ] = None,
 ) -> None:
     """Show important Forge paths."""
-    resolved = resolve_root(override=root)
-    paths = ForgePaths.from_root(resolved.root)
+    resolved = project_service.resolve_project_root(root)
+    paths = project_service.project_paths(resolved.root)
 
     if output_json:
-        console.print_json(json.dumps(paths.to_dict()))
+        console.print_json(json.dumps(paths))
         return
 
     table = Table(title="Forge Paths")
     table.add_column("Path")
     table.add_column("Location")
-    table.add_row("Global config", str(paths.global_config_path))
-    table.add_row("Global Forge dir", str(paths.global_forge_dir))
-    table.add_row("Repository root", str(paths.repo_root))
-    table.add_row("Project Forge dir", str(paths.project_forge_dir))
-    table.add_row("Worksets dir", str(paths.worksets_dir))
-    table.add_row("Summaries dir", str(paths.summaries_dir))
-    table.add_row("Context dir", str(paths.context_dir))
-    table.add_row("Architecture dir", str(paths.architecture_dir))
-    table.add_row("Sessions dir", str(paths.sessions_dir))
-    table.add_row("Cache dir", str(paths.cache_dir))
+    table.add_row("Global config", paths["global_config_path"])
+    table.add_row("Global Forge dir", paths["global_forge_dir"])
+    table.add_row("Repository root", paths["repo_root"])
+    table.add_row("Project Forge dir", paths["project_forge_dir"])
+    table.add_row("Worksets dir", paths["worksets_dir"])
+    table.add_row("Summaries dir", paths["summaries_dir"])
+    table.add_row("Context dir", paths["context_dir"])
+    table.add_row("Architecture dir", paths["architecture_dir"])
+    table.add_row("Sessions dir", paths["sessions_dir"])
+    table.add_row("Cache dir", paths["cache_dir"])
+    table.add_row("Plans dir", paths["plans_dir"])
+    table.add_row("Memory dir", paths["memory_dir"])
+    table.add_row("Patches dir", paths["patches_dir"])
     console.print(table)
 
 
@@ -859,6 +875,29 @@ def _status(check: CheckResult) -> str:
 
 def _join_values(values: list[str]) -> str:
     return ", ".join(values) if values else "-"
+
+
+def _first_command(steps: object, kind: str) -> str:
+    if not isinstance(steps, list):
+        return "none"
+    for step in steps:
+        if isinstance(step, dict) and step.get("kind") == kind:
+            return str(step.get("command") or "none")
+    return "none"
+
+
+def _human_ecosystem(ecosystem: str) -> str:
+    labels = {
+        "python": "Python",
+        "node": "Node",
+        "maven": "Java Maven",
+        "gradle": "Java Gradle",
+        "go": "Go",
+        "rust": "Rust",
+        "dotnet": ".NET",
+        "unknown": "unknown",
+    }
+    return labels.get(ecosystem, ecosystem)
 
 
 @app.command("plan")
@@ -895,11 +934,71 @@ def plan_command(
     ] = False,
 ) -> None:
     """Generate an implementation plan using a persisted workset."""
-    resolved = resolve_root(override=root)
-    paths = ForgePaths.from_root(resolved.root)
+    resolved = project_service.resolve_project_root(root)
 
     try:
-        result = generate_plan(
+        result = planning_service.PlanningService(_model_manager()).generate_plan(
+            resolved.root,
+            task,
+            workset,
+            model=model,
+            save=save,
+            timeout_seconds=timeout_seconds,
+            max_lines_per_file=max_lines_per_file,
+            include_full=include_full,
+        )
+    except PlannerError as exc:
+        console.print(f"[red]Planning error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if save:
+        console.print(f"[green]Plan saved:[/green] {result.saved_path}")
+
+    if output_json:
+        console.print_json(render_plan_json(result))
+        return
+
+    console.print(render_plan_text(result))
+
+
+@app.command("implement")
+def implement_command(
+    task: Annotated[str, typer.Argument(help="Implementation task to generate a patch for.")],
+    workset: Annotated[str, typer.Option("--workset", "-w", help="Persisted workset name.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model override for this request."),
+    ] = None,
+    timeout_seconds: Annotated[
+        int | None,
+        typer.Option("--timeout", help="Request timeout in seconds."),
+    ] = None,
+    max_lines_per_file: Annotated[
+        int,
+        typer.Option("--max-lines-per-file", min=1, help="Max excerpt lines per file."),
+    ] = 120,
+    include_full: Annotated[
+        bool,
+        typer.Option("--include-full", help="Include full file contents in context."),
+    ] = False,
+    output_path: Annotated[
+        Path | None,
+        typer.Option("--output", help="Write a valid patch to this explicit path."),
+    ] = None,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+) -> None:
+    """Generate a human-reviewable patch without applying it."""
+    resolved = project_service.resolve_project_root(root)
+
+    try:
+        result = implementation_service.ImplementationService(_model_manager()).implement(
             resolved.root,
             task,
             workset,
@@ -907,22 +1006,47 @@ def plan_command(
             timeout_seconds=timeout_seconds,
             max_lines_per_file=max_lines_per_file,
             include_full=include_full,
-            model_manager=_model_manager(),
+            output_path=output_path,
         )
-    except PlannerError as exc:
-        console.print(f"[red]Planning error:[/red] {exc}")
+    except ExecutionServiceError as exc:
+        console.print(f"[red]Execution error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+    except implementation_service.ImplementationServiceError as exc:
+        console.print(f"[red]Implementation error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    except WorksetStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    except ModelNotFoundError as exc:
+        _handle_model_not_found(exc)
+    except ModelProviderError as exc:
+        _handle_provider_error(exc)
 
-    if save:
-        saved = save_plan(result, paths.project_forge_dir)
-        result.saved_path = saved
-        console.print(f"[green]Plan saved:[/green] {saved}")
-
+    data = result.to_dict()
     if output_json:
-        console.print_json(render_plan_json(result))
+        console.print_json(json.dumps(data))
+        if not data["valid"]:
+            raise typer.Exit(code=1)
         return
 
-    console.print(render_plan_text(result))
+    console.print(f"Model: {data['model']}")
+    console.print(f"Status: {data['status']}")
+    if data["patch_path"]:
+        console.print(f"Patch path: {data['patch_path']}")
+    if data["raw_response_path"]:
+        console.print(f"Invalid artifact path: {data['raw_response_path']}")
+    console.print(f"Valid: {'yes' if data['valid'] else 'no'}")
+    console.print(f"Affected files: {_join_values(data['affected_files'])}")
+    if data["validation_errors"]:
+        console.print("Validation errors:")
+        for error in data["validation_errors"]:
+            console.print(f"  - {error}")
+    if data["next_command"]:
+        console.print(f"Next command: {data['next_command']}")
+
+    if not data["valid"]:
+        console.print("No patch was accepted.")
+        raise typer.Exit(code=1)
 
 
 @memory_app.command("list")
@@ -934,11 +1058,10 @@ def memory_list(
     output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """List all engineering memory items."""
-    resolved = resolve_root(override=root)
-    mgr = MemoryManager.from_root(resolved.root)
-    items = mgr.list()
+    resolved = project_service.resolve_project_root(root)
+    items = memory_service.list_timeline(resolved.root)
     if output_json:
-        console.print_json(json.dumps([i.to_dict() for i in items]))
+        console.print_json(json.dumps(items))
         return
     if not items:
         console.print("[yellow]No memory items found.[/yellow]")
@@ -950,7 +1073,13 @@ def memory_list(
     table.add_column("Workset")
     table.add_column("Created")
     for item in items:
-        table.add_row(item.id, item.type.value, item.title, item.workset, item.created_at)
+        table.add_row(
+            item["id"],
+            item["type"],
+            item["title"],
+            item["workset"],
+            item["created_at"],
+        )
     console.print(table)
 
 
@@ -964,29 +1093,28 @@ def memory_show(
     output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """Show a single memory item by ID."""
-    resolved = resolve_root(override=root)
-    mgr = MemoryManager.from_root(resolved.root)
+    resolved = project_service.resolve_project_root(root)
     try:
-        item = mgr.get(item_id)
+        item = memory_service.get(resolved.root, item_id)
     except MemoryStoreError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
     if output_json:
-        console.print_json(json.dumps(item.to_dict()))
+        console.print_json(json.dumps(item))
         return
-    console.print(f"[bold]{item.title}[/bold]")
-    console.print(f"  ID:       {item.id}")
-    console.print(f"  Type:     {item.type.value}")
-    console.print(f"  Workset:  {item.workset or '—'}")
-    console.print(f"  Created:  {item.created_at}")
-    if item.tags:
-        console.print(f"  Tags:     {', '.join(item.tags)}")
-    if item.summary:
-        console.print(f"  Summary:  {item.summary}")
-    if item.related_files:
-        console.print(f"  Files:    {', '.join(item.related_files[:5])}")
-    if item.related_plans:
-        console.print(f"  Related plans: {', '.join(item.related_plans)}")
+    console.print(f"[bold]{item['title']}[/bold]")
+    console.print(f"  ID:       {item['id']}")
+    console.print(f"  Type:     {item['type']}")
+    console.print(f"  Workset:  {item['workset'] or '—'}")
+    console.print(f"  Created:  {item['created_at']}")
+    if item["tags"]:
+        console.print(f"  Tags:     {', '.join(item['tags'])}")
+    if item["summary"]:
+        console.print(f"  Summary:  {item['summary']}")
+    if item["related_files"]:
+        console.print(f"  Files:    {', '.join(item['related_files'][:5])}")
+    if item["related_plans"]:
+        console.print(f"  Related plans: {', '.join(item['related_plans'])}")
 
 
 @memory_app.command("search")
@@ -1000,21 +1128,11 @@ def memory_search(
     output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """Search engineering memory with a query string."""
-    resolved = resolve_root(override=root)
-    results = search_memory(resolved.root, query, max_results=max_results)
+    resolved = project_service.resolve_project_root(root)
+    data = memory_service.search(resolved.root, query, max_results=max_results)
+    results = data["results"]
     if output_json:
-        out = [
-            {
-                "item": r.item.to_dict(),
-                "score": r.score,
-                "reasons": [
-                    {"signal": rs.signal, "detail": rs.detail, "points": rs.points}
-                    for rs in r.reasons
-                ],
-            }
-            for r in results
-        ]
-        console.print_json(json.dumps(out))
+        console.print_json(json.dumps(results))
         return
     if not results:
         console.print("[yellow]No matching memory items.[/yellow]")
@@ -1025,9 +1143,12 @@ def memory_search(
     table.add_column("Title")
     table.add_column("Score", justify="right")
     table.add_column("Why")
-    for r in results:
-        why = "; ".join(f"{rs.signal}:{rs.detail}" for rs in r.reasons[:2])
-        table.add_row(r.item.id, r.item.type.value, r.item.title, str(r.score), why)
+    for result in results:
+        item = result["item"]
+        why = "; ".join(
+            f"{reason['signal']}:{reason['detail']}" for reason in result["reasons"][:2]
+        )
+        table.add_row(item["id"], item["type"], item["title"], str(result["score"]), why)
     console.print(table)
 
 
@@ -1043,21 +1164,16 @@ def memory_related(
     output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """Find memory items similar to the given query and context."""
-    resolved = resolve_root(override=root)
-    results = find_similar(resolved.root, query, workset=workset, max_results=max_results)
+    resolved = project_service.resolve_project_root(root)
+    data = memory_service.related(
+        resolved.root,
+        query,
+        workset=workset,
+        max_results=max_results,
+    )
+    results = data["results"]
     if output_json:
-        out = [
-            {
-                "item": r.item.to_dict(),
-                "score": r.score,
-                "reasons": [
-                    {"signal": rs.signal, "detail": rs.detail, "points": rs.points}
-                    for rs in r.reasons
-                ],
-            }
-            for r in results
-        ]
-        console.print_json(json.dumps(out))
+        console.print_json(json.dumps(results))
         return
     if not results:
         console.print("[yellow]No similar memory items found.[/yellow]")
@@ -1068,9 +1184,12 @@ def memory_related(
     table.add_column("Title")
     table.add_column("Score", justify="right")
     table.add_column("Why")
-    for r in results:
-        why = "; ".join(f"{rs.signal}:{rs.detail}" for rs in r.reasons[:2])
-        table.add_row(r.item.id, r.item.type.value, r.item.title, str(r.score), why)
+    for result in results:
+        item = result["item"]
+        why = "; ".join(
+            f"{reason['signal']}:{reason['detail']}" for reason in result["reasons"][:2]
+        )
+        table.add_row(item["id"], item["type"], item["title"], str(result["score"]), why)
     console.print(table)
 
 
@@ -1082,10 +1201,105 @@ def memory_rebuild(
     ] = None,
 ) -> None:
     """Rebuild the memory index from stored item files."""
-    resolved = resolve_root(override=root)
-    mgr = MemoryManager.from_root(resolved.root)
-    count = mgr.rebuild()
+    resolved = project_service.resolve_project_root(root)
+    count = memory_service.rebuild(resolved.root)["count"]
     console.print(f"[green]Memory index rebuilt.[/green] {count} item(s) indexed.")
+
+
+@patch_app.command("list")
+def patch_list(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """List saved patches under .forge/patches."""
+    resolved = project_service.resolve_project_root(root)
+    patches = patch_service.list_all(resolved.root)
+
+    if output_json:
+        console.print_json(json.dumps(patches))
+        return
+
+    if not patches:
+        console.print("[yellow]No saved patches found in .forge/patches/.[/yellow]")
+        return
+
+    table = Table(title="Saved Patches")
+    table.add_column("Name")
+    table.add_column("Valid")
+    table.add_column("Affected files")
+    table.add_column("Size", justify="right")
+    table.add_column("Path")
+    for patch in patches:
+        table.add_row(
+            patch["name"],
+            "[green]yes[/green]" if patch["valid"] else "[red]no[/red]",
+            _join_values(patch["affected_files"]),
+            str(patch["size_bytes"]),
+            str(patch["path"]),
+        )
+    console.print(table)
+
+
+@patch_app.command("show")
+def patch_show(
+    patch_name: Annotated[str, typer.Argument(help="Saved patch name or direct patch path.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Print saved patch content."""
+    resolved = project_service.resolve_project_root(root)
+    try:
+        patch = patch_service.show(resolved.root, patch_name)
+    except PatchError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if output_json:
+        console.print_json(json.dumps(patch))
+        return
+
+    console.print(patch["content"], markup=False, end="")
+
+
+@patch_app.command("validate")
+def patch_validate(
+    patch_path_or_name: Annotated[
+        str,
+        typer.Argument(help="Saved patch name or direct patch path to validate."),
+    ],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Validate whether a file looks like a unified diff."""
+    resolved = project_service.resolve_project_root(root)
+    try:
+        patch = patch_service.validate(resolved.root, patch_path_or_name)
+    except PatchError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if output_json:
+        console.print_json(json.dumps(patch))
+    else:
+        status = "[green]valid[/green]" if patch["valid"] else "[red]invalid[/red]"
+        console.print(f"Patch {patch['name']}: {status}")
+        if patch["affected_files"]:
+            console.print(f"Affected files: {', '.join(patch['affected_files'])}")
+        if patch["validation_errors"]:
+            console.print("Validation errors:")
+            for error in patch["validation_errors"]:
+                console.print(f"  - {error}")
+
+    raise typer.Exit(code=0 if patch["valid"] else 1)
 
 
 def main() -> None:

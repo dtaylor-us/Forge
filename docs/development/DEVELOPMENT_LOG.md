@@ -1,5 +1,280 @@
 # Dev Log
 
+## 2026-06-28 — Phase 5.3: Unified Engineering Artifact Registry
+
+### Problem Solved
+
+Forge now has a shared Engineering Artifact Registry that can represent
+repository metadata, worksets, context bundles, implementation plans,
+Engineering Memory entries, and saved patches through one read-only model.
+
+### Architecture Decisions
+
+- Added `forge/artifacts/` as a new internal package with models, metadata
+  helpers, discovery, and a registry facade.
+- Introduced `ArtifactType`, `Artifact`, and `ArtifactRelationship` as the
+  common vocabulary for current and future engineering artifacts.
+- Discovery preserves existing storage locations and file formats:
+  `.forge/project.json`, `.forge/worksets/`, `.forge/context/`,
+  `.forge/plans/`, `.forge/memory/`, and `.forge/patches/`.
+- Artifact identifiers are deterministic. Intrinsic IDs are used where existing
+  artifacts provide them; path-based artifacts use stable hashed IDs.
+- Metadata loading is tolerant of partial or malformed files so the registry can
+  enumerate old artifacts without forcing migration.
+- Relationships are sparse and explicit. The registry records workset and memory
+  lineage only where it can be determined reliably.
+- No CLI commands were added. Existing end-user workflows, services, storage,
+  and file formats remain unchanged.
+
+### Files Added
+
+- `forge/artifacts/__init__.py`
+- `forge/artifacts/models.py`
+- `forge/artifacts/metadata.py`
+- `forge/artifacts/discovery.py`
+- `forge/artifacts/registry.py`
+- `tests/test_artifacts.py`
+
+### Files Modified
+
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Future Extension Points
+
+- Execution records
+- Verification reports
+- Repair reports
+- Architecture analysis
+- Review reports
+- Documentation updates
+- Knowledge capture
+- Workflow history
+
+---
+
+## 2026-06-28 — `forge implement` Patch Generation MVP
+
+### Problem Solved
+
+Forge now has its first end-to-end Engineering Execution capability:
+`forge implement "<task>" --workset <name>` generates a human-reviewable raw
+unified diff from a task and persisted workset.
+
+### Architecture Decisions
+
+- Added `ImplementationService` under `forge/services/` so the CLI remains a
+  thin adapter.
+- Reused `ExecutionService` to prepare workset context, selected model,
+  Engineering Memory, and execution request metadata.
+- Added a dedicated implementation prompt builder in `forge/execution/` that
+  requires raw unified diff output only, with no Markdown fences or
+  explanations.
+- Provider calls go through `ModelManager`.
+- Patch validation and affected-file extraction reuse `forge/patches`.
+- Valid model diffs are saved under `.forge/patches/` unless `--output` is
+  provided. Invalid model responses are preserved under
+  `.forge/patches/invalid/`.
+- This MVP does not apply patches, edit source files directly, call `git apply`,
+  run verification, implement repair loops, or change the web UI.
+
+### CLI
+
+```bash
+forge workset create copy-mermaid --query "mermaid copy button"
+forge implement "Add a Copy Mermaid button next to rendered Mermaid diagrams" \
+  --workset copy-mermaid
+forge patch show <generated-patch>
+forge patch validate <generated-patch>
+```
+
+### Files Added
+
+- `forge/services/implementation_service.py`
+- `tests/test_implement.py`
+
+### Files Modified
+
+- `forge/cli/app.py`
+- `forge/execution/execution_prompt.py`
+- `forge/patches/__init__.py`
+- `forge/patches/service.py`
+- `README.md`
+- `docs/development/DEVELOPMENT_LOG.md`
+
+---
+
+## 2026-06-28 — Application Service Architecture Refactor
+
+### Problem Solved
+
+Forge had service modules, but orchestration responsibilities were still split
+between CLI commands, planning code, workset/context modules, memory commands,
+and web routes. This refactor establishes a consistent Application Service
+architecture before future Engineering Execution, Patch Generation,
+Verification, Repair, and Architecture Intelligence add more workflow
+complexity.
+
+### Architecture Decisions
+
+- `PlanningService` is now the canonical application-service pattern. It
+  coordinates context bundle generation, Engineering Memory lookup/write,
+  provider calls through `ModelManager`, and optional plan persistence.
+- `forge.planning.generate_plan` remains as a compatibility facade, but new
+  orchestration should be added under `forge/services/`.
+- CLI commands now delegate repository, workset/context, project, planning,
+  memory, and patch inspection workflows to application services, while keeping
+  Typer parsing and Rich output in the adapter layer.
+- Web routes continue to use services; the dashboard now uses project service
+  helpers for recent plan artifacts instead of reading `.forge/plans` directly.
+- Domain packages remain focused on deterministic business logic: repository
+  inspection, workset scoring, context rendering, memory search/similarity,
+  planning prompts/rendering/storage, and patch validation.
+- Patch support remains inspection and validation only. This refactor does not
+  add patch generation, patch application, source editing, or verification
+  loops.
+
+### Files Added
+
+- `docs/ARCHITECTURE.md`
+- `forge/services/patch_service.py`
+- `tests/test_application_services.py`
+
+### Files Modified
+
+- `forge/services/planning_service.py` — canonical planning orchestrator.
+- `forge/planning/planner.py` — compatibility facade into `PlanningService`.
+- `forge/services/repository_service.py` — repository file/search workflows.
+- `forge/services/workset_service.py` — workset add/remove and context artifact
+  workflow.
+- `forge/services/memory_service.py` — related-memory and rebuild workflows.
+- `forge/services/project_service.py` — root/path/recent-plan helpers.
+- `forge/cli/app.py` — thin CLI adapter over application services.
+- `forge/web/routes/dashboard.py` — service-backed recent plans.
+- `README.md` — documented the Application Service architecture.
+- `docs/development/DEVELOPMENT_LOG.md`
+
+### Guidance For Future Work
+
+- New workflows belong in `forge/services/`.
+- Business rules belong in the relevant domain package.
+- Provider calls go through `forge/models/`.
+- Infrastructure concerns stay local and explicit.
+- Future `ExecutionService`, `VerificationService`, `PatchService`, and
+  `ArchitectureService` should follow the `PlanningService` shape.
+
+---
+
+## 2026-06-28 — Engineering Execution Architecture Foundation
+
+### Problem Solved
+
+Planning previously ended at a generated implementation plan. Forge now has an
+Engineering Execution pipeline that prepares all execution inputs as typed,
+stage-by-stage orchestration without editing repositories, generating patches,
+invoking git, implementing verification/repair, or calling model providers.
+
+### Architecture Decisions
+
+- Added `forge/execution/` as the reusable execution orchestration package.
+- Execution is intentionally separate from Planning: planning creates advisory
+  implementation plans, while execution coordinates how approved work will move
+  through future implementation stages.
+- Added a provider-independent `ExecutionPipeline` and `ExecutionOrchestrator`
+  that run insertable stages and collect `ExecutionStageResult` timing, status,
+  metadata, and errors.
+- The initial canonical stages are Load Workset, Load Context, Load Engineering
+  Memory, Load Implementation Plan, Assemble Execution Context, and Execution
+  Complete.
+- The existing `ExecutionService` still prepares an `ExecutionRequest` for
+  callers that need the prompt-oriented contract, while the pipeline is now the
+  canonical orchestration mechanism for future implementation workflows.
+- The pipeline returns structured data only. It does not mutate source
+  repositories, generate diffs, apply patches, call git, run tests, implement
+  repair, update documentation, update memory, or ask model providers.
+- The execution prompt builder reuses planning context and memory rendering helpers, but remains isolated so execution-specific instructions can evolve independently from planning.
+- Added typed execution vocabulary: `ExecutionStage`, `ExecutionContext`,
+  `ExecutionRequest`, `ExecutionResult`, `ExecutionStatus`,
+  `ExecutionStageResult`, and `ExecutionTarget`.
+
+### Future Extension Points
+
+Future phases can plug into the prepared request contract without redesigning the orchestration layer:
+
+- Patch Generation
+- Patch Validation
+- Patch Storage
+- Patch Review
+- Patch Application
+- Verification
+- Repair
+- Documentation Updates
+- Knowledge Capture
+
+### Files Added
+
+- `forge/execution/__init__.py`
+- `forge/execution/models.py`
+- `forge/execution/pipeline.py`
+- `forge/execution/stages.py`
+- `forge/execution/orchestrator.py`
+- `forge/execution/execution_models.py`
+- `forge/execution/execution_prompt.py`
+- `forge/execution/execution_result.py`
+- `forge/execution/execution_service.py`
+- `tests/test_execution.py`
+
+### Files Modified
+
+- `forge/planning/prompts.py` — exposed reusable context and memory rendering helpers for planning-adjacent prompts.
+- `docs/development/DEVELOPMENT_LOG.md`
+
+---
+
+## 2026-06-28 — Patch Management Foundation
+
+### Problem Solved
+
+Forge now has first-class storage, inspection, and validation for patch artifacts under `.forge/patches/`. This gives future implementation workflows a deterministic place to save and review raw diffs before any source-editing behavior exists.
+
+### Commands Added
+
+```bash
+forge patch list
+forge patch list --json
+forge patch show <patch-name-or-path>
+forge patch show <patch-name-or-path> --json
+forge patch validate <patch-name-or-path>
+forge patch validate <patch-name-or-path> --json
+```
+
+### Architecture Decisions
+
+- Added `forge/patches/` with a `Patch` dataclass and a small service layer for directory management, lookup, content reading, validation, and affected-file extraction.
+- Patch files live in `.forge/patches/`; the directory is created by `forge init` and on demand when patch listing/storage helpers need it.
+- Validation is intentionally conservative: raw git or unified diffs with hunk markers pass, while empty files, prose, Markdown fenced responses, and files without hunks fail.
+- Affected file extraction is best effort for `diff --git a/path b/path`, `--- a/path`, and `+++ b/path`.
+- This phase does not generate patches, apply patches, edit source files, call AI providers, run verification/repair loops, or change the web UI.
+- This prepares the storage and validation foundation for a future `forge implement` command.
+
+### Files Added
+
+- `forge/patches/__init__.py`
+- `forge/patches/models.py`
+- `forge/patches/service.py`
+- `tests/test_patches.py`
+
+### Files Modified
+
+- `forge/cli/app.py` — registered the `forge patch` command group.
+- `forge/project/paths.py` — added `patches_dir`.
+- `forge/project/initializer.py` — creates `.forge/patches/`.
+- `README.md` — documented patch management commands while keeping patch generation planned.
+- `docs/development/DEVELOPMENT_LOG.md`
+
+---
+
 ## 2026-06-28 — Phase 4.2: Web UI Redesign — Premium Engineering Workbench
 
 ### Problem Solved

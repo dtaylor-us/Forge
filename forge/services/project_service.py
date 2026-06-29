@@ -17,6 +17,12 @@ def resolve_project_root(root: Path | str | None = None) -> ResolvedRoot:
     return resolve_root(override=root)
 
 
+def root_path(root: Path | str | None = None) -> dict[str, Any]:
+    """Return resolved project root metadata."""
+    resolved = resolve_project_root(root)
+    return {"repo_root": str(resolved.root), "git_detected": resolved.git_detected}
+
+
 def project_info(root: Path) -> dict[str, Any]:
     """Return project metadata and Forge paths."""
     resolved = resolve_root(override=root)
@@ -42,6 +48,20 @@ def project_info(root: Path) -> dict[str, Any]:
         "metadata": meta,
         "detected": detected,
     }
+
+
+def project_paths(root: Path) -> dict[str, str]:
+    """Return important Forge paths for a project root."""
+    return ForgePaths.from_root(resolve_root(override=root).root).to_dict()
+
+
+def recent_plans(root: Path, *, limit: int = 5) -> list[dict[str, str]]:
+    """Return recent saved plan artifacts."""
+    paths = ForgePaths.from_root(root)
+    if not paths.plans_dir.exists():
+        return []
+    plans = sorted(paths.plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [{"name": plan.name, "path": str(plan)} for plan in plans[:limit]]
 
 
 def initialize(root: Path, *, force: bool = False) -> dict[str, Any]:

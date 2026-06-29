@@ -18,6 +18,7 @@ _SUBDIRS = (
     "cache",
     "plans",
     "memory",
+    "patches",
 )
 
 

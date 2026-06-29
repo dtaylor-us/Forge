@@ -8,6 +8,7 @@ from typing import Any
 from forge.memory.manager import MemoryManager
 from forge.memory.models import MemoryType
 from forge.memory.search import search_memory
+from forge.memory.similarity import find_similar
 
 
 def list_timeline(root: Path) -> list[dict[str, Any]]:
@@ -41,6 +42,41 @@ def search(root: Path, query: str, *, max_results: int = 10) -> dict[str, Any]:
             for result in results
         ],
     }
+
+
+def related(
+    root: Path,
+    query: str,
+    *,
+    workset: str = "",
+    max_results: int = 5,
+) -> dict[str, Any]:
+    """Find memory items similar to the current context."""
+    results = find_similar(root, query, workset=workset, max_results=max_results)
+    return {
+        "query": query,
+        "workset": workset,
+        "results": [
+            {
+                "item": result.item.to_dict(),
+                "score": result.score,
+                "reasons": [
+                    {
+                        "signal": reason.signal,
+                        "detail": reason.detail,
+                        "points": reason.points,
+                    }
+                    for reason in result.reasons
+                ],
+            }
+            for result in results
+        ],
+    }
+
+
+def rebuild(root: Path) -> dict[str, int]:
+    """Rebuild the memory index."""
+    return {"count": MemoryManager.from_root(root).rebuild()}
 
 
 def add_item(

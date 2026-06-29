@@ -1,519 +1,639 @@
 # Forge
 
-**AI-native Software Engineering Workbench**
+> **AI-Native Software Engineering Workbench**
+>
+> **Understand Software Before You Change It**
 
-Repository Intelligence | Architecture Awareness | Engineering Memory | Planning
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)]()
+[![CLI](https://img.shields.io/badge/Interface-CLI%20%7C%20Web%20UI-orange)]()
+[![Local First](https://img.shields.io/badge/Local-First-success)]()
+[![AI Providers](https://img.shields.io/badge/Providers-Ollama%20%7C%20OpenAI%20%7C%20Anthropic-blue)]()
+[![Status](https://img.shields.io/badge/Status-Active%20Development-orange)]()
+[![License](https://img.shields.io/badge/License-MIT-green)]()
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
-[![CLI](https://img.shields.io/badge/interface-CLI-informational.svg)](#command-reference)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
-[![Status](https://img.shields.io/badge/status-active_development-orange.svg)](#roadmap)
+Forge is an **AI-native software engineering workbench** that helps engineers understand, plan, and evolve software using **deterministic repository intelligence**, **engineering knowledge**, and **architecture-aware workflows**.
 
-Forge is a local-first engineering workbench for understanding repositories, building precise task context, and generating implementation plans with your preferred AI model. It combines deterministic repository analysis with provider-independent model access so engineers and AI agents can work from the same project facts.
+Rather than immediately asking an AI to write code, Forge first builds engineering context that both humans and AI can trust.
 
-| Area | Support |
-| --- | --- |
-| Providers | Ollama, OpenAI, Anthropic |
-| Platforms | macOS and Linux with Python 3.12+; Windows is not yet verified |
-| Interface | `forge` CLI and local FastAPI web UI |
-| Project state | Local `.forge/` directory inside each repository |
-| Global config | `~/.forge/config.yaml` |
+---
 
-## Why Forge?
+# Why Forge?
 
-Forge is not just another AI CLI. It focuses on the engineering context that must exist before a model is useful.
+Modern AI coding tools excel at implementation.
 
-| Differentiator | What it means |
-| --- | --- |
-| Deterministic repository intelligence | Repository detection, file search, trees, and workset suggestions run without model calls. |
-| Worksets | Task-scoped file sets make context explicit, reviewable, and repeatable. |
-| Context engineering | Forge turns a workset into a structured bundle with symbols, summaries, dependency hints, and excerpts. |
-| Architecture-aware planning | Plans are generated from repository facts and selected context, not from a blind prompt. |
-| Engineering memory | Local memory commands let teams search and relate prior decisions, plans, and task context. |
-| Provider independence | Ollama, OpenAI, and Anthropic use the same provider interface. |
+Forge focuses on everything that should happen **before implementation**.
 
-## Key Features
+Instead of asking an AI:
+
+> "Write code."
+
+Forge asks:
+
+- What kind of repository is this?
+- Which files actually matter?
+- What architecture already exists?
+- What decisions have already been made?
+- What engineering knowledge should influence this task?
+- What context should be given to the model?
+
+Only then does Forge involve AI.
+
+```text
+Repository
+        │
+        ▼
+Repository Intelligence
+        │
+        ▼
+Relevant Workset
+        │
+        ▼
+Context Bundle
+        │
+        ▼
+Engineering Knowledge
+        │
+        ▼
+Implementation Plan
+        │
+        ▼
+AI Model
+        │
+        ▼
+Engineer
+```
+
+Forge is intentionally:
+
+- Deterministic first
+- Human controlled
+- Provider independent
+- Architecture aware
+- Local first
+
+---
+
+# What Makes Forge Different?
+
+| Traditional AI Coding Tools | Forge |
+|-----------------------------|-------|
+| Start with prompts | Start with repository understanding |
+| Editor context | Repository intelligence |
+| Temporary chat history | Persistent engineering knowledge |
+| AI-first | Deterministic-first |
+| Focus on code generation | Focus on engineering understanding |
+| One-off conversations | Repeatable engineering workflows |
+
+Forge complements tools like Cursor, Claude Code, Continue, and Codex by supplying the engineering context they typically lack.
+
+---
+
+# Who Is Forge For?
+
+### 👨‍💻 Software Engineers
+
+Understand unfamiliar repositories, identify relevant files, generate plans, and preserve engineering knowledge.
+
+---
+
+### 🏗 Software Architects
+
+Explore architecture, capture decisions, build reusable knowledge, and guide implementation from repository facts.
+
+---
+
+### 👥 Technical Leads
+
+Maintain engineering history, understand previous work, and guide teams through repeatable workflows.
+
+---
+
+### 🤖 AI Agents
+
+Consume deterministic repository intelligence instead of large, noisy prompts.
+
+---
+
+### 🏢 Engineering Teams
+
+Create engineering knowledge that survives beyond AI conversations and individual contributors.
+
+---
+
+# Core Capabilities
 
 | Capability | Status | Description |
-| --- | --- | --- |
-| Project initialization | Available | Creates project metadata and local Forge artifact directories. |
-| Repository detection | Available | Detects languages, build systems, package managers, frameworks, roots, and important files. |
-| Repository search | Available | Lists files, prints compact trees, and searches repository content while skipping generated/vendor paths. |
-| Workset suggestion | Available | Scores relevant files for a task using deterministic filename, path, and content signals. |
-| Workset management | Available | Creates, lists, shows, refreshes, edits, and clears persisted worksets. |
-| Context bundles | Available | Generates Markdown or JSON context from a workset without calling a model. |
-| Planning | Available | Generates advisory implementation plans from a task and workset using the configured model. |
-| Model management | Available | Lists configured provider models and persists a default model. |
-| Engineering memory search | Available | Lists, shows, searches, relates, and rebuilds local memory items. |
-| Local web UI | Available | Browser interface for project inspection, repository detection, worksets, context bundles, planning, and memory. |
-| Patch generation | Planned | Not implemented. Forge does not apply code changes from plans today. |
-| Test orchestration | Planned | Not implemented as a first-class `forge verify` command today. |
+|------------|:------:|-------------|
+| Repository Intelligence | ✅ | Detect languages, frameworks, source roots, build systems, important files, and repository structure. |
+| Worksets | ✅ | Deterministic task-scoped file collections with explainable scoring. |
+| Context Engineering | ✅ | Structured Markdown/JSON context bundles with summaries, symbols, excerpts, and dependency hints. |
+| Engineering Knowledge | ✅ | Decisions, investigations, lessons, plans, architecture notes, and searchable engineering history. |
+| Architecture-Aware Planning | ✅ | Generate implementation plans grounded in repository facts. |
+| Engineering Execution Pipeline | ✅ | Provider-independent orchestration stages that load worksets, context, memory, and plans without mutating repositories. |
+| Patch Management | ✅ | Store, list, inspect, and validate saved raw diff patches without applying them. |
+| Patch Generation | ✅ | Generate human-reviewable unified diff patches from a task and workset without applying them. |
+| Engineering Artifact Registry | ✅ | Internal read-only registry that unifies repository metadata, worksets, context bundles, plans, memory entries, and patches without moving or rewriting files. |
+| Local Web Workbench | ✅ | Modern browser interface for planning, worksets, repository analysis, and engineering knowledge. |
+| Multi-Provider AI | ✅ | Ollama, OpenAI, and Anthropic through a common provider abstraction. |
+| Architecture Intelligence | 🚧 Planned | Living architecture, dependency analysis, and architectural health. |
+| Agent Orchestration | 🚧 Planned | Multi-agent engineering workflows. |
 
-## Installation
+---
 
-### Python
+# Typical Engineering Workflows
 
-Forge currently installs from source.
+## 📖 Understand a New Repository
 
 ```bash
-git clone <forge-repository-url>
+forge init
+
+forge repo detect
+
+forge repo tree
+
+forge explain-project
+```
+
+Forge will:
+
+- Detect languages
+- Detect frameworks
+- Discover important files
+- Understand repository structure
+- Explain the project using explicit repository context
+
+---
+
+## 🚀 Plan a Feature
+
+```bash
+forge workset suggest "authentication"
+
+forge workset create auth --query "authentication"
+
+forge workset context auth
+
+forge plan "Add GitHub OAuth" --workset auth
+```
+
+Workflow
+
+```text
+Task
+
+↓
+
+Relevant Files
+
+↓
+
+Context Bundle
+
+↓
+
+Implementation Plan
+
+↓
+
+Execution Pipeline
+```
+
+---
+
+## 🐛 Investigate a Bug
+
+```bash
+forge memory search "timeout"
+
+forge workset suggest "timeout"
+
+forge workset context timeout
+
+forge investigation create "Planning timeout"
+
+forge plan "Resolve planning timeout" --workset timeout
+```
+
+---
+
+## 🧠 Capture Engineering Knowledge
+
+```bash
+forge decision create "Use JWT"
+
+forge investigation create "Planning timeout"
+
+forge memory timeline
+```
+
+## 🧩 Inspect Saved Patches
+
+```bash
+forge patch list
+
+forge patch show example.patch
+
+forge patch validate example.patch
+```
+
+## 🛠️ Generate Reviewable Patches
+
+```bash
+forge workset create copy-mermaid --query "mermaid copy button"
+
+forge implement "Add a Copy Mermaid button next to rendered Mermaid diagrams" \
+  --workset copy-mermaid
+
+forge patch show <generated-patch>
+
+forge patch validate <generated-patch>
+```
+
+`forge implement` asks the configured model for a raw unified diff, validates
+the response, and saves valid patches under `.forge/patches/`. It does not
+apply patches, edit source files directly, run verification, or start repair
+loops. Invalid model output is preserved under `.forge/patches/invalid/` for
+review.
+
+Engineering knowledge becomes searchable and influences future planning.
+
+---
+
+# Engineering Artifact Registry
+
+Forge has an internal read-only Engineering Artifact Registry in
+`forge/artifacts/`. It provides a common `Artifact` model over the project-local
+artifacts Forge already writes:
+
+- `.forge/project.json` repository metadata
+- `.forge/worksets/*.json`
+- `.forge/context/*`
+- `.forge/plans/*.md`
+- `.forge/memory/**/*.json`
+- `.forge/patches/*.patch`
+
+The registry does not expose new CLI commands yet. It preserves existing
+storage locations, file formats, and workflows while giving future capabilities
+a shared vocabulary for artifact type, path, producer, timestamps, workset
+association, sparse relationships, and free-form metadata.
+
+Artifact lifecycle is intentionally simple in this phase:
+
+```text
+Existing Forge service writes artifact
+        |
+Artifact remains in its current storage location
+        |
+Registry discovers artifact read-only
+        |
+Future services consume unified metadata and relationships
+```
+
+Relationships are explicit and sparse. Forge records only lineage it can infer
+reliably, such as a memory entry or saved plan associated with a workset. Future
+execution, verification, repair, review, documentation, ADR, and workflow
+artifacts can join the same model without storage migration.
+
+---
+
+# Five-Minute Quick Start
+
+## Install Forge
+
+```bash
+git clone <forge-repository>
+
 cd forge
+
 python3.12 -m venv .venv
+
 source .venv/bin/activate
+
 pip install -e ".[dev]"
 ```
 
-### Ollama
+---
 
-Ollama is the default provider.
+## Install Ollama
 
 ```bash
 brew install ollama
-ollama serve
+
+brew services start ollama
+
 ollama pull llama3.1:8b
 ```
 
-On Linux, install Ollama from the official Ollama installer, then run the same `ollama serve` and `ollama pull` commands.
+---
 
-### Optional Providers
-
-OpenAI and Anthropic require API keys in the environment and provider settings in `~/.forge/config.yaml`.
-
-```bash
-export OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
-forge config edit
-```
-
-Example OpenAI configuration:
-
-```yaml
-provider: openai
-default_model: gpt-4.1-mini
-providers:
-  openai:
-    endpoint: https://api.openai.com/v1
-    timeout_seconds: 120
-```
-
-Example Anthropic configuration:
-
-```yaml
-provider: anthropic
-default_model: claude-3-5-sonnet-latest
-providers:
-  anthropic:
-    endpoint: https://api.anthropic.com/v1
-    timeout_seconds: 120
-```
-
-### Verification
-
-```bash
-forge version
-forge doctor
-forge models
-pytest
-```
-
-## Five-Minute Quick Start
-
-Run these commands from the repository you want Forge to inspect.
+## Verify Installation
 
 ```bash
 forge doctor
+```
+
+Forge validates:
+
+- Python
+- Git
+- Docker
+- Java
+- ripgrep
+- Ollama
+- installed models
+
+---
+
+## Initialize Your Project
+
+```bash
 forge init
-forge project info
-forge repo detect
-forge workset suggest "authentication"
-forge workset create auth --query "authentication"
-forge workset context auth
-forge plan "Add GitHub OAuth" --workset auth
-forge web
 ```
 
-| Command | What it does |
-| --- | --- |
-| `forge doctor` | Checks local tools and provider configuration. |
-| `forge init` | Creates `.forge/project.json` and project artifact directories. |
-| `forge project info` | Shows repository identity, initialization state, and detected metadata. |
-| `forge repo detect` | Reports repository languages, build systems, frameworks, roots, and important files. |
-| `forge workset suggest "authentication"` | Ranks files likely to matter for the task. |
-| `forge workset create auth --query "authentication"` | Persists the suggested files as `.forge/worksets/auth.json`. |
-| `forge workset context auth` | Writes a deterministic context bundle under `.forge/context/`. |
-| `forge plan "Add GitHub OAuth" --workset auth` | Calls the configured model to produce an advisory implementation plan. |
-| `forge web` | Starts the local browser UI at `http://127.0.0.1:8765`. |
-
-## Local Web UI
-
-Forge includes a local-only web interface for engineers who prefer to inspect and operate Forge from a browser.
-
-```bash
-forge web
-```
-
-Then open:
+Creates
 
 ```text
+.forge/
+
+    project.json
+
+    worksets/
+
+    context/
+
+    plans/
+
+    memory/
+
+    patches/
+
+    architecture/
+
+    sessions/
+
+    cache/
+```
+
+---
+
+## Inspect the Repository
+
+```bash
+forge repo detect
+```
+
+Discover
+
+- Languages
+- Frameworks
+- Package managers
+- Source roots
+- Test roots
+- Important files
+
+---
+
+## Build a Workset
+
+```bash
+forge workset suggest "authentication"
+```
+
+Forge ranks relevant files using deterministic scoring.
+
+---
+
+## Generate Context
+
+```bash
+forge workset context authentication
+```
+
+Produces
+
+- Symbols
+- Summaries
+- Dependency hints
+- Excerpts
+
+without calling AI.
+
+---
+
+## Generate a Plan
+
+```bash
+forge plan "Add GitHub OAuth" --workset authentication
+```
+
+The model receives structured engineering context rather than a blind prompt.
+
+---
+
+## Open the Forge Workbench
+
+```bash
+forge web
+```
+
+Open
+
+```
 http://127.0.0.1:8765
 ```
 
-By default, the server binds to `127.0.0.1` and uses the resolved repository root. It reads and writes the same project-local `.forge/` artifacts as the CLI: project metadata, worksets, context bundles, saved plans, and engineering memory.
+---
 
-```bash
-forge web --host 127.0.0.1 --port 8765 --root /path/to/repo --reload
+# Forge Workbench
+
+The browser interface provides a modern engineering experience.
+
+| Workspace | Purpose |
+|-----------|---------|
+| Dashboard | Project overview, recent activity, workflows |
+| Repository | Detection, search, repository structure |
+| Worksets | Build, inspect, refresh, manage worksets |
+| Planning | Generate implementation plans |
+| Engineering Knowledge | Search decisions, investigations, plans, lessons |
+| Project | Project metadata and Forge configuration |
+
+*(Screenshot placeholders)*
+
+```
+docs/images/dashboard.png
+
+docs/images/worksets.png
+
+docs/images/planning.png
+
+docs/images/knowledge.png
 ```
 
-If you bind to `0.0.0.0`, Forge prints a warning because that may expose the local tool on your network. The web UI does not implement authentication or remote sharing.
+---
 
-Screens available in the MVP:
+# Supported AI Providers
 
-| Screen | Purpose |
-| --- | --- |
-| Dashboard | Project summary, detected metadata, recent worksets, saved plans, memory items, and quick actions. |
-| Project | Project metadata, Forge paths, initialized state, and project initialization action. |
-| Repository | Repository detection, compact tree, and text search. |
-| Worksets | Suggest, create, inspect, refresh, delete, and generate context bundles. |
-| Planning | Generate advisory plans from a task and persisted workset. |
-| Memory | Search memory, view timeline/details, and create decisions or investigations. |
+| Provider | Status |
+|----------|:------:|
+| Ollama | ✅ Default |
+| OpenAI | ✅ Supported |
+| Anthropic | ✅ Supported |
 
-Screenshot placeholder: `docs/images/forge-web-dashboard.png`
+Switch providers simply by changing your configuration.
 
-## Typical Workflow
+---
 
-```mermaid
-flowchart LR
-    A["Repository"] --> B["Repository Intelligence"]
-    B --> C["Workset"]
-    C --> D["Context Bundle"]
-    D --> E["Planning"]
-    E --> F["Engineering Memory"]
+# Architecture
+
+Forge now follows an Application Service architecture. CLI commands and web
+routes are adapters; they parse input and format output. Workflow coordination
+lives in `forge/services/`, deterministic business logic stays in domain
+packages, provider calls go through `forge/models/`, and local artifact storage
+stays explicit under `.forge/`.
+
+```text
+                Forge
+
+          CLI      Web UI
+             \      /
+              \    /
+       Application Services
+                     │
+     ┌───────────────┼─────────────────┐
+     │               │                 │
+Repository      Worksets       Engineering
+Intelligence                   Knowledge
+     │               │                 │
+     └───────────────┼─────────────────┘
+                     │
+           Context Engineering
+                     │
+               Planning Engine
+                  /     \
+                 /       \
+             Execution    Provider
+              Pipeline   Abstraction
+                          │
+                 Ollama • OpenAI • Anthropic
 ```
 
-1. Inspect the repository with deterministic commands.
-2. Create a workset for the task.
-3. Generate a context bundle that can be reviewed or shared.
-4. Ask Forge to plan against that explicit context.
-5. Store or search engineering memory as the project evolves.
+`PlanningService` is the canonical pattern for future services. It coordinates
+workset context, Engineering Memory, provider calls, and optional plan
+persistence without modifying source files. The Engineering Execution Pipeline
+is the next layer: it consumes a plan and coordinates read-only stages that load
+the workset, context bundle, Engineering Memory, and implementation plan into a
+durable `ExecutionResult`. Future patch generation, validation, application,
+verification, repair, documentation, and knowledge capture stages plug into that
+pipeline without coupling orchestration to the CLI or model providers.
 
-## Core Concepts
+Detailed guidance: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### Repository
+---
 
-A repository is the source tree Forge inspects. By default, Forge walks upward from the current directory until it finds `.git`. If no `.git` directory exists, Forge uses the current directory. Most commands also accept `--root <path>` to override this behavior.
+# Engineering Philosophy
 
-### Project
-
-A project is a repository initialized for Forge. `forge init` creates `.forge/project.json` with project identity, detected metadata, timestamps, and the Forge version that wrote it.
-
-### Workset
-
-A workset is a named, task-scoped set of files. Forge can suggest worksets from a query, then persist them under `.forge/worksets/`. Worksets are editable with `add`, `remove`, `refresh`, and `clear`.
-
-### Context Bundle
-
-A context bundle is a deterministic Markdown or JSON artifact generated from a workset. It includes file statistics, summaries, symbols, dependency hints, and relevant excerpts. Context bundles do not call AI models.
-
-### Plan
-
-A plan is an advisory implementation plan generated by the configured model from a task and workset context. Plans can be printed or saved under `.forge/plans/`. Forge plans do not modify files.
-
-### Engineering Memory
-
-Engineering memory is local project knowledge stored under `.forge/memory/`. Current commands can list, show, search, relate, and rebuild memory items. Memory helps future work discover prior decisions and task context.
-
-## Command Reference
-
-### Project
-
-| Command | Purpose |
-| --- | --- |
-| `forge init` | Initialize Forge metadata in the current repository. |
-| `forge init --force` | Reinitialize project metadata while preserving creation history. |
-| `forge project root` | Print the resolved repository root. |
-| `forge project info` | Show project identity and detected metadata. |
-| `forge project info --json` | Output project info as JSON. |
-| `forge project paths` | Show important Forge paths. |
-| `forge version` | Print the installed Forge version. |
-| `forge doctor` | Check local dependencies and provider readiness. |
-
-### Web UI
-
-| Command | Purpose |
-| --- | --- |
-| `forge web` | Start the local web UI on `http://127.0.0.1:8765`. |
-| `forge web --root /path/to/repo` | Start the UI against an explicit repository root. |
-| `forge web --reload` | Start the UI with Uvicorn reload enabled for local development. |
-
-### Repository
-
-| Command | Purpose |
-| --- | --- |
-| `forge repo detect` | Detect languages, build systems, frameworks, roots, and important files. |
-| `forge repo tree --max-depth 3` | Print a compact repository tree. |
-| `forge repo grep "ModelManager"` | Search repository files for a literal pattern. |
-| `forge repo grep "router" --glob "*.py"` | Search within repeated glob filters. |
-| `forge repo files` | List relevant repository files. |
-| `forge repo files --ext py` | List relevant files with one extension. |
-
-### Worksets
-
-| Command | Purpose |
-| --- | --- |
-| `forge workset suggest "model config"` | Rank files relevant to a task. |
-| `forge workset suggest "auth tests" --include-tests` | Include test files in suggestions. |
-| `forge workset suggest "model config" --json` | Output suggestions as JSON. |
-| `forge workset create model-config --query "model config"` | Create a persisted workset. |
-| `forge workset list` | List persisted worksets. |
-| `forge workset show model-config` | Show workset metadata and files. |
-| `forge workset add model-config README.md` | Add a file to a workset. |
-| `forge workset remove model-config README.md` | Remove a file from a workset. |
-| `forge workset refresh model-config` | Re-run the saved query and update the workset. |
-| `forge workset clear model-config --yes` | Delete a workset without prompting. |
-
-### Context
-
-| Command | Purpose |
-| --- | --- |
-| `forge workset context model-config` | Generate and save a Markdown context bundle. |
-| `forge workset context model-config --json` | Print the context bundle as JSON. |
-| `forge workset context model-config --output /tmp/context.md` | Write the bundle to a chosen path. |
-| `forge workset context model-config --max-lines-per-file 80` | Limit excerpts per file. |
-| `forge workset context model-config --include-full` | Include full file contents in excerpts. |
-
-### Planning
-
-| Command | Purpose |
-| --- | --- |
-| `forge plan "Improve diagnostics" --workset model-config` | Generate an implementation plan. |
-| `forge plan "Improve diagnostics" --workset model-config --save` | Save the plan under `.forge/plans/`. |
-| `forge plan "Improve diagnostics" --workset model-config --model qwen2.5-coder:14b` | Use a model for one request. |
-| `forge plan "Improve diagnostics" --workset model-config --timeout 300` | Override request timeout. |
-| `forge plan "Improve diagnostics" --workset model-config --json` | Output plan metadata as JSON. |
-
-### Models And Configuration
-
-| Command | Purpose |
-| --- | --- |
-| `forge models` | List models for the configured provider. |
-| `forge models use llama3.1:8b` | Persist a default model. |
-| `forge config show` | Print `~/.forge/config.yaml`. |
-| `forge config edit` | Open the config file in `$EDITOR` or `$VISUAL`. |
-| `forge config set-default-model llama3.1:8b` | Validate and persist a default model. |
-| `forge ask "Explain dependency injection in Python."` | Send a literal prompt to the configured model. |
-| `forge explain-project` | Ask the model to explain the current repository with explicit local context. |
-
-### Memory
-
-| Command | Purpose |
-| --- | --- |
-| `forge memory list` | List engineering memory items. |
-| `forge memory show <id>` | Show a memory item. |
-| `forge memory search "OAuth decision"` | Search stored memory items. |
-| `forge memory related "authentication work" --workset auth` | Find memory related to a query and optional workset. |
-| `forge memory rebuild` | Rebuild the memory index from stored item files. |
-
-All repository-aware commands accept `--root <path>` unless noted otherwise.
-
-## Examples
-
-### Understand A Repository
-
-```bash
-forge repo detect
-forge repo tree --max-depth 2
-forge explain-project --timeout 180
-```
-
-Use `repo detect` and `repo tree` for deterministic facts. Use `explain-project` when you want the configured model to summarize those facts.
-
-### Find Relevant Files
-
-```bash
-forge workset suggest "timeout handling"
-forge workset suggest "timeout handling" --include-tests --max-results 15
-forge repo grep "timeout_seconds" --glob "*.py"
-```
-
-### Plan A Feature
-
-```bash
-forge workset create github-oauth --query "authentication oauth github" --include-tests
-forge workset context github-oauth
-forge plan "Add GitHub OAuth login" --workset github-oauth --save
-```
-
-### Search Engineering Memory
-
-```bash
-forge memory list
-forge memory search "provider timeout"
-forge memory related "model provider errors" --workset model-config
-```
-
-### Switch Models
-
-```bash
-forge models
-forge models use qwen2.5-coder:14b
-forge ask --model qwen2.5-coder:32b "Explain this error path."
-```
-
-### Work With Ollama
-
-```bash
-ollama serve
-ollama pull llama3.1:8b
-forge config set-default-model llama3.1:8b
-forge models
-forge ask "Explain this project in one sentence."
-```
-
-## Architecture
-
-```mermaid
-flowchart TB
-    CLI["cli\nTyper commands"] --> Project["project\nroot resolution, metadata, paths"]
-    CLI --> Repository["repository\ndetection, files, tree, grep"]
-    CLI --> Worksets["worksets\nsuggestion, scoring, persistence"]
-    Worksets --> Context["context\nbundles, symbols, summaries, excerpts"]
-    Context --> Planning["planning\nprompt assembly, plan rendering, plan storage"]
-    CLI --> Memory["memory\nlocal items, search, similarity, index rebuild"]
-    Planning --> Providers["providers\nOllama, OpenAI, Anthropic"]
-    CLI --> Providers
-```
-
-| Package | Responsibility |
-| --- | --- |
-| `forge.project` | Resolves repository roots, computes Forge paths, initializes project metadata. |
-| `forge.repository` | Provides deterministic repository inspection, search, file listing, and tree generation. |
-| `forge.worksets` | Scores files for a task and manages persisted worksets. |
-| `forge.context` | Builds reviewable context bundles from worksets. |
-| `forge.planning` | Generates and renders implementation plans from explicit task context. |
-| `forge.memory` | Stores, lists, searches, relates, and indexes engineering memory items. |
-| `forge.models` | Defines provider abstractions and implementations for Ollama, OpenAI, and Anthropic. |
-| `forge.cli` | Exposes the Typer-based `forge` command. |
-
-## Philosophy
-
-Forge follows the project Constitution summarized here:
+Forge follows six core principles.
 
 | Principle | Meaning |
-| --- | --- |
-| Deterministic First | Use inspectable repository facts before model output. |
-| Human in Control | Plans are advisory; Forge does not silently change source code. |
-| Architecture Before Implementation | Understand project structure before proposing changes. |
-| Explainability | Show why files, context, and plans were selected. |
-| Engineering Memory | Preserve useful project knowledge across tasks. |
-| AI Independence | Keep provider choices interchangeable. |
+|-----------|---------|
+| Deterministic First | Repository facts before model output. |
+| Human in Control | Forge advises but never silently edits source code. |
+| Architecture Before Implementation | Understand software before changing it. |
+| Explainability | Worksets, context, and recommendations explain themselves. |
+| Engineering Knowledge | Valuable engineering knowledge survives AI sessions. |
+| Provider Independence | AI providers are interchangeable. |
 
-See this [Constitution summary](#philosophy) and the [Development Log](docs/development/DEVELOPMENT_LOG.md). A dedicated `docs/development/CONSTITUTION.md` is recommended as the project grows.
+---
 
-## Development Workflow
-
-Contributors should keep changes small, tested, and documented.
+# Development Workflow
 
 ```bash
 pytest
+
 pytest -m "not integration"
+
 pytest -m integration
-pytest tests/test_config_manager.py
+
 ruff check .
+
 black --check .
 ```
 
-| Practice | Expectation |
-| --- | --- |
-| Development Log | Update [docs/development/DEVELOPMENT_LOG.md](docs/development/DEVELOPMENT_LOG.md) for meaningful product or architecture changes. |
-| ADRs | Use an ADR when a decision affects architecture, provider behavior, artifacts, or long-term workflow. |
-| Constitution | Keep behavior aligned with deterministic-first, human-controlled engineering workflows. |
-| AI agents | Agents should inspect the repository first, use worksets/context bundles, avoid inventing commands, and never treat model output as applied code. |
-| Tests | Add or update tests for command behavior, artifact formats, provider handling, and deterministic scoring. |
-| Documentation | Update README or focused docs whenever user-facing commands, artifacts, or workflows change. |
+Contributors should:
 
-## Configuration
+- Update the Development Log
+- Create ADRs for architectural decisions
+- Add tests for every meaningful feature
+- Keep repository intelligence deterministic
+- Preserve clean architecture
+- Update documentation alongside user-facing changes
 
-Forge stores user configuration at:
+---
+
+# Repository Artifacts
+
+Forge stores project-local artifacts under:
 
 ```text
-~/.forge/config.yaml
+.forge/
 ```
 
-Default configuration:
+| Artifact | Purpose |
+|----------|---------|
+| `project.json` | Project identity and metadata |
+| `worksets/` | Persisted worksets |
+| `context/` | Context bundles |
+| `plans/` | Saved implementation plans |
+| `memory/` | Engineering knowledge |
+| `patches/` | Saved raw diff patches for inspection and validation |
+| `architecture/` | Future architecture artifacts |
+| `sessions/` | Future session history |
+| `cache/` | Local cache |
 
-```yaml
-provider: ollama
-default_model: llama3.1:8b
-providers:
-  ollama:
-    endpoint: http://localhost:11434
-    timeout_seconds: 120
-```
+Never store secrets under `.forge/`.
 
-| Key | Purpose |
-| --- | --- |
-| `provider` | Active provider: `ollama`, `openai`, or `anthropic`. |
-| `default_model` | Model used when `--model` is not supplied. |
-| `providers.<name>.endpoint` | Provider API endpoint. |
-| `providers.<name>.timeout_seconds` | Optional request timeout. Ollama defaults to 120 seconds. |
+---
 
-## Repository Artifacts
+# Roadmap
 
-Forge writes project-local artifacts under `.forge/`.
+| Area | Status |
+|------|:------:|
+| Repository Intelligence | ✅ Complete |
+| Context Engineering | ✅ Complete |
+| Engineering Knowledge | ✅ Complete |
+| Planning | ✅ Complete |
+| Web Workbench | ✅ Complete |
+| Guided Engineering Experience | 🚧 In Progress |
+| Architecture Intelligence | ⏳ Planned |
+| Verification Engine | ⏳ Planned |
+| Patch Generation | ✅ Complete |
+| Patch Application | ⏳ Planned |
+| Agent Orchestration | ⏳ Planned |
+| Enterprise Knowledge | ⏳ Planned |
 
-| Path | Created by | Purpose |
-| --- | --- | --- |
-| `.forge/project.json` | `forge init` | Project identity, detected metadata, timestamps, and Forge version. |
-| `.forge/worksets/` | `forge init`, workset commands | Persisted worksets as JSON files. |
-| `.forge/context/` | `forge init`, `forge workset context` | Generated Markdown or JSON context bundles. |
-| `.forge/plans/` | `forge plan --save` | Saved implementation plans. |
-| `.forge/memory/` | Memory commands | Local engineering memory items and index data. |
-| `.forge/summaries/` | `forge init` | Reserved for repository and file summaries. |
-| `.forge/architecture/` | `forge init` | Reserved for architecture intelligence artifacts. |
-| `.forge/sessions/` | `forge init` | Reserved for session-oriented workflow artifacts. |
-| `.forge/cache/` | `forge init` | Local cache data. |
+---
 
-Do not store secrets in `.forge/`.
+# Contributing
 
-## Supported Providers
+Forge is built around **deterministic engineering workflows**.
 
-| Provider | Status | Configuration |
-| --- | --- | --- |
-| Ollama | Default, local provider | `provider: ollama`, endpoint defaults to `http://localhost:11434`. |
-| OpenAI | Supported provider interface | Requires `OPENAI_API_KEY` and OpenAI provider config. |
-| Anthropic | Supported provider interface | Requires `ANTHROPIC_API_KEY` and Anthropic provider config. |
+Before contributing:
 
-## Roadmap
+1. Read the Constitution.
+2. Read the Development Log.
+3. Review existing tests.
+4. Preserve architectural boundaries.
+5. Update documentation with any user-facing changes.
 
-| Theme | Direction |
-| --- | --- |
-| Repository Intelligence | Broader language detection, richer dependency signals, and more precise repository maps. |
-| Engineering Memory | Better capture, indexing, retrieval, and relation of decisions, plans, and implementation history. |
-| Architecture Intelligence | First-class architecture artifacts and architecture-aware task guidance. |
-| Planning | More structured plans with clearer assumptions, risks, validation steps, and memory links. |
-| Verification | A dedicated verification workflow for tests, formatting, and project-specific checks. |
-| Patch Generation | Controlled patch proposal and application workflows with human review. |
+Every meaningful change should include:
 
-## Contributing
+- Tests
+- Documentation
+- Development Log update
+- ADR when architecture changes
 
-Start by reading the [Development Log](docs/development/DEVELOPMENT_LOG.md), then inspect the current command and test coverage.
+---
 
-| Step | Command or artifact |
-| --- | --- |
-| Install | `pip install -e ".[dev]"` |
-| Run tests | `pytest` |
-| Run unit tests | `pytest -m "not integration"` |
-| Run integration tests | `pytest -m integration` |
-| Lint | `ruff check .` |
-| Format check | `black --check .` |
-| Document changes | README, Development Log, and ADRs when relevant |
+# License
 
-Recommended documentation additions:
-
-| Document | Purpose |
-| --- | --- |
-| `docs/getting-started.md` | Longer installation and first-project walkthrough. |
-| `docs/architecture.md` | Detailed package architecture and artifact lifecycle. |
-| `docs/cli-reference.md` | Full generated CLI reference. |
-| `docs/contributing.md` | Contribution process, ADR process, and agent expectations. |
-| `docs/development/CONSTITUTION.md` | Canonical project Constitution. |
+MIT License.
