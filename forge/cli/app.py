@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -12,7 +14,10 @@ from rich.console import Console
 from rich.table import Table
 
 from forge.commands.doctor import CheckResult, run_doctor
-from forge.commands.project_context import build_project_explanation_prompt
+from forge.commands.project_context import (
+    build_guardrailed_ask_prompt,
+    build_project_explanation_prompt,
+)
 from forge.config.manager import ConfigManager
 from forge.execution import ExecutionServiceError
 from forge.memory.store import MemoryStoreError
@@ -39,23 +44,108 @@ from forge.services.apply_service import ApplyError, PolicyBlockedError
 from forge.utils.logging import configure_logging
 from forge.version import __version__
 from forge.web.app import create_app
+from forge.workflows.registry import AmbiguousWorkflowIdError
 from forge.worksets.store import WorksetStoreError
+
+
+def _help_with_examples(summary: str, *examples: str) -> str:
+    example_lines = "\n".join(f"  {example}" for example in examples)
+    return f"{summary}\n\nExamples:\n{example_lines}"
+
+
+FORGE_BRAND = "[bold cyan]forge[/bold cyan]"
 
 app = typer.Typer(
     name="forge",
-    help="Local-first AI software engineering workbench.",
+    help=_help_with_examples(
+        "[bold cyan]forge[/bold cyan] - local-first AI software engineering workbench.",
+        "forge doctor",
+        "forge repo detect",
+        'forge workset suggest "add request tracing"',
+    ),
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
-config_app = typer.Typer(help="Manage Forge configuration.")
-models_app = typer.Typer(help="Manage configured provider models.")
-repo_app = typer.Typer(help="Inspect the current repository deterministically.")
-workset_app = typer.Typer(help="Build and inspect worksets of relevant files.")
-project_app = typer.Typer(help="Show project identity and Forge path information.")
-memory_app = typer.Typer(help="Manage the engineering memory knowledge base.")
-patch_app = typer.Typer(help="Inspect and validate saved patches.")
-git_app = typer.Typer(help="Inspect Git repository state.")
-policy_app = typer.Typer(help="Inspect and evaluate engineering policy.")
-workflow_app = typer.Typer(help="Run guided engineering workflows.")
+config_app = typer.Typer(
+    help=_help_with_examples(
+        "Manage [bold cyan]forge[/bold cyan] configuration.",
+        "forge config show",
+        "forge config set-default-model llama3.1:8b",
+    ),
+    rich_markup_mode="rich",
+)
+models_app = typer.Typer(
+    help=_help_with_examples(
+        "Manage configured provider models.",
+        "forge models",
+        "forge models use llama3.1:8b",
+    ),
+    rich_markup_mode="rich",
+)
+repo_app = typer.Typer(
+    help=_help_with_examples(
+        "Inspect the current repository deterministically.",
+        "forge repo tree --max-depth 2",
+        'forge repo grep ModelManager --glob "*.py"',
+    ),
+    rich_markup_mode="rich",
+)
+workset_app = typer.Typer(
+    help=_help_with_examples(
+        "Build and inspect worksets of relevant files.",
+        'forge workset suggest "fix login redirect" --include-tests',
+        'forge workset create auth-flow --query "fix login redirect"',
+    ),
+    rich_markup_mode="rich",
+)
+project_app = typer.Typer(
+    help=_help_with_examples(
+        "Show project identity and [bold cyan]forge[/bold cyan] path information.",
+        "forge project root",
+        "forge project info --json",
+    ),
+    rich_markup_mode="rich",
+)
+memory_app = typer.Typer(
+    help=_help_with_examples(
+        "Manage the engineering memory knowledge base.",
+        "forge memory list",
+        'forge memory search "auth redirect"',
+    ),
+    rich_markup_mode="rich",
+)
+patch_app = typer.Typer(
+    help=_help_with_examples(
+        "Inspect and validate saved patches.",
+        "forge patch list",
+        "forge patch validate fix-auth.patch",
+    ),
+    rich_markup_mode="rich",
+)
+git_app = typer.Typer(
+    help=_help_with_examples(
+        "Inspect Git repository state.",
+        "forge git status",
+        "forge git branch --json",
+    ),
+    rich_markup_mode="rich",
+)
+policy_app = typer.Typer(
+    help=_help_with_examples(
+        "Inspect and evaluate engineering policy.",
+        "forge policy show",
+        "forge policy check fix-auth.patch --verification verify-20260101.json",
+    ),
+    rich_markup_mode="rich",
+)
+workflow_app = typer.Typer(
+    help=_help_with_examples(
+        "Run guided engineering workflows.",
+        'forge workflow feature "add CSV export"',
+        'forge workflow run bugfix "fix failing login test"',
+    ),
+    rich_markup_mode="rich",
+)
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
@@ -67,6 +157,27 @@ app.add_typer(git_app, name="git")
 app.add_typer(policy_app, name="policy")
 app.add_typer(workflow_app, name="workflow")
 console = Console()
+
+
+def _table(title: str, **kwargs: object) -> Table:
+    """Create a consistent, colorful table for human-facing CLI output."""
+    return Table(
+        title=f"forge / {title}",
+        title_style="bold cyan",
+        header_style="bold magenta",
+        border_style="cyan",
+        **kwargs,
+    )
+
+
+@contextmanager
+def _running(message: str, *, enabled: bool = True) -> Iterator[None]:
+    """Show responsive command feedback without polluting JSON/script output."""
+    if not enabled:
+        yield
+        return
+    with console.status(f"{FORGE_BRAND} [cyan]{message}[/cyan]", spinner="dots"):
+        yield
 
 
 def _config_manager() -> ConfigManager:
@@ -110,7 +221,7 @@ def version() -> None:
 def doctor() -> None:
     """Verify local tools needed by Forge."""
     checks = run_doctor(_config_manager().load())
-    table = Table(title="Forge Doctor")
+    table = _table("Forge Doctor")
     table.add_column("Check")
     table.add_column("Status")
     table.add_column("Detail")
@@ -169,14 +280,15 @@ def verify(
         return
 
     try:
-        report = verification_service.run(
-            resolved.root,
-            timeout=timeout,
-            output_path=output,
-            patch=patch,
-            plan=plan,
-            workset=workset,
-        )
+        with _running("Running verification...", enabled=not output_json):
+            report = verification_service.run(
+                resolved.root,
+                timeout=timeout,
+                output_path=output,
+                patch=patch,
+                plan=plan,
+                workset=workset,
+            )
     except verification_service.VerificationServiceError as exc:
         if output_json:
             console.print_json(json.dumps({"error": str(exc), "overall_status": "error"}))
@@ -230,7 +342,7 @@ def models_command(ctx: typer.Context) -> None:
     except ModelProviderError as exc:
         _handle_provider_error(exc)
 
-    table = Table(title=f"Forge Models ({config.provider.value})")
+    table = _table(f"Forge Models ({config.provider.value})")
     table.add_column("Provider")
     table.add_column("Model")
     table.add_column("Active")
@@ -271,12 +383,14 @@ def ask(
     ] = None,
 ) -> None:
     """Ask the configured model a question."""
+    guarded_prompt = build_guardrailed_ask_prompt(Path.cwd(), prompt)
     try:
-        response = _model_manager().ask(
-            prompt=prompt,
-            model=model,
-            timeout_seconds=timeout_seconds,
-        )
+        with _running("Waiting for model response..."):
+            response = _model_manager().ask(
+                prompt=guarded_prompt,
+                model=model,
+                timeout_seconds=timeout_seconds,
+            )
     except ModelNotFoundError as exc:
         _handle_model_not_found(exc)
     except ModelProviderError as exc:
@@ -306,11 +420,12 @@ def explain_project(
     resolved = project_service.resolve_project_root(root)
     prompt = build_project_explanation_prompt(resolved.root)
     try:
-        response = _model_manager().ask(
-            prompt=prompt,
-            model=model,
-            timeout_seconds=timeout_seconds,
-        )
+        with _running("Building project explanation..."):
+            response = _model_manager().ask(
+                prompt=prompt,
+                model=model,
+                timeout_seconds=timeout_seconds,
+            )
     except ModelNotFoundError as exc:
         _handle_model_not_found(exc)
     except ModelProviderError as exc:
@@ -345,7 +460,7 @@ def repo_detect(
     """Detect repository characteristics."""
     resolved = project_service.resolve_project_root(root)
     detection = repository_service.detect(resolved.root)
-    table = Table(title="Repository Detection")
+    table = _table("Repository Detection")
     table.add_column("Property")
     table.add_column("Value")
     table.add_row("Root path", detection["root_path"])
@@ -383,7 +498,7 @@ def repo_grep(
         globs=glob_patterns or [],
         max_results=max_results,
     )
-    table = Table(title="Repository Search")
+    table = _table("Repository Search")
     table.add_column("File")
     table.add_column("Line", justify="right")
     table.add_column("Match")
@@ -410,7 +525,7 @@ def repo_files(
     """List relevant repository files."""
     resolved = project_service.resolve_project_root(root)
     result = repository_service.files(resolved.root, ext=ext, max_results=max_results)
-    table = Table(title="Repository Files")
+    table = _table("Repository Files")
     table.add_column("File")
     for path in result["files"]:
         table.add_row(path)
@@ -458,7 +573,7 @@ def workset_suggest(
     console.print(f"[dim]Tokens: {', '.join(suggestion['tokens'])}[/dim]")
     console.print()
 
-    table = Table(title=f"Candidates ({len(suggestion['candidates'])})")
+    table = _table(f"Candidates ({len(suggestion['candidates'])})")
     table.add_column("File", no_wrap=False)
     table.add_column("Score", justify="right")
     table.add_column("Category")
@@ -533,7 +648,7 @@ def workset_list(
     if not worksets:
         console.print("[yellow]No worksets found.[/yellow]")
         return
-    table = Table(title="Worksets")
+    table = _table("Worksets")
     table.add_column("Name")
     table.add_column("Query")
     table.add_column("Files", justify="right")
@@ -584,7 +699,7 @@ def workset_show(
     console.print(f"  Updated: {data.get('updated_at', '')}")
     console.print()
 
-    table = Table(title=f"Files ({len(data.get('files', []))})")
+    table = _table(f"Files ({len(data.get('files', []))})")
     table.add_column("File")
     table.add_column("Score", justify="right")
     table.add_column("Category")
@@ -884,7 +999,7 @@ def project_paths(
         console.print_json(json.dumps(paths))
         return
 
-    table = Table(title="Forge Paths")
+    table = _table("Paths")
     table.add_column("Path")
     table.add_column("Location")
     table.add_row("Global config", paths["global_config_path"])
@@ -958,7 +1073,7 @@ def _render_verification_report(report: dict[str, object]) -> None:
     console.print(f"Overall: {_status_label(overall)}")
     console.print()
 
-    table = Table(show_header=False, box=None)
+    table = _table("Verification Gates", show_header=False, box=None)
     table.add_column("Gate")
     table.add_column("Status")
     for label, kind in (
@@ -1051,16 +1166,17 @@ def plan_command(
     resolved = project_service.resolve_project_root(root)
 
     try:
-        result = planning_service.PlanningService(_model_manager()).generate_plan(
-            resolved.root,
-            task,
-            workset,
-            model=model,
-            save=save,
-            timeout_seconds=timeout_seconds,
-            max_lines_per_file=max_lines_per_file,
-            include_full=include_full,
-        )
+        with _running("Generating implementation plan...", enabled=not output_json):
+            result = planning_service.PlanningService(_model_manager()).generate_plan(
+                resolved.root,
+                task,
+                workset,
+                model=model,
+                save=save,
+                timeout_seconds=timeout_seconds,
+                max_lines_per_file=max_lines_per_file,
+                include_full=include_full,
+            )
     except PlannerError as exc:
         console.print(f"[red]Planning error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -1103,6 +1219,14 @@ def implement_command(
         Path | None,
         typer.Option("--output", help="Write a valid patch to this explicit path."),
     ] = None,
+    repair_attempts: Annotated[
+        int,
+        typer.Option(
+            "--repair-attempts",
+            min=0,
+            help="Number of repair attempts on invalid patch.",
+        ),
+    ] = 1,
     output_json: Annotated[
         bool,
         typer.Option("--json", help="Output as JSON."),
@@ -1112,16 +1236,18 @@ def implement_command(
     resolved = project_service.resolve_project_root(root)
 
     try:
-        result = implementation_service.ImplementationService(_model_manager()).implement(
-            resolved.root,
-            task,
-            workset,
-            model=model,
-            timeout_seconds=timeout_seconds,
-            max_lines_per_file=max_lines_per_file,
-            include_full=include_full,
-            output_path=output_path,
-        )
+        with _running("Generating patch...", enabled=not output_json):
+            result = implementation_service.ImplementationService(_model_manager()).implement(
+                resolved.root,
+                task,
+                workset,
+                model=model,
+                timeout_seconds=timeout_seconds,
+                max_lines_per_file=max_lines_per_file,
+                include_full=include_full,
+                output_path=output_path,
+                repair_attempts=repair_attempts,
+            )
     except ExecutionServiceError as exc:
         console.print(f"[red]Execution error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -1157,6 +1283,21 @@ def implement_command(
             console.print(f"  - {error}")
     if data["next_command"]:
         console.print(f"Next command: {data['next_command']}")
+    if data.get("repair_attempts_made", 0) > 0:
+        if data["valid"]:
+            console.print(
+                "Patch repaired and validated after "
+                f"{data['repair_attempts_made']} attempt(s)."
+            )
+        else:
+            console.print(
+                "[red]Patch generation failed validation after "
+                f"{data['repair_attempts_made']} repair attempt(s).[/red]"
+            )
+            if data.get("raw_response_path"):
+                console.print("Invalid responses saved under .forge/patches/invalid/")
+    if data.get("test_warning"):
+        console.print(f"[yellow]Warning:[/yellow] {data['test_warning']}")
 
     if not data["valid"]:
         console.print("No patch was accepted.")
@@ -1180,7 +1321,7 @@ def memory_list(
     if not items:
         console.print("[yellow]No memory items found.[/yellow]")
         return
-    table = Table(title="Engineering Memory")
+    table = _table("Engineering Memory")
     table.add_column("ID")
     table.add_column("Type")
     table.add_column("Title")
@@ -1251,7 +1392,7 @@ def memory_search(
     if not results:
         console.print("[yellow]No matching memory items.[/yellow]")
         return
-    table = Table(title=f"Memory Search: {query!r}")
+    table = _table(f"Memory Search: {query!r}")
     table.add_column("ID")
     table.add_column("Type")
     table.add_column("Title")
@@ -1292,7 +1433,7 @@ def memory_related(
     if not results:
         console.print("[yellow]No similar memory items found.[/yellow]")
         return
-    table = Table(title=f"Related Memory: {query!r}")
+    table = _table(f"Related Memory: {query!r}")
     table.add_column("ID")
     table.add_column("Type")
     table.add_column("Title")
@@ -1340,7 +1481,7 @@ def patch_list(
         console.print("[yellow]No saved patches found in .forge/patches/.[/yellow]")
         return
 
-    table = Table(title="Saved Patches")
+    table = _table("Saved Patches")
     table.add_column("Name")
     table.add_column("Valid")
     table.add_column("Affected files")
@@ -1519,6 +1660,9 @@ def policy_check(
     resolved = project_service.resolve_project_root(root)
     try:
         result = policy_service.check(resolved.root, patch_path_or_name, verification)
+    except PatchError as exc:
+        console.print(f"[red]Patch not found:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]Policy check error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
@@ -1608,12 +1752,13 @@ def apply_command(
             raise typer.Exit(code=0)
 
     try:
-        record = apply_service.apply(
-            resolved.root,
-            patch_path_or_name,
-            verification_path=verification,
-            force=force,
-        )
+        with _running("Applying patch...", enabled=not output_json):
+            record = apply_service.apply(
+                resolved.root,
+                patch_path_or_name,
+                verification_path=verification,
+                force=force,
+            )
     except PolicyBlockedError as exc:
         if output_json:
             console.print_json(json.dumps({"error": str(exc), "evaluation": exc.evaluation}))
@@ -1666,7 +1811,8 @@ def _run_workflow(
         console.print("")
 
     try:
-        run = workflow_service.run_workflow(resolved.root, template, task, model=model)
+        with _running(f"Running {template} workflow...", enabled=not output_json):
+            run = workflow_service.run_workflow(resolved.root, template, task, model=model)
     except WorkflowServiceError as exc:
         if output_json:
             console.print_json(json.dumps({"error": str(exc), "status": "failed"}))
@@ -1780,7 +1926,7 @@ def workflow_templates(
     if output_json:
         console.print_json(json.dumps(templates))
         return
-    table = Table(title="Workflow Templates")
+    table = _table("Workflow Templates")
     table.add_column("Template")
     table.add_column("Name")
     table.add_column("Description")
@@ -1816,7 +1962,7 @@ def workflow_list(
     if not runs:
         console.print("[yellow]No workflow runs found.[/yellow]")
         return
-    table = Table(title="Workflow Runs")
+    table = _table("Workflow Runs")
     table.add_column("ID")
     table.add_column("Template")
     table.add_column("Status")
@@ -1846,7 +1992,11 @@ def workflow_show(
 ) -> None:
     """Show details of a workflow run."""
     resolved = project_service.resolve_project_root(root)
-    run = workflow_service.show_run(resolved.root, run_id)
+    try:
+        run = workflow_service.show_run(resolved.root, run_id)
+    except AmbiguousWorkflowIdError as exc:
+        console.print(f"[red]Ambiguous workflow ID:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
     if run is None:
         console.print(f"[red]Workflow run {run_id!r} not found.[/red]")
         raise typer.Exit(code=1)
@@ -1864,6 +2014,205 @@ def workflow_show(
         console.print(f"[bold]Patch:[/bold] {run['patch_path']}")
     console.print("")
     _render_workflow_run(run)
+
+
+def _add_command_examples(callback: object, *examples: str) -> None:
+    if not callable(callback):
+        return
+    summary = (callback.__doc__ or "").strip()
+    callback.__doc__ = _help_with_examples(summary, *examples)
+
+
+def _install_command_examples() -> None:
+    _add_command_examples(version, "forge version")
+    _add_command_examples(doctor, "forge doctor")
+    _add_command_examples(
+        verify,
+        "forge verify --detect",
+        "forge verify --timeout 600 --output .forge/verifications/latest.json",
+    )
+    _add_command_examples(config_show, "forge config show")
+    _add_command_examples(config_edit, "EDITOR=vim forge config edit")
+    _add_command_examples(
+        config_set_default_model,
+        "forge config set-default-model llama3.1:8b",
+    )
+    _add_command_examples(models_command, "forge models")
+    _add_command_examples(models_use, "forge models use qwen2.5-coder:32b")
+    _add_command_examples(
+        ask,
+        'forge ask "Explain dependency injection"',
+        'forge ask --model qwen2.5-coder:32b "Review this error message"',
+    )
+    _add_command_examples(
+        explain_project,
+        "forge explain-project",
+        "forge explain-project --root ../service --timeout 180",
+    )
+    _add_command_examples(
+        repo_tree,
+        "forge repo tree",
+        "forge repo tree --max-depth 2 --root ../service",
+    )
+    _add_command_examples(
+        repo_detect,
+        "forge repo detect",
+        "forge repo detect --root ../service",
+    )
+    _add_command_examples(
+        repo_grep,
+        "forge repo grep ModelManager",
+        'forge repo grep "TODO" --glob "*.py" --max-results 25',
+    )
+    _add_command_examples(
+        repo_files,
+        "forge repo files",
+        "forge repo files --ext py --max-results 50",
+    )
+    _add_command_examples(
+        workset_suggest,
+        'forge workset suggest "add audit logging"',
+        'forge workset suggest "fix login redirect" --include-tests --json',
+    )
+    _add_command_examples(
+        workset_create,
+        'forge workset create auth-flow --query "fix login redirect"',
+        'forge workset create api-errors -q "standardize API errors" --include-tests',
+    )
+    _add_command_examples(workset_list, "forge workset list")
+    _add_command_examples(
+        workset_show,
+        "forge workset show auth-flow",
+        "forge workset show auth-flow --json",
+    )
+    _add_command_examples(
+        workset_add,
+        "forge workset add auth-flow forge/services/auth.py",
+    )
+    _add_command_examples(
+        workset_remove,
+        "forge workset remove auth-flow forge/services/auth.py",
+    )
+    _add_command_examples(workset_refresh, "forge workset refresh auth-flow")
+    _add_command_examples(
+        workset_context,
+        "forge workset context auth-flow",
+        "forge workset context auth-flow --include-full --output context.md",
+    )
+    _add_command_examples(
+        workset_clear,
+        "forge workset clear auth-flow",
+        "forge workset clear auth-flow --yes",
+    )
+    _add_command_examples(
+        init,
+        "forge init",
+        "forge init --root ../service --force",
+    )
+    _add_command_examples(
+        web_command,
+        "forge web",
+        "forge web --port 9000 --reload",
+    )
+    _add_command_examples(project_root, "forge project root")
+    _add_command_examples(
+        project_info,
+        "forge project info",
+        "forge project info --json",
+    )
+    _add_command_examples(
+        project_paths,
+        "forge project paths",
+        "forge project paths --json",
+    )
+    _add_command_examples(
+        plan_command,
+        'forge plan "add CSV export" --workset export-flow',
+        'forge plan "fix flaky auth test" -w auth-flow --save',
+    )
+    _add_command_examples(
+        implement_command,
+        'forge implement "add CSV export" --workset export-flow',
+        'forge implement "fix login redirect" -w auth-flow --repair-attempts 2',
+    )
+    _add_command_examples(memory_list, "forge memory list", "forge memory list --json")
+    _add_command_examples(
+        memory_show,
+        "forge memory show decision-20260101-auth",
+        "forge memory show decision-20260101-auth --json",
+    )
+    _add_command_examples(
+        memory_search,
+        'forge memory search "authentication"',
+        'forge memory search "retry policy" --max-results 3',
+    )
+    _add_command_examples(
+        memory_related,
+        'forge memory related "change token refresh behavior"',
+        'forge memory related "API timeout" --workset api-client',
+    )
+    _add_command_examples(memory_rebuild, "forge memory rebuild")
+    _add_command_examples(patch_list, "forge patch list", "forge patch list --json")
+    _add_command_examples(
+        patch_show,
+        "forge patch show fix-auth.patch",
+        "forge patch show .forge/patches/fix-auth.patch",
+    )
+    _add_command_examples(
+        patch_validate,
+        "forge patch validate fix-auth.patch",
+        "forge patch validate fix-auth.patch --json",
+    )
+    _add_command_examples(git_status, "forge git status", "forge git status --json")
+    _add_command_examples(git_branch, "forge git branch", "forge git branch --json")
+    _add_command_examples(policy_show, "forge policy show", "forge policy show --json")
+    _add_command_examples(
+        policy_check,
+        "forge policy check fix-auth.patch",
+        "forge policy check fix-auth.patch --verification verify-20260101.json",
+    )
+    _add_command_examples(
+        apply_command,
+        "forge apply fix-auth.patch",
+        "forge apply fix-auth.patch --verification verify-20260101.json --yes",
+    )
+    _add_command_examples(
+        workflow_feature,
+        'forge workflow feature "add CSV export"',
+        'forge workflow feature "add CSV export" --model qwen2.5-coder:32b',
+    )
+    _add_command_examples(
+        workflow_bugfix,
+        'forge workflow bugfix "fix login redirect"',
+        'forge workflow bugfix "fix login redirect" --json',
+    )
+    _add_command_examples(
+        workflow_refactor,
+        'forge workflow refactor "split repository service"',
+    )
+    _add_command_examples(
+        workflow_run,
+        'forge workflow run feature "add CSV export"',
+        'forge workflow run bugfix "fix failing login test"',
+    )
+    _add_command_examples(
+        workflow_templates,
+        "forge workflow templates",
+        "forge workflow templates --json",
+    )
+    _add_command_examples(
+        workflow_list,
+        "forge workflow list",
+        "forge workflow list --template feature",
+    )
+    _add_command_examples(
+        workflow_show,
+        "forge workflow show 01HZY7M6K2Q3",
+        "forge workflow show 01HZY7M6K2Q3 --json",
+    )
+
+
+_install_command_examples()
 
 
 def main() -> None:

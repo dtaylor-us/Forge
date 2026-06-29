@@ -8,16 +8,18 @@ from pathlib import Path
 from typing import Any
 
 from forge.execution import ExecutionService, ExecutionServiceError
-from forge.execution.execution_prompt import build_implementation_prompt
+from forge.execution.execution_prompt import build_implementation_prompt, build_repair_prompt
 from forge.models.manager import ModelManager
 from forge.patches import (
     Patch,
+    apply_check_patch_content,
     save_invalid_response,
     save_patch_content,
     validate_patch_content,
 )
 from forge.patches.service import inspect_patch
 from forge.planning.planner import ImplementationPlan
+from forge.planning.prompts import build_context_sections
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ class ImplementationResult:
     patch_name: str | None
     show_target: str | None
     raw_response_path: Path | None = None
+    test_warning: str | None = None
+    repair_attempts_made: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable result."""
@@ -54,6 +58,8 @@ class ImplementationResult:
             "next_command": (
                 f"forge patch show {self.show_target}" if self.show_target is not None else None
             ),
+            "test_warning": self.test_warning,
+            "repair_attempts_made": self.repair_attempts_made,
         }
 
 
@@ -79,8 +85,9 @@ class ImplementationService:
         max_lines_per_file: int = 120,
         include_full: bool = False,
         output_path: Path | None = None,
+        repair_attempts: int = 1,
     ) -> ImplementationResult:
-        """Generate and store a model-produced unified diff."""
+        """Generate and store a model-produced unified diff, with optional repair."""
         selected_model = model or self._model_manager.config().default_model
         request = self._execution_service.create_request(
             root,
@@ -94,7 +101,7 @@ class ImplementationService:
         if request.context_bundle is None or request.implementation_plan is None:
             raise ExecutionServiceError("Execution context was not prepared.")
 
-        prompt = build_implementation_prompt(
+        prompt, test_warning = build_implementation_prompt(
             task,
             request.context_bundle,
             request.implementation_plan,
@@ -108,14 +115,45 @@ class ImplementationService:
             model=model,
             timeout_seconds=timeout_seconds,
         )
-        valid, errors, affected_files = validate_patch_content(response.content)
+        current_content = response.content
+        current_model = response.model
+        attempts_made = 0
 
-        if valid:
-            patch = _save_valid_patch(root, response.content, output_path=output_path, task=task)
+        valid, errors, affected_files = validate_patch_content(current_content)
+        apply_ok, apply_error = _apply_check_if_structurally_valid(root, current_content, valid)
+        is_valid = valid and apply_ok
+
+        file_details = _bundle_file_details(request.context_bundle)
+        while not is_valid and attempts_made < repair_attempts:
+            attempts_made += 1
+            repair_prompt = build_repair_prompt(
+                task=task,
+                original_patch=current_content,
+                structural_errors=errors,
+                apply_check_error=apply_error,
+                file_details=file_details,
+            )
+            repair_response = self._model_manager.ask(
+                prompt=repair_prompt,
+                model=model,
+                timeout_seconds=timeout_seconds,
+            )
+            current_content = repair_response.content
+            current_model = repair_response.model
+            valid, errors, affected_files = validate_patch_content(current_content)
+            apply_ok, apply_error = _apply_check_if_structurally_valid(
+                root,
+                current_content,
+                valid,
+            )
+            is_valid = valid and apply_ok
+
+        if is_valid:
+            patch = _save_valid_patch(root, current_content, output_path=output_path, task=task)
             return ImplementationResult(
                 task=task,
                 workset=workset,
-                model=response.model,
+                model=current_model,
                 status="accepted",
                 patch_path=patch.path,
                 valid=patch.valid,
@@ -123,13 +161,17 @@ class ImplementationService:
                 validation_errors=patch.validation_errors,
                 patch_name=patch.name,
                 show_target=_show_target(root, patch.path),
+                test_warning=test_warning,
+                repair_attempts_made=attempts_made,
             )
 
-        invalid_path = save_invalid_response(root, response.content, prefix=_artifact_slug(task))
+        if apply_error and apply_error not in errors:
+            errors = [*errors, apply_error]
+        invalid_path = save_invalid_response(root, current_content, prefix=_artifact_slug(task))
         return ImplementationResult(
             task=task,
             workset=workset,
-            model=response.model,
+            model=current_model,
             status="rejected",
             patch_path=None,
             valid=False,
@@ -138,6 +180,8 @@ class ImplementationService:
             patch_name=None,
             show_target=None,
             raw_response_path=invalid_path,
+            test_warning=test_warning,
+            repair_attempts_made=attempts_made,
         )
 
 
@@ -180,6 +224,22 @@ def _show_target(root: Path, path: Path) -> str:
     except OSError:
         pass
     return str(path)
+
+
+def _apply_check_if_structurally_valid(
+    root: Path,
+    content: str,
+    structurally_valid: bool,
+) -> tuple[bool, str]:
+    if not structurally_valid:
+        return False, "Structural validation failed"
+    return apply_check_patch_content(root, content)
+
+
+def _bundle_file_details(bundle: Any) -> str:
+    """Extract detailed file context from a context bundle for repair prompts."""
+    _, file_details = build_context_sections(bundle)
+    return file_details
 
 
 def _artifact_slug(task: str) -> str:

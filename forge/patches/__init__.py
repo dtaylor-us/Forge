@@ -3,6 +3,7 @@
 from forge.patches.models import Patch
 from forge.patches.service import (
     PatchError,
+    apply_check_patch_content,
     ensure_invalid_patch_dir,
     ensure_patch_dir,
     invalid_patch_dir,
@@ -19,6 +20,7 @@ from forge.patches.service import (
 __all__ = [
     "Patch",
     "PatchError",
+    "apply_check_patch_content",
     "ensure_patch_dir",
     "ensure_invalid_patch_dir",
     "invalid_patch_dir",

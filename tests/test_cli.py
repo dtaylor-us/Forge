@@ -63,6 +63,79 @@ def test_ask_help_smoke() -> None:
     assert result.exit_code == 0
     assert "Prompt to send to the configured model" in result.stdout
     assert "--timeout" in result.stdout
+    assert "Examples:" in result.stdout
+    assert 'forge ask "Explain dependency injection"' in result.stdout
+
+
+def test_help_sections_include_examples() -> None:
+    help_sections = [
+        [],
+        ["config"],
+        ["models"],
+        ["repo"],
+        ["workset"],
+        ["project"],
+        ["memory"],
+        ["patch"],
+        ["git"],
+        ["policy"],
+        ["workflow"],
+        ["version"],
+        ["doctor"],
+        ["verify"],
+        ["config", "show"],
+        ["config", "edit"],
+        ["config", "set-default-model"],
+        ["models", "use"],
+        ["ask"],
+        ["explain-project"],
+        ["repo", "tree"],
+        ["repo", "detect"],
+        ["repo", "grep"],
+        ["repo", "files"],
+        ["workset", "suggest"],
+        ["workset", "create"],
+        ["workset", "list"],
+        ["workset", "show"],
+        ["workset", "add"],
+        ["workset", "remove"],
+        ["workset", "refresh"],
+        ["workset", "context"],
+        ["workset", "clear"],
+        ["init"],
+        ["web"],
+        ["project", "root"],
+        ["project", "info"],
+        ["project", "paths"],
+        ["plan"],
+        ["implement"],
+        ["memory", "list"],
+        ["memory", "show"],
+        ["memory", "search"],
+        ["memory", "related"],
+        ["memory", "rebuild"],
+        ["patch", "list"],
+        ["patch", "show"],
+        ["patch", "validate"],
+        ["git", "status"],
+        ["git", "branch"],
+        ["policy", "show"],
+        ["policy", "check"],
+        ["apply"],
+        ["workflow", "feature"],
+        ["workflow", "bugfix"],
+        ["workflow", "refactor"],
+        ["workflow", "run"],
+        ["workflow", "templates"],
+        ["workflow", "list"],
+        ["workflow", "show"],
+    ]
+
+    for section in help_sections:
+        result = runner.invoke(app, [*section, "--help"])
+
+        assert result.exit_code == 0, section
+        assert "Examples:" in result.stdout, section
 
 
 def test_config_show_smoke(monkeypatch) -> None:
@@ -105,8 +178,12 @@ def test_ask_command_uses_model_override(monkeypatch) -> None:
     result = runner.invoke(app, ["ask", "--model", "qwen2.5-coder:32b", "Hello"])
 
     assert result.exit_code == 0
-    assert "qwen2.5-coder:32b: Hello" in result.stdout
-    assert manager.prompts == [("Hello", "qwen2.5-coder:32b", None)]
+    prompt, model, timeout_seconds = manager.prompts[0]
+    assert model == "qwen2.5-coder:32b"
+    assert timeout_seconds is None
+    assert "When the user says Forge, interpret it as this local project" in prompt
+    assert "User question:\nHello" in prompt
+    assert "qwen2.5-coder:32b:" in result.stdout
 
 
 def test_ask_command_uses_timeout_override(monkeypatch) -> None:
@@ -116,7 +193,11 @@ def test_ask_command_uses_timeout_override(monkeypatch) -> None:
     result = runner.invoke(app, ["ask", "--timeout", "240", "Hello"])
 
     assert result.exit_code == 0
-    assert manager.prompts == [("Hello", None, 240)]
+    prompt, model, timeout_seconds = manager.prompts[0]
+    assert model is None
+    assert timeout_seconds == 240
+    assert "When the user says Forge, interpret it as this local project" in prompt
+    assert "User question:\nHello" in prompt
 
 
 def test_config_set_default_model_smoke(monkeypatch) -> None:
@@ -177,16 +258,26 @@ def test_ask_command_formats_provider_errors(monkeypatch) -> None:
     assert "Unable to reach Ollama" in result.stdout
 
 
-def test_ask_command_sends_literal_prompt_without_project_context(monkeypatch, tmp_path) -> None:
+def test_ask_command_anchors_prompt_to_local_project_identity(monkeypatch, tmp_path) -> None:
     manager = FakeModelManager()
     monkeypatch.setattr("forge.cli.app._model_manager", lambda: manager)
     monkeypatch.chdir(tmp_path)
     (tmp_path / "README.md").write_text("# Existing project context\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "forge-workbench"\ndescription = "Local-first AI workbench."\n',
+        encoding="utf-8",
+    )
 
-    result = runner.invoke(app, ["ask", "Explain this project"])
+    result = runner.invoke(app, ["ask", "how could I enhance forge to be a VS Code extension"])
 
     assert result.exit_code == 0
-    assert manager.prompts == [("Explain this project", None, None)]
+    prompt, model, timeout_seconds = manager.prompts[0]
+    assert model is None
+    assert timeout_seconds is None
+    assert "When the user says Forge, interpret it as this local project" in prompt
+    assert "Do not assume Autodesk Forge" in prompt
+    assert "forge-workbench - Local-first AI workbench." in prompt
+    assert "how could I enhance forge to be a VS Code extension" in prompt
 
 
 def test_explain_project_sends_explicit_project_context(monkeypatch, tmp_path) -> None:
@@ -229,6 +320,15 @@ def test_repo_detect_command(tmp_path) -> None:
     assert result.exit_code == 0
     assert "Repository Detection" in result.stdout
     assert "Python" in result.stdout
+
+
+def test_policy_check_not_found_exits_1(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["policy", "check", "does-not-exist.patch", "--root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 1
 
 
 def test_repo_grep_command(monkeypatch, tmp_path) -> None:

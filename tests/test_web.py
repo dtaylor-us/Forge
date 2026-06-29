@@ -45,6 +45,30 @@ def test_dashboard_route_returns_200(tmp_path: Path) -> None:
     assert "Forge" in response.text
 
 
+def test_dashboard_shows_branch_for_git_repo(tmp_path: Path, monkeypatch) -> None:
+    from forge.services import git_service as gs
+
+    monkeypatch.setattr(gs, "branch", lambda root=None: {"branch": "main"})
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "main" in response.text
+
+
+def test_dashboard_shows_dash_for_non_git_repo(tmp_path: Path, monkeypatch) -> None:
+    from forge.services import git_service as gs
+
+    monkeypatch.setattr(gs, "branch", lambda root=None: {"branch": None})
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "—" in response.text
+
+
 def test_project_api_returns_metadata(tmp_path: Path) -> None:
     client = TestClient(create_app(_repo(tmp_path)))
 
@@ -303,7 +327,12 @@ def test_workflow_detail_page_and_api_with_run(tmp_path: Path) -> None:
 
     root = _repo(tmp_path)
     reg = WorkflowRegistry.from_root(root)
-    run = WorkflowRun(id="test-run-1", template=WorkflowTemplate.feature, task="Add feature", repository=str(root))
+    run = WorkflowRun(
+        id="test-run-1",
+        template=WorkflowTemplate.feature,
+        task="Add feature",
+        repository=str(root),
+    )
     reg.save(run)
     client = TestClient(create_app(root))
 
@@ -322,8 +351,22 @@ def test_workflows_api_lists_persisted_runs(tmp_path: Path) -> None:
 
     root = _repo(tmp_path)
     reg = WorkflowRegistry.from_root(root)
-    reg.save(WorkflowRun(id="r1", template=WorkflowTemplate.feature, task="feat", repository=str(root)))
-    reg.save(WorkflowRun(id="r2", template=WorkflowTemplate.bugfix, task="fix", repository=str(root)))
+    reg.save(
+        WorkflowRun(
+            id="r1",
+            template=WorkflowTemplate.feature,
+            task="feat",
+            repository=str(root),
+        )
+    )
+    reg.save(
+        WorkflowRun(
+            id="r2",
+            template=WorkflowTemplate.bugfix,
+            task="fix",
+            repository=str(root),
+        )
+    )
     client = TestClient(create_app(root))
 
     response = client.get("/api/workflows")
@@ -358,7 +401,14 @@ def test_dashboard_includes_workflow_metrics(tmp_path: Path) -> None:
 
     root = _repo(tmp_path)
     reg = WorkflowRegistry.from_root(root)
-    reg.save(WorkflowRun(id="dash1", template=WorkflowTemplate.feature, task="Dashboard test", repository=str(root)))
+    reg.save(
+        WorkflowRun(
+            id="dash1",
+            template=WorkflowTemplate.feature,
+            task="Dashboard test",
+            repository=str(root),
+        )
+    )
     client = TestClient(create_app(root))
 
     response = client.get("/")
@@ -373,7 +423,14 @@ def test_workflows_page_shows_run_in_table(tmp_path: Path) -> None:
 
     root = _repo(tmp_path)
     reg = WorkflowRegistry.from_root(root)
-    reg.save(WorkflowRun(id="show1", template=WorkflowTemplate.refactor, task="Refactor auth module", repository=str(root)))
+    reg.save(
+        WorkflowRun(
+            id="show1",
+            template=WorkflowTemplate.refactor,
+            task="Refactor auth module",
+            repository=str(root),
+        )
+    )
     client = TestClient(create_app(root))
 
     response = client.get("/workflows")
@@ -388,7 +445,14 @@ def test_workflow_detail_shows_empty_stage_state(tmp_path: Path) -> None:
 
     root = _repo(tmp_path)
     reg = WorkflowRegistry.from_root(root)
-    reg.save(WorkflowRun(id="empty1", template=WorkflowTemplate.bugfix, task="Fix login", repository=str(root)))
+    reg.save(
+        WorkflowRun(
+            id="empty1",
+            template=WorkflowTemplate.bugfix,
+            task="Fix login",
+            repository=str(root),
+        )
+    )
     client = TestClient(create_app(root))
 
     response = client.get("/workflows/empty1")

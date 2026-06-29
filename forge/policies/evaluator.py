@@ -174,7 +174,10 @@ class PolicyEvaluator:
     def _check_git_repo(self, policy: ForgePolicy, git_status: dict[str, Any]) -> PolicyCheck:
         if not policy.git.require_git_repository:
             return PolicyCheck(
-                "git_repository", CheckStatus.skip, "Git repository not required.", CheckSeverity.info
+                "git_repository",
+                CheckStatus.skip,
+                "Git repository not required.",
+                CheckSeverity.info,
             )
         is_repo = git_status.get("is_git_repository", False)
         if is_repo:
@@ -187,12 +190,27 @@ class PolicyEvaluator:
 
     def _check_git_clean(self, policy: ForgePolicy, git_status: dict[str, Any]) -> PolicyCheck:
         if not policy.git.require_clean_worktree:
-            return PolicyCheck("git_clean", CheckStatus.skip, "Clean worktree not required.", CheckSeverity.info)
+            return PolicyCheck(
+                "git_clean",
+                CheckStatus.skip,
+                "Clean worktree not required.",
+                CheckSeverity.info,
+            )
         if not git_status.get("is_git_repository", False):
-            return PolicyCheck("git_clean", CheckStatus.skip, "Not a git repository — skipping clean check.", CheckSeverity.info)
+            return PolicyCheck(
+                "git_clean",
+                CheckStatus.skip,
+                "Not a git repository — skipping clean check.",
+                CheckSeverity.info,
+            )
         clean = git_status.get("clean", False)
         if clean:
-            return PolicyCheck("git_clean", CheckStatus.pass_, "Working tree is clean.", CheckSeverity.info)
+            return PolicyCheck(
+                "git_clean",
+                CheckStatus.pass_,
+                "Working tree is clean.",
+                CheckSeverity.info,
+            )
         modified = git_status.get("modified_files", [])
         staged = git_status.get("staged_files", [])
         untracked = git_status.get("untracked_files", [])

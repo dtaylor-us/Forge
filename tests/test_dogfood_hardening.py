@@ -612,7 +612,8 @@ def test_implementation_prompt_labels_existing_files() -> None:
         generated_at=datetime.now(tz=UTC),
         content="Do the thing.",
     )
-    prompt = build_implementation_prompt("add feature", bundle, plan, "test-model")
+    prompt, warning = build_implementation_prompt("add feature", bundle, plan, "test-model")
+    assert warning is None
     assert "ALREADY EXIST" in prompt or "existing" in prompt.lower()
 
 

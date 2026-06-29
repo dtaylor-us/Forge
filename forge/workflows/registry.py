@@ -8,6 +8,18 @@ from pathlib import Path
 from forge.workflows.models import WorkflowRun, WorkflowTemplate
 
 
+class AmbiguousWorkflowIdError(Exception):
+    """Raised when a short ID prefix matches more than one workflow run."""
+
+    def __init__(self, prefix: str, matches: list[str]) -> None:
+        self.prefix = prefix
+        self.matches = matches
+        super().__init__(
+            f"Workflow ID prefix {prefix!r} is ambiguous. "
+            f"Matching runs: {', '.join(matches)}"
+        )
+
+
 class WorkflowRegistry:
     """Read and write workflow run records for a project root."""
 
@@ -29,12 +41,24 @@ class WorkflowRegistry:
 
     def load(self, run_id: str) -> dict | None:
         path = self._dir / f"{run_id}.json"
-        if not path.exists():
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+
+        if not self._dir.exists():
             return None
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
+
+        matches = [p for p in self._dir.glob("*.json") if p.stem.startswith(run_id)]
+        if len(matches) == 1:
+            try:
+                return json.loads(matches[0].read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+        if len(matches) > 1:
+            raise AmbiguousWorkflowIdError(run_id, [p.stem for p in sorted(matches)])
+        return None
 
     def list_runs(
         self,

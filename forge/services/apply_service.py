@@ -123,7 +123,11 @@ def _build_record(
         "id": str(uuid.uuid4()),
         "patch": patch_meta["name"],
         "affected_files": patch_meta.get("affected_files", []),
-        "verification_report": verification_report.get("artifact", {}).get("relative_path") if verification_report else None,
+        "verification_report": (
+            verification_report.get("artifact", {}).get("relative_path")
+            if verification_report
+            else None
+        ),
         "policy_status": evaluation.get("status"),
         "applied_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
         "branch": branch,

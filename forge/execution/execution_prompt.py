@@ -160,6 +160,23 @@ never /dev/null for them.
 Hunk counts in @@ markers must be exact.
 """
 
+_TEST_GUIDANCE = """\
+
+## Test File Requirement
+
+The task explicitly requests tests. The Workset Files table above includes test files.
+You MUST include changes to those test files in your patch.
+Do not return a patch that only modifies source files when the task requests tests.
+"""
+
+_TEST_MISSING_NOTE = """\
+
+## Test File Warning
+
+The task requests tests, but no test files are present in this workset.
+The patch will not include test changes unless test files are added to the workset.
+"""
+
 
 def build_execution_prompt(
     task: str,
@@ -201,7 +218,7 @@ def build_implementation_prompt(
     implementation_plan: ImplementationPlan,
     model: str,
     memory_context: list[MemorySearchResult] | None = None,
-) -> str:
+) -> tuple[str, str | None]:
     """Construct a provider prompt that asks only for a raw unified diff."""
     file_table_rows, file_details = build_context_sections(bundle)
     result = _IMPLEMENTATION_TEMPLATE.format(
@@ -216,6 +233,21 @@ def build_implementation_prompt(
         file_details=file_details,
         implementation_plan=implementation_plan.content,
     )
+    test_warning: str | None = None
+    task_mentions_tests = any(
+        keyword in task.lower() for keyword in ("test", "tests", "spec", "specs")
+    )
+    if task_mentions_tests:
+        has_test_files = any(_is_test_file(file.path) for file in bundle.files)
+        if has_test_files:
+            result += _TEST_GUIDANCE
+        else:
+            result += _TEST_MISSING_NOTE
+            test_warning = (
+                "Task mentions tests, but no test files were present in the workset. "
+                "Consider refreshing the workset with a test-focused query."
+            )
+
     if memory_context:
         result = (
             result
@@ -229,4 +261,68 @@ def build_implementation_prompt(
             )
         )
         result += "\n\nReturn only a raw unified diff. No Markdown fences. No explanations.\n"
-    return result
+    return result, test_warning
+
+
+def build_repair_prompt(
+    task: str,
+    original_patch: str,
+    structural_errors: list[str],
+    apply_check_error: str,
+    file_details: str,
+) -> str:
+    """Build a prompt asking the model to repair an invalid patch."""
+    error_lines = (
+        "\n".join(f"- {error}" for error in structural_errors)
+        if structural_errors
+        else "(none)"
+    )
+    return f"""\
+{_IMPLEMENTATION_SYSTEM_INSTRUCTIONS}
+
+---
+
+# Patch Repair Request
+
+The patch you previously generated failed validation. You must return a corrected raw unified diff.
+
+## Original Task
+{task}
+
+## Validation Errors (structural)
+{error_lines}
+
+## git apply --check Error
+{apply_check_error or "(none)"}
+
+## Original Invalid Patch
+{original_patch}
+
+## Relevant File Context
+{file_details}
+
+---
+
+# Requirements
+
+Return ONLY a corrected raw unified diff.
+No Markdown fences.
+No prose.
+No explanations.
+Hunk line counts in @@ markers must be exact.
+Existing files listed in the original context must use standard unified diff hunks.
+Never use /dev/null for existing files.
+The corrected patch must pass: git apply --check
+"""
+
+
+def _is_test_file(path: str) -> bool:
+    lowered = path.lower()
+    return (
+        lowered.startswith("tests/")
+        or "/tests/" in lowered
+        or lowered.startswith("test_")
+        or "/test_" in lowered
+        or lowered.endswith(("_test.py", "_spec.py", ".spec.py", ".test.py"))
+        or "test" in lowered
+    )

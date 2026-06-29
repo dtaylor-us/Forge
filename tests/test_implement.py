@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -104,7 +105,7 @@ def test_implementation_prompt_requires_unified_diff_only(tmp_path: Path) -> Non
         implementation_plan=plan,
     )
 
-    prompt = build_implementation_prompt(
+    prompt, warning = build_implementation_prompt(
         TASK,
         request.context_bundle,
         request.implementation_plan,
@@ -112,6 +113,7 @@ def test_implementation_prompt_requires_unified_diff_only(tmp_path: Path) -> Non
         request.related_memory,
     )
 
+    assert warning is None
     assert "Return only a raw unified diff" in prompt
     assert "No Markdown fences" in prompt
     assert "No explanations" in prompt
@@ -291,3 +293,178 @@ def test_existing_patch_commands_work_with_generated_patches(monkeypatch, tmp_pa
     assert "diff --git a/forge/example.py b/forge/example.py" in shown.output
     assert validated.exit_code == 0
     assert "valid" in validated.output
+
+
+def test_implementation_prompt_includes_test_guidance_when_task_mentions_tests(
+    tmp_path: Path,
+) -> None:
+    bundle = SimpleNamespace(
+        workset_name="my-workset",
+        query="tests",
+        root=str(tmp_path),
+        generated_at="2026-01-01T00:00:00Z",
+        files=[
+            SimpleNamespace(
+                path="tests/test_calc.py",
+                category="test",
+                score=10,
+                line_count=12,
+                symbols=[],
+                error=None,
+                summary=[],
+                dependency_hints=[],
+                excerpts=[],
+            )
+        ],
+    )
+    plan = SimpleNamespace(content="add subtract tests")
+
+    prompt, warning = build_implementation_prompt(
+        "add subtract function and tests",
+        bundle,
+        plan,
+        "model-x",
+    )
+
+    assert "Test File Requirement" in prompt
+    assert warning is None
+
+
+def test_implementation_prompt_warns_when_no_test_files_in_workset(
+    tmp_path: Path,
+) -> None:
+    bundle = SimpleNamespace(
+        workset_name="my-workset",
+        query="tests",
+        root=str(tmp_path),
+        generated_at="2026-01-01T00:00:00Z",
+        files=[
+            SimpleNamespace(
+                path="src/calc.py",
+                category="source",
+                score=10,
+                line_count=12,
+                symbols=[],
+                error=None,
+                summary=[],
+                dependency_hints=[],
+                excerpts=[],
+            )
+        ],
+    )
+    plan = SimpleNamespace(content="add tests")
+
+    prompt, warning = build_implementation_prompt("add subtract tests", bundle, plan, "model-x")
+
+    assert "Test File Warning" in prompt
+    assert warning is not None
+    assert "no test files" in warning.lower()
+
+
+def test_implementation_prompt_no_warning_when_task_has_no_test_mention(
+    tmp_path: Path,
+) -> None:
+    bundle = SimpleNamespace(
+        workset_name="my-workset",
+        query="calc",
+        root=str(tmp_path),
+        generated_at="2026-01-01T00:00:00Z",
+        files=[],
+    )
+    plan = SimpleNamespace(content="add subtract")
+
+    prompt, warning = build_implementation_prompt("add subtract function", bundle, plan, "model-x")
+
+    assert "Test File" not in prompt
+    assert warning is None
+
+
+def test_invalid_first_patch_triggers_repair(tmp_path: Path) -> None:
+    valid_response = MagicMock(content=VALID_DIFF, model="test-model")
+    invalid_response = MagicMock(content="This is not a patch at all.", model="test-model")
+    manager = MagicMock()
+    manager.config.return_value.default_model = "test-model"
+    manager.ask.side_effect = [invalid_response, valid_response]
+
+    svc = ImplementationService(manager)
+    with (
+        patch.object(svc._execution_service, "create_request") as mock_req,
+        patch("forge.services.implementation_service.apply_check_patch_content") as mock_check,
+        patch("forge.services.implementation_service._bundle_file_details", return_value=""),
+        patch("forge.services.implementation_service._save_valid_patch") as mock_save,
+    ):
+        mock_req.return_value.context_bundle = SimpleNamespace(
+            workset_name="my-workset",
+            query="add subtract",
+            root=str(tmp_path),
+            generated_at="2026-01-01T00:00:00Z",
+            files=[],
+        )
+        mock_req.return_value.implementation_plan = SimpleNamespace(content="plan")
+        mock_req.return_value.selected_model = "test-model"
+        mock_req.return_value.related_memory = None
+        mock_check.return_value = (True, "")
+        mock_save.return_value = SimpleNamespace(
+            path=tmp_path / ".forge" / "patches" / "x.patch",
+            valid=True,
+            affected_files=["forge/example.py"],
+            validation_errors=[],
+            name="x.patch",
+        )
+
+        result = svc.implement(tmp_path, "add subtract", "my-workset", repair_attempts=1)
+
+    assert result.valid is True
+    assert result.repair_attempts_made == 1
+    assert manager.ask.call_count == 2
+
+
+def test_repair_exhausted_saves_invalid_artifact(tmp_path: Path) -> None:
+    bad_response = MagicMock(content="not a patch", model="test-model")
+    manager = MagicMock()
+    manager.config.return_value.default_model = "test-model"
+    manager.ask.return_value = bad_response
+
+    svc = ImplementationService(manager)
+    with (
+        patch.object(svc._execution_service, "create_request") as mock_req,
+        patch(
+            "forge.services.implementation_service.apply_check_patch_content",
+            return_value=(False, "error"),
+        ),
+        patch("forge.services.implementation_service._bundle_file_details", return_value=""),
+    ):
+        mock_req.return_value.context_bundle = SimpleNamespace(
+            workset_name="my-workset",
+            query="add subtract",
+            root=str(tmp_path),
+            generated_at="2026-01-01T00:00:00Z",
+            files=[],
+        )
+        mock_req.return_value.implementation_plan = SimpleNamespace(content="plan")
+        mock_req.return_value.selected_model = "test-model"
+        mock_req.return_value.related_memory = None
+
+        result = svc.implement(tmp_path, "add subtract", "my-workset", repair_attempts=2)
+
+    assert result.valid is False
+    assert result.repair_attempts_made == 2
+    assert manager.ask.call_count == 3
+    assert result.raw_response_path is not None
+
+
+def test_repair_prompt_contains_original_patch_and_errors() -> None:
+    from forge.execution.execution_prompt import build_repair_prompt
+
+    prompt = build_repair_prompt(
+        task="add subtract",
+        original_patch="not a diff",
+        structural_errors=["Patch must begin with raw diff content"],
+        apply_check_error="corrupt hunk at line 3",
+        file_details="file content here",
+    )
+
+    assert "not a diff" in prompt
+    assert "Patch must begin with raw diff content" in prompt
+    assert "corrupt hunk at line 3" in prompt
+    assert "add subtract" in prompt

@@ -2,7 +2,31 @@
 
 from __future__ import annotations
 
-from forge.commands.project_context import build_project_explanation_prompt
+from forge.commands.project_context import (
+    build_guardrailed_ask_prompt,
+    build_project_explanation_prompt,
+)
+
+
+def test_guardrailed_ask_prompt_disambiguates_local_forge_project(tmp_path) -> None:
+    (tmp_path / "README.md").write_text(
+        "# Forge\n\nForge is an AI-native software engineering workbench.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "forge-workbench"\ndescription = "Local-first AI workbench."\n',
+        encoding="utf-8",
+    )
+
+    prompt = build_guardrailed_ask_prompt(
+        tmp_path, "how could I enhance forge to be a VS Code extension"
+    )
+
+    assert "When the user says Forge, interpret it as this local project" in prompt
+    assert "Do not assume Autodesk Forge" in prompt
+    assert "forge-workbench - Local-first AI workbench." in prompt
+    assert "Forge is an AI-native software engineering workbench." in prompt
+    assert "how could I enhance forge to be a VS Code extension" in prompt
 
 
 def test_project_explanation_includes_readme_when_present(tmp_path) -> None:

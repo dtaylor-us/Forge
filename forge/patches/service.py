@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tempfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -89,6 +91,30 @@ def validate_patch_file(root: Path, path_or_name: str | Path) -> Patch:
     """Validate a saved patch name or direct path."""
     path = resolve_patch_path(root, path_or_name)
     return inspect_patch(path)
+
+
+def apply_check_patch_content(root: Path, content: str) -> tuple[bool, str]:
+    """Dry-run git apply for patch content and return (ok, error_message)."""
+    from forge.git.service import GitService, GitServiceError
+
+    git_svc = GitService(cwd=root)
+    with tempfile.NamedTemporaryFile(
+        suffix=".patch",
+        mode="w",
+        encoding="utf-8",
+        delete=False,
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(_ensure_trailing_newline(content))
+
+    try:
+        git_svc.apply_check(tmp_path)
+        return True, ""
+    except GitServiceError as exc:
+        return False, str(exc)
+    finally:
+        with suppress(OSError):
+            tmp_path.unlink()
 
 
 def inspect_patch(path: Path) -> Patch:

@@ -108,7 +108,9 @@ class ForgePolicy:
             "verification": {
                 "require_verification": self.verification.require_verification,
                 "allow_missing_verification": self.verification.allow_missing_verification,
-                "require_successful_verification": self.verification.require_successful_verification,
+                "require_successful_verification": (
+                    self.verification.require_successful_verification
+                ),
             },
             "git": {
                 "require_git_repository": self.git.require_git_repository,

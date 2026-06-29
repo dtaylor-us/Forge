@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tomllib
 from pathlib import Path
 
 EXCLUDED_TREE_NAMES = {".git", ".venv", "target", "build", "node_modules", "dist"}
@@ -23,6 +24,27 @@ CONTEXT_FILES = [
 ]
 
 
+def build_guardrailed_ask_prompt(root: Path, user_prompt: str) -> str:
+    """Build a compact prompt that anchors generic asks to the local Forge project."""
+    identity = _project_identity(root)
+    return "\n".join(
+        [
+            "You are answering a question about the local software project in this directory.",
+            (
+                "When the user says Forge, interpret it as this local project "
+                "unless they explicitly name another product."
+            ),
+            "Do not assume Autodesk Forge, Minecraft Forge, or any other product named Forge.",
+            "",
+            f"Project root: {root}",
+            f"Project identity: {identity}",
+            "",
+            "User question:",
+            user_prompt,
+        ]
+    )
+
+
 def build_project_explanation_prompt(root: Path) -> str:
     """Build a compact prompt describing the current project directory."""
     parts = [
@@ -39,6 +61,42 @@ def build_project_explanation_prompt(root: Path) -> str:
         if path.is_file():
             parts.extend(["", f"File: {relative_path}", "```", _read_text(path), "```"])
     return "\n".join(parts)
+
+
+def _project_identity(root: Path) -> str:
+    pyproject_identity = _pyproject_identity(root / "pyproject.toml")
+    readme_summary = _readme_summary(root / "README.md")
+    if pyproject_identity and readme_summary:
+        return f"{pyproject_identity}; {readme_summary}"
+    return pyproject_identity or readme_summary or root.name or str(root)
+
+
+def _pyproject_identity(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        project = tomllib.loads(_read_text(path)).get("project", {})
+    except tomllib.TOMLDecodeError:
+        return ""
+    name = project.get("name")
+    description = project.get("description")
+    if isinstance(name, str) and isinstance(description, str):
+        return f"{name} - {description}"
+    if isinstance(name, str):
+        return name
+    if isinstance(description, str):
+        return description
+    return ""
+
+
+def _readme_summary(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    for line in _read_text(path, max_chars=4_000).splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith(("#", ">", "[", "---")):
+            return stripped.replace("**", "")
+    return ""
 
 
 def _compact_tree(root: Path, max_entries: int = 200) -> str:

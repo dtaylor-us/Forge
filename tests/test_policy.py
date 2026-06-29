@@ -132,7 +132,12 @@ def test_load_policy_falls_back_to_defaults_when_no_file(tmp_path: Path) -> None
 
 def test_valid_patch_passes(valid_patch_meta, clean_git_status, passed_verification) -> None:
     policy = default_policy()
-    eval_ = PolicyEvaluator().evaluate(policy, valid_patch_meta, clean_git_status, passed_verification)
+    eval_ = PolicyEvaluator().evaluate(
+        policy,
+        valid_patch_meta,
+        clean_git_status,
+        passed_verification,
+    )
     assert eval_.status == PolicyEvaluationStatus.pass_
 
 
@@ -151,10 +156,19 @@ def test_invalid_patch_fails_policy(clean_git_status) -> None:
     assert "patch_valid" in names
 
 
-def test_too_many_changed_files_fails(valid_patch_meta, clean_git_status, passed_verification) -> None:
+def test_too_many_changed_files_fails(
+    valid_patch_meta,
+    clean_git_status,
+    passed_verification,
+) -> None:
     from forge.policies.models import PatchPolicy
     policy = ForgePolicy(patch=PatchPolicy(max_changed_files=0))
-    eval_ = PolicyEvaluator().evaluate(policy, valid_patch_meta, clean_git_status, passed_verification)
+    eval_ = PolicyEvaluator().evaluate(
+        policy,
+        valid_patch_meta,
+        clean_git_status,
+        passed_verification,
+    )
     assert eval_.status == PolicyEvaluationStatus.fail
     assert any(c.name == "changed_files" for c in eval_.blocking_failures())
 
@@ -181,22 +195,45 @@ def test_missing_verification_fails_when_required(valid_patch_meta, clean_git_st
     assert any(c.name == "verification" for c in eval_.blocking_failures())
 
 
-def test_failed_verification_fails_policy(valid_patch_meta, clean_git_status, failed_verification) -> None:
+def test_failed_verification_fails_policy(
+    valid_patch_meta,
+    clean_git_status,
+    failed_verification,
+) -> None:
     policy = default_policy()
-    eval_ = PolicyEvaluator().evaluate(policy, valid_patch_meta, clean_git_status, failed_verification)
+    eval_ = PolicyEvaluator().evaluate(
+        policy,
+        valid_patch_meta,
+        clean_git_status,
+        failed_verification,
+    )
     assert eval_.status == PolicyEvaluationStatus.fail
 
 
-def test_passed_verification_passes_policy(valid_patch_meta, clean_git_status, passed_verification) -> None:
+def test_passed_verification_passes_policy(
+    valid_patch_meta,
+    clean_git_status,
+    passed_verification,
+) -> None:
     policy = default_policy()
-    eval_ = PolicyEvaluator().evaluate(policy, valid_patch_meta, clean_git_status, passed_verification)
+    eval_ = PolicyEvaluator().evaluate(
+        policy,
+        valid_patch_meta,
+        clean_git_status,
+        passed_verification,
+    )
     # also need clean worktree — which clean_git_status provides
     assert eval_.status == PolicyEvaluationStatus.pass_
 
 
 def test_dirty_git_fails_policy(valid_patch_meta, dirty_git_status, passed_verification) -> None:
     policy = default_policy()
-    eval_ = PolicyEvaluator().evaluate(policy, valid_patch_meta, dirty_git_status, passed_verification)
+    eval_ = PolicyEvaluator().evaluate(
+        policy,
+        valid_patch_meta,
+        dirty_git_status,
+        passed_verification,
+    )
     assert eval_.status == PolicyEvaluationStatus.fail
     assert any(c.name == "git_clean" for c in eval_.blocking_failures())
 
@@ -286,7 +323,10 @@ def test_cli_policy_check(tmp_git_repo: Path) -> None:
 
 def test_cli_policy_check_json(tmp_git_repo: Path) -> None:
     patch_path = _valid_patch(tmp_git_repo)
-    result = runner.invoke(app, ["policy", "check", patch_path.name, "--json", "--root", str(tmp_git_repo)])
+    result = runner.invoke(
+        app,
+        ["policy", "check", patch_path.name, "--json", "--root", str(tmp_git_repo)],
+    )
     assert result.exit_code in (0, 1)
     data = json.loads(result.output)
     assert "evaluation" in data
@@ -295,7 +335,11 @@ def test_cli_policy_check_json(tmp_git_repo: Path) -> None:
 def test_cli_apply_prompts_before_applying(tmp_git_repo: Path) -> None:
     patch_path = _valid_patch(tmp_git_repo)
     # Answer "n" to decline
-    result = runner.invoke(app, ["apply", patch_path.name, "--root", str(tmp_git_repo)], input="n\n")
+    result = runner.invoke(
+        app,
+        ["apply", patch_path.name, "--root", str(tmp_git_repo)],
+        input="n\n",
+    )
     assert "cancelled" in result.output.lower() or result.exit_code == 0
 
 

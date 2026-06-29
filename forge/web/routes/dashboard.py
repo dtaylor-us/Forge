@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from forge.artifacts.registry import ArtifactRegistry
 from forge.config.manager import ConfigManager
 from forge.services import (
+    git_service,
     memory_service,
     project_service,
     repository_service,
@@ -26,6 +27,8 @@ def dashboard(request: Request) -> HTMLResponse:
     artifacts = [artifact.to_dict() for artifact in registry.enumerate()]
     project = project_service.project_info(root)
     detection = repository_service.detect(root)
+    git_result = git_service.branch(root)
+    branch = git_result.get("branch") or "—"
     worksets = workset_service.list_all(root)
     plans = project_service.recent_plans(root, limit=5)
     memory_items = memory_service.list_timeline(root)[:5]
@@ -36,6 +39,7 @@ def dashboard(request: Request) -> HTMLResponse:
         active="dashboard",
         project=project,
         detection=detection,
+        branch=branch,
         worksets=worksets[:5],
         plans=plans,
         memory_items=memory_items,
@@ -101,16 +105,28 @@ def _next_action(
     verification_status = latest_run.get("verification_status")
     policy_status = latest_run.get("policy_status")
     if status == "failed":
-        return {"label": "Review failed workflow", "href": f"/workflows/{latest_run.get('id', '')}", "icon": "alert-circle"}
+        return {
+            "label": "Review failed workflow",
+            "href": f"/workflows/{latest_run.get('id', '')}",
+            "icon": "alert-circle",
+        }
     if status == "completed":
         if policy_status == "pass" and patch_path:
             return {"label": "Apply patch", "href": "/patches", "icon": "git-pull-request-arrow"}
         if verification_status == "fail":
-            return {"label": "Open Verification Report", "href": "/artifacts", "icon": "badge-check"}
+            return {
+                "label": "Open Verification Report",
+                "href": "/artifacts",
+                "icon": "badge-check",
+            }
         if policy_status == "fail":
             return {"label": "Open Policy Report", "href": "/artifacts", "icon": "shield-alert"}
         if patch_path:
-            return {"label": "Review generated patch", "href": "/patches", "icon": "git-pull-request-arrow"}
+            return {
+                "label": "Review generated patch",
+                "href": "/patches",
+                "icon": "git-pull-request-arrow",
+            }
     return {"label": "Start a new workflow", "href": "/workflows", "icon": "git-branch-plus"}
 
 

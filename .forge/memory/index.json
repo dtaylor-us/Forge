@@ -24,6 +24,24 @@
       ],
       "repository": "/Users/derektaylor/projects/forge",
       "summary": "Created through web API smoke verification."
+    },
+    {
+      "id": "556d1d31",
+      "type": "plan",
+      "title": "package forge into product to deploy on mac silicon",
+      "created_at": "2026-06-29T04:21:41+00:00",
+      "workset": "product",
+      "tags": [
+        "package",
+        "forge",
+        "into",
+        "product",
+        "deploy",
+        "mac",
+        "silicon"
+      ],
+      "repository": "/Users/derektaylor/projects/forge",
+      "summary": "Implementation plan for: package forge into product to deploy on mac silicon"
     }
   ]
 }

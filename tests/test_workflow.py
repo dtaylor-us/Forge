@@ -207,6 +207,60 @@ def test_registry_load_missing(tmp_root: Path):
     assert reg.load("nonexistent") is None
 
 
+def test_workflow_show_full_id(tmp_path: Path) -> None:
+    registry = WorkflowRegistry(tmp_path)
+    data = {
+        "id": "abcd1234efgh5678",
+        "template": "feature",
+        "status": "completed",
+        "task": "test",
+        "stages": [],
+    }
+    (tmp_path / "abcd1234efgh5678.json").write_text(json.dumps(data), encoding="utf-8")
+
+    result = registry.load("abcd1234efgh5678")
+
+    assert result is not None
+    assert result["id"] == "abcd1234efgh5678"
+
+
+def test_workflow_show_unique_prefix(tmp_path: Path) -> None:
+    registry = WorkflowRegistry(tmp_path)
+    data = {
+        "id": "abcd1234efgh5678",
+        "template": "feature",
+        "status": "completed",
+        "task": "test",
+        "stages": [],
+    }
+    (tmp_path / "abcd1234efgh5678.json").write_text(json.dumps(data), encoding="utf-8")
+
+    result = registry.load("abcd1234")
+
+    assert result is not None
+    assert result["id"] == "abcd1234efgh5678"
+
+
+def test_workflow_show_ambiguous_prefix_raises(tmp_path: Path) -> None:
+    from forge.workflows.registry import AmbiguousWorkflowIdError
+
+    registry = WorkflowRegistry(tmp_path)
+    for run_id in ["abcd1234aaaa0001", "abcd1234bbbb0002"]:
+        data = {
+            "id": run_id,
+            "template": "feature",
+            "status": "completed",
+            "task": "test",
+            "stages": [],
+        }
+        (tmp_path / f"{run_id}.json").write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(AmbiguousWorkflowIdError) as exc_info:
+        registry.load("abcd1234")
+
+    assert "abcd1234" in str(exc_info.value)
+
+
 # ---------------------------------------------------------------------------
 # 4. Stage ordering
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
@@ -64,6 +65,43 @@ def test_validate_name_dotdot():
 def test_validate_name_space():
     with pytest.raises(WorksetStoreError):
         validate_name("my workset")
+
+
+def test_candidate_to_file_entry_no_colon_in_label_does_not_duplicate() -> None:
+    from forge.worksets.manager import _candidate_to_file_entry
+
+    entry = _candidate_to_file_entry(
+        SimpleNamespace(
+            path=Path("calc.py"),
+            score=10,
+            file_category="source",
+            reasons=[SimpleNamespace(label="filename matched 'calculator'", score=10)],
+        ),
+        Path("/repo"),
+    )
+
+    reason = entry["reasons"][0]
+    assert reason["signal"] == "match"
+    assert reason["detail"] == "filename matched 'calculator'"
+    assert reason["signal"] != reason["detail"]
+
+
+def test_candidate_to_file_entry_with_colon_label_splits_correctly() -> None:
+    from forge.worksets.manager import _candidate_to_file_entry
+
+    entry = _candidate_to_file_entry(
+        SimpleNamespace(
+            path=Path("calc.py"),
+            score=8,
+            file_category="source",
+            reasons=[SimpleNamespace(label="filename:matched 'calculator'", score=8)],
+        ),
+        Path("/repo"),
+    )
+
+    reason = entry["reasons"][0]
+    assert reason["signal"] == "filename"
+    assert reason["detail"] == "matched 'calculator'"
 
 
 # ---------------------------------------------------------------------------

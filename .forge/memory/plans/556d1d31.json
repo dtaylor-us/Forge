@@ -1,0 +1,45 @@
+{
+  "id": "556d1d31",
+  "type": "plan",
+  "title": "package forge into product to deploy on mac silicon",
+  "created_at": "2026-06-29T04:21:41+00:00",
+  "repository": "/Users/derektaylor/projects/forge",
+  "workset": "product",
+  "tags": [
+    "package",
+    "forge",
+    "into",
+    "product",
+    "deploy",
+    "mac",
+    "silicon"
+  ],
+  "summary": "Implementation plan for: package forge into product to deploy on mac silicon",
+  "related_files": [
+    "README.md",
+    "forge/repository/detect.py",
+    "pyproject.toml",
+    "forge/artifacts/discovery.py",
+    "forge/cli/app.py",
+    "forge/commands/project_context.py",
+    "forge/config/settings.py",
+    "forge/context/bundle.py",
+    "forge/execution/execution_prompt.py",
+    "forge/execution/execution_service.py",
+    "forge/execution/stages.py",
+    "forge/memory/manager.py",
+    "forge/memory/store.py",
+    "forge/planning/prompts.py",
+    "forge/project/initializer.py",
+    "forge/project/metadata.py",
+    "forge/repository/files.py",
+    "forge/repository/ignore.py",
+    "forge/services/apply_service.py",
+    "forge/services/implementation_service.py"
+  ],
+  "related_plans": [],
+  "related_worksets": [
+    "product"
+  ],
+  "source_path": ""
+}

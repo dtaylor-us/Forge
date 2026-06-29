@@ -24,9 +24,11 @@ SCHEMA_VERSION = 1
 def _candidate_to_file_entry(candidate: Any, root: Path) -> dict[str, Any]:
     reasons = []
     for r in candidate.reasons:
-        parts = r.label.split(":", 1)
-        signal = parts[0]
-        detail = parts[1] if len(parts) > 1 else r.label
+        if ":" in r.label:
+            signal, detail = r.label.split(":", 1)
+        else:
+            signal = "match"
+            detail = r.label
         reasons.append({"signal": signal, "detail": detail, "points": r.score})
     return {
         "path": candidate.path.as_posix(),
