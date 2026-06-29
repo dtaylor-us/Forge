@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from forge.git.service import GitService
 from forge.repository import (
     detect_repository,
     generate_tree,
@@ -16,6 +17,13 @@ from forge.repository import (
 def detect(root: Path) -> dict[str, Any]:
     """Return repository detection metadata."""
     result = detect_repository(root)
+    current_branch: str | None = None
+    try:
+        git_svc = GitService(cwd=root)
+        if git_svc.is_git_repository():
+            current_branch = git_svc.branch()
+    except Exception:  # noqa: BLE001
+        pass
     return {
         "root_path": str(result.root_path),
         "languages": result.languages,
@@ -25,6 +33,7 @@ def detect(root: Path) -> dict[str, Any]:
         "source_roots": [path.as_posix() for path in result.source_roots],
         "test_roots": [path.as_posix() for path in result.test_roots],
         "important_files": [path.as_posix() for path in result.important_files],
+        "current_branch": current_branch,
     }
 
 

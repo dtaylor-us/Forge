@@ -48,7 +48,10 @@ class PolicyEvaluation:
     checks: list[PolicyCheck]
 
     def blocking_failures(self) -> list[PolicyCheck]:
-        return [c for c in self.checks if c.status == CheckStatus.fail and c.severity == CheckSeverity.error]
+        return [
+            c for c in self.checks
+            if c.status == CheckStatus.fail and c.severity == CheckSeverity.error
+        ]
 
     def warnings(self) -> list[PolicyCheck]:
         return [c for c in self.checks if c.status == CheckStatus.warn]

@@ -10,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from forge.cli.app import app
-from forge.git.service import GitService, GitServiceError
+from forge.git.service import GitService
 
 runner = CliRunner()
 

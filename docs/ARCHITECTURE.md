@@ -262,7 +262,29 @@ modifies files except via `git apply`.
 evaluated. `--force` bypasses policy failures only when
 `policy.apply.allow_force` is `true`.
 
+The `forge apply` CLI validates patch existence and structural correctness before
+presenting the confirmation prompt. A missing or structurally invalid patch exits
+immediately with an actionable error message.
+
 No model calls occur during apply. No repair loop exists.
+
+## Patch Validation
+
+`forge/services/patch_service.validate()` is the authoritative validation entry
+point. It performs two sequential checks:
+
+1. **Structural**: `validate_patch_content()` — offline, checks format, headers,
+   hunk markers.
+2. **Applicability**: `GitService.apply_check()` — dry-runs `git apply --check`
+   against the current working tree. Skipped when not in a git repository
+   (`apply_check_valid` is `None`).
+
+The returned dict includes `structural_valid`, `apply_check_valid`, `valid`
+(conjunction of both), `validation_errors`, and `suggestions` (actionable next
+steps on failure).
+
+All git subprocess calls must go through `GitService`. Direct `subprocess.run`
+calls for git operations are prohibited outside `GitService`.
 
 ## Engineering Workflow Engine
 
@@ -313,6 +335,47 @@ are emitted as `ArtifactRelationship` entries.
 - `WorkflowEngine` never calls models directly. All model calls remain inside
   `PlanningService` and `ImplementationService`.
 - `WorkflowRegistry` is the only component that writes to `.forge/workflows/`.
+
+## Engineering Workflow Workbench (Web UI)
+
+`forge/web/` is a thin FastAPI presentation layer. It maps URLs to service
+calls, renders Jinja2 templates, and serves a dark engineering workbench UI.
+All routes are read-only except POST `/api/worksets/create`,
+POST `/api/worksets/{name}/context`, POST `/api/plans/generate`,
+POST `/api/decisions/create`, POST `/api/investigations/create`, and
+POST `/api/workflows`.
+
+**Workflow as the primary engineering object (Phase 6.1):**
+
+The Workbench routes and templates are organized around workflows:
+
+```
+Dashboard  →  Engineering Command Center
+               - Repository summary
+               - Current workflow (latest run)
+               - Engineering pipeline visualization
+               - Workflow metrics
+               - Smart next-action recommendation
+               - Activity timeline (includes workflow events)
+
+Workflows  →  List page with table, filters, template cards, Start Workflow modal
+               - GET /workflows
+               - GET /workflows/{run_id}   — detail: pipeline, stages, artifacts, timeline
+
+API        →  GET  /api/workflows
+               GET  /api/workflows/templates
+               GET  /api/workflows/{run_id}
+               POST /api/workflows         — delegates to workflow_service.run_workflow()
+```
+
+**UI invariants:**
+
+- Routes never scan `.forge/` directly. All data comes through application services.
+- No orchestration logic lives in routes or templates.
+- `WorkflowService` is the sole workflow data source for the web layer.
+- The `ArtifactRegistry` remains the single source of truth for artifact counts.
+- Navigation order: Dashboard → Workflows → Repository → Worksets → Planning →
+  Execution → Artifacts → Patches → Engineering Memory → Project.
 
 ## Future Services
 

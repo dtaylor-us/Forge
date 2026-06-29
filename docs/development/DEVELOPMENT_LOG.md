@@ -1,5 +1,55 @@
 # Dev Log
 
+## 2026-06-28 — Phase 6.1: Dogfood Readiness Hardening
+
+### Completed
+
+- **Patch validation hardened**: `patch_service.validate()` now runs `git apply --check` via `GitService.apply_check()` after structural validation. JSON output includes `structural_valid`, `apply_check_valid`, `errors`, and `suggestions` fields. A patch that fails `git apply --check` is reported as invalid with actionable next steps.
+- **Apply command reordered**: `forge apply` now validates patch existence and structure before showing the confirmation prompt. A missing or invalid patch exits immediately without prompting.
+- **`--yes` semantics documented and tested**: `--yes` skips the interactive confirmation only; policy is always evaluated. `--force` is required to bypass allowed policy failures. Tests verify both behaviors.
+- **Workflow validate uses GitService**: Replaced direct `subprocess.run(["git", "apply", "--check"])` in `WorkflowEngine._stage_validate` with `GitService.apply_check()`. No direct git subprocess calls outside `GitService`.
+- **Workflow failure guidance**: Validate stage failure messages include actionable next steps: inspect the patch, regenerate, revalidate.
+- **Implementation prompt strengthened**: `_IMPLEMENTATION_SYSTEM_INSTRUCTIONS` now explicitly forbids `/dev/null` diffs for existing files. The workset file table header clearly states all listed files already exist in the repository.
+- **Verification recommendations**: `VerificationExecutor.execute()` now populates `recommendations` with deterministic guidance for failed steps (black, ruff, pytest, npm, build, missing tool).
+- **Telemetry suppressed in non-verbose mode**: `configure_logging(verbose=False)` now sets logging level to `WARNING`, preventing model telemetry (INFO-level) from appearing in stderr during normal CLI use.
+- **Dashboard branch**: `repository_service.detect()` now includes `current_branch` via `GitService.branch()`. Dashboard `BRANCH: —` is resolved.
+- **29 new tests** covering all of the above. All 465 tests pass.
+
+### Architecture Notes
+
+Patch validation is now a two-phase check: structural diff format check (fast, offline) followed by `git apply --check` (requires a git repository). The `apply_check_valid` field is `None` (not attempted) when the repo is not a git repository. The CLI renders both phases clearly on failure.
+
+The workflow engine's validate stage now calls `patch_service.validate()` for the structural check and then independently calls `GitService.apply_check()` directly — keeping the stages decoupled but ensuring both checks run in sequence.
+
+---
+
+## 2026-06-28 — Phase 6.1: Engineering Workflow Workbench
+
+### Completed
+
+- Added `forge/web/routes/workflows.py` with GET `/workflows`, GET `/workflows/{run_id}`, GET `/api/workflows`, GET `/api/workflows/templates`, GET `/api/workflows/{run_id}`, POST `/api/workflows`.
+- Created `forge/web/templates/workflows.html` — workflow list page with table, status/template filters, empty state, template cards with metadata, and a Start Workflow modal.
+- Created `forge/web/templates/workflow_detail.html` — rich detail view showing summary hero, visual pipeline with per-node status/duration, artifact relationships, per-stage cards with error display, and engineering timeline.
+- Updated `forge/web/templates/base.html` — added Workflows as second nav item (after Dashboard), added to command palette, removed stale "Workflow History (planned)" item.
+- Updated `forge/web/templates/dashboard.html` — evolved to Engineering Command Center: added Current Workflow card, updated hero copy, added `workflow_runs` metric at top of metrics grid, updated activity timeline to link workflow runs, replaced "What To Do Next" with smart `next_action` recommendation.
+- Updated `forge/web/routes/dashboard.py` — loads `workflow_service.list_runs()`, computes `latest_run`, adds `next_action()` and `_next_action()` helper, adds `workflow_runs` metric, extends `_activity()` with workflow run events.
+- Updated `forge/web/app.py` — registered `workflows.router`.
+- Extended `forge/web/static/styles.css` — added `status-error`, `status-neutral`, `pipeline-failed`, `pipeline-running`, `timeline-dot.danger`, `data-table`, `filter-btn.active`, `action-btn-primary`.
+- Added 11 new web tests in `tests/test_web.py` covering: workflow list page, empty API, templates API, 404 detail, 404 detail API, detail page with run, list with persisted runs, invalid template start, missing task start, dashboard workflow metrics, detail stage state.
+- All 31 web tests pass. All 23 workflow engine tests pass.
+
+### Architecture Notes
+
+The UI is a thin presentation layer. Workflow data flows exclusively through `WorkflowService` → `WorkflowRegistry`. The dashboard calls `workflow_service.list_runs()` to derive latest run and next action without reading `.forge/workflows/` directly. No orchestration logic lives in routes or templates. The Start Workflow modal POSTs to `/api/workflows` which delegates entirely to `workflow_service.run_workflow()`.
+
+### Design Decisions
+
+- Navigation order: Dashboard → Workflows → Repository → … puts the workflow as the primary engineering object immediately after the command center.
+- Dashboard `next_action` is derived from the latest run's status/patch/verification/policy fields — it always recommends a concrete next step rather than static links.
+- Workflow detail renders all eight pipeline stages even when a run has fewer (pending stages shown as grey "Pending"), giving the engineer a stable mental model of the full lifecycle regardless of where a run stopped.
+
+---
+
 ## 2026-06-28 — Phase 6.0: Engineering Workflow Engine
 
 ### Completed

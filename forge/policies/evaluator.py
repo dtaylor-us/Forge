@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 from forge.policies.models import (
@@ -41,7 +39,9 @@ class PolicyEvaluator:
         checks.append(self._check_git_repo(policy, git_status))
         checks.append(self._check_git_clean(policy, git_status))
 
-        has_error = any(c.status == CheckStatus.fail and c.severity == CheckSeverity.error for c in checks)
+        has_error = any(
+            c.status == CheckStatus.fail and c.severity == CheckSeverity.error for c in checks
+        )
         has_warn = any(c.status == CheckStatus.warn for c in checks)
 
         if has_error:
@@ -57,11 +57,15 @@ class PolicyEvaluator:
 
     def _check_patch_valid(self, policy: ForgePolicy, patch_meta: dict[str, Any]) -> PolicyCheck:
         if not policy.patch.require_valid_patch:
-            return PolicyCheck("patch_valid", CheckStatus.skip, "Patch validity not required.", CheckSeverity.info)
+            return PolicyCheck(
+                "patch_valid", CheckStatus.skip, "Patch validity not required.", CheckSeverity.info
+            )
         valid = patch_meta.get("valid", False)
         errors = patch_meta.get("validation_errors", [])
         if valid:
-            return PolicyCheck("patch_valid", CheckStatus.pass_, "Patch is valid.", CheckSeverity.info)
+            return PolicyCheck(
+                "patch_valid", CheckStatus.pass_, "Patch is valid.", CheckSeverity.info
+            )
         msg = "Patch is invalid."
         if errors:
             msg += " " + "; ".join(errors)
@@ -169,10 +173,14 @@ class PolicyEvaluator:
 
     def _check_git_repo(self, policy: ForgePolicy, git_status: dict[str, Any]) -> PolicyCheck:
         if not policy.git.require_git_repository:
-            return PolicyCheck("git_repository", CheckStatus.skip, "Git repository not required.", CheckSeverity.info)
+            return PolicyCheck(
+                "git_repository", CheckStatus.skip, "Git repository not required.", CheckSeverity.info
+            )
         is_repo = git_status.get("is_git_repository", False)
         if is_repo:
-            return PolicyCheck("git_repository", CheckStatus.pass_, "Git repository detected.", CheckSeverity.info)
+            return PolicyCheck(
+                "git_repository", CheckStatus.pass_, "Git repository detected.", CheckSeverity.info
+            )
         return PolicyCheck(
             "git_repository", CheckStatus.fail, "Not a git repository.", CheckSeverity.error
         )

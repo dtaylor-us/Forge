@@ -10,8 +10,10 @@ import structlog
 
 def configure_logging(verbose: bool = False) -> None:
     """Configure application logging once for CLI execution."""
-    level = logging.DEBUG if verbose else logging.INFO
+    # Non-verbose mode uses WARNING to suppress model telemetry (INFO-level) from stderr.
+    level = logging.DEBUG if verbose else logging.WARNING
     logging.basicConfig(format="%(message)s", level=level, stream=sys.stderr)
+    logging.getLogger().setLevel(level)
     structlog.configure(
         processors=[
             structlog.processors.TimeStamper(fmt="iso", utc=True),

@@ -248,6 +248,156 @@ def test_root_path_is_fixed_to_resolved_repo(tmp_path: Path) -> None:
     assert response.json()["data"]["repo_root"] == str(root.resolve())
 
 
+def test_workflows_page_returns_200(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/workflows")
+
+    assert response.status_code == 200
+    assert "Workflow" in response.text
+
+
+def test_workflows_api_empty(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/api/workflows")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert data["data"]["runs"] == []
+    assert data["data"]["count"] == 0
+
+
+def test_workflows_templates_api(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/api/workflows/templates")
+
+    assert response.status_code == 200
+    templates = response.json()["data"]["templates"]
+    names = {t["template"] for t in templates}
+    assert {"feature", "bugfix", "refactor"}.issubset(names)
+
+
+def test_workflow_detail_missing_returns_404(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/workflows/nonexistent-id")
+
+    assert response.status_code == 404
+
+
+def test_workflow_detail_api_missing_returns_404(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.get("/api/workflows/nonexistent-id")
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+
+
+def test_workflow_detail_page_and_api_with_run(tmp_path: Path) -> None:
+    from forge.workflows.models import WorkflowRun, WorkflowTemplate
+    from forge.workflows.registry import WorkflowRegistry
+
+    root = _repo(tmp_path)
+    reg = WorkflowRegistry.from_root(root)
+    run = WorkflowRun(id="test-run-1", template=WorkflowTemplate.feature, task="Add feature", repository=str(root))
+    reg.save(run)
+    client = TestClient(create_app(root))
+
+    page = client.get("/workflows/test-run-1")
+    api = client.get("/api/workflows/test-run-1")
+
+    assert page.status_code == 200
+    assert "Add feature" in page.text
+    assert api.status_code == 200
+    assert api.json()["data"]["run"]["task"] == "Add feature"
+
+
+def test_workflows_api_lists_persisted_runs(tmp_path: Path) -> None:
+    from forge.workflows.models import WorkflowRun, WorkflowTemplate
+    from forge.workflows.registry import WorkflowRegistry
+
+    root = _repo(tmp_path)
+    reg = WorkflowRegistry.from_root(root)
+    reg.save(WorkflowRun(id="r1", template=WorkflowTemplate.feature, task="feat", repository=str(root)))
+    reg.save(WorkflowRun(id="r2", template=WorkflowTemplate.bugfix, task="fix", repository=str(root)))
+    client = TestClient(create_app(root))
+
+    response = client.get("/api/workflows")
+
+    assert response.status_code == 200
+    runs = response.json()["data"]["runs"]
+    ids = {r["id"] for r in runs}
+    assert {"r1", "r2"}.issubset(ids)
+
+
+def test_workflow_start_api_invalid_template(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.post("/api/workflows", json={"template": "invalid", "task": "do something"})
+
+    assert response.status_code == 422
+    assert response.json()["ok"] is False
+
+
+def test_workflow_start_api_missing_task(tmp_path: Path) -> None:
+    client = TestClient(create_app(_repo(tmp_path)))
+
+    response = client.post("/api/workflows", json={"template": "feature", "task": ""})
+
+    assert response.status_code == 400
+    assert response.json()["ok"] is False
+
+
+def test_dashboard_includes_workflow_metrics(tmp_path: Path) -> None:
+    from forge.workflows.models import WorkflowRun, WorkflowTemplate
+    from forge.workflows.registry import WorkflowRegistry
+
+    root = _repo(tmp_path)
+    reg = WorkflowRegistry.from_root(root)
+    reg.save(WorkflowRun(id="dash1", template=WorkflowTemplate.feature, task="Dashboard test", repository=str(root)))
+    client = TestClient(create_app(root))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Workflow" in response.text
+
+
+def test_workflows_page_shows_run_in_table(tmp_path: Path) -> None:
+    from forge.workflows.models import WorkflowRun, WorkflowTemplate
+    from forge.workflows.registry import WorkflowRegistry
+
+    root = _repo(tmp_path)
+    reg = WorkflowRegistry.from_root(root)
+    reg.save(WorkflowRun(id="show1", template=WorkflowTemplate.refactor, task="Refactor auth module", repository=str(root)))
+    client = TestClient(create_app(root))
+
+    response = client.get("/workflows")
+
+    assert response.status_code == 200
+    assert "Refactor auth module" in response.text
+
+
+def test_workflow_detail_shows_empty_stage_state(tmp_path: Path) -> None:
+    from forge.workflows.models import WorkflowRun, WorkflowTemplate
+    from forge.workflows.registry import WorkflowRegistry
+
+    root = _repo(tmp_path)
+    reg = WorkflowRegistry.from_root(root)
+    reg.save(WorkflowRun(id="empty1", template=WorkflowTemplate.bugfix, task="Fix login", repository=str(root)))
+    client = TestClient(create_app(root))
+
+    response = client.get("/workflows/empty1")
+
+    assert response.status_code == 200
+    assert "Fix login" in response.text
+    assert "Engineering Pipeline" in response.text
+
+
 def test_cli_web_help() -> None:
     result = runner.invoke(cli_app, ["web", "--help"])
 

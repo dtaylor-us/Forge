@@ -133,7 +133,7 @@ Create engineering knowledge that survives beyond AI conversations and individua
 | Patch Management | ✅ | Store, list, inspect, and validate saved raw diff patches without applying them. |
 | Patch Generation | ✅ | Generate human-reviewable unified diff patches from a task and workset without applying them. |
 | Engineering Artifact Registry | ✅ | Internal read-only registry that unifies repository metadata, worksets, context bundles, plans, memory entries, and patches without moving or rewriting files. |
-| Local Web Workbench | ✅ | Modern browser interface for planning, worksets, repository analysis, and engineering knowledge. |
+| Local Web Workbench | ✅ | Engineering Command Center — workflows as primary object, visual pipeline, artifact registry, repository intelligence, planning, patches, and memory. |
 | Multi-Provider AI | ✅ | Ollama, OpenAI, and Anthropic through a common provider abstraction. |
 | Architecture Intelligence | 🚧 Planned | Living architecture, dependency analysis, and architectural health. |
 | Agent Orchestration | 🚧 Planned | Multi-agent engineering workflows. |
@@ -272,6 +272,11 @@ apply patches, edit source files directly, run verification, or start repair
 loops. Invalid model output is preserved under `.forge/patches/invalid/` for
 review.
 
+`forge patch validate` performs a two-phase check: structural format validation
+followed by `git apply --check` against the current working tree. Output
+includes `structural_valid`, `apply_check_valid`, validation errors, and
+actionable suggestions on failure.
+
 ## ✅ Run Engineering Verification
 
 ```bash
@@ -383,14 +388,15 @@ forge apply <patch> --verification <path>  # use a specific verification report
 
 `forge apply` runs the following guards in order before touching any file:
 
-1. Validate patch (must be a valid unified diff).
-2. `git apply --check` — dry-run to confirm patch can be applied.
-3. Load the latest verification report from `.forge/verifications/`.
-4. Evaluate the active policy against patch metadata, verification, and git state.
-5. Block if policy fails unless `--force` is used and `policy.apply.allow_force` is true.
-6. Prompt for confirmation unless `--yes` is supplied.
-7. Apply patch via `git apply`. No commit is created.
-8. Persist apply record under `.forge/applications/`.
+1. Validate patch existence — missing patch exits immediately, before any prompt.
+2. Validate patch structure (must be a valid unified diff).
+3. `git apply --check` — dry-run to confirm patch can be applied cleanly.
+4. Load the latest verification report from `.forge/verifications/`.
+5. Evaluate the active policy against patch metadata, verification, and git state.
+6. Block if policy fails unless `--force` is used and `policy.apply.allow_force` is true.
+7. Prompt for confirmation unless `--yes` is supplied (`--yes` skips prompt only, not policy).
+8. Apply patch via `git apply`. No commit is created.
+9. Persist apply record under `.forge/applications/`.
 
 Policy fields (`patch`, `verification`, `git`, `apply`) may be overridden via
 `.forge/policy.yaml`. Defaults are applied when the file is absent.
@@ -607,20 +613,22 @@ workflow. It is presentation-only: routes consume application services and the
 Engineering Artifact Registry, while CLI behavior and backend orchestration stay
 unchanged.
 
+Workflows are the primary engineering object. The Dashboard evolves into an Engineering Command Center; every other page surfaces its workflow context.
+
 | Workspace | Purpose |
 |-----------|---------|
-| Dashboard | Repository summary, workflow visualization, engineering metrics, and recent activity |
-| Repository | Engineering overview with detected languages, frameworks, package managers, roots, important files, build systems, and verification placeholders |
+| Dashboard | Engineering Command Center — current workflow, repository summary, pipeline visualization, workflow metrics, smart next-action, and activity timeline |
+| Workflows | Engineering orchestration — start workflows, browse run history, filter by status/template, view full pipeline detail with stage cards and artifact relationships |
+| Repository | Engineering overview with detected languages, frameworks, package managers, roots, important files, and build systems |
 | Worksets | Build, inspect, refresh, and relate task-scoped file sets to plans, patches, context bundles, and artifacts |
-| Planning | Generate implementation plans and browse saved plan artifacts connected to execution, memory, patches, and future verification |
+| Planning | Generate implementation plans and browse saved plan artifacts connected to execution, memory, patches, and verification |
 | Execution | Read-only visualization of the prepared `ExecutionRequest`, selected model, pipeline stages, prompt summary, memory summary, and context summary |
-| Artifacts | Unified Artifact Explorer backed by the read-only registry for repositories, worksets, context bundles, plans, memory entries, patches, and future artifact types |
+| Artifacts | Unified Artifact Explorer backed by the read-only registry for repositories, worksets, context bundles, plans, memory entries, patches, and workflows |
 | Patches | Patch Explorer for saved unified diffs with affected files, validation state, source metadata, show, validate, and download actions |
 | Engineering Memory | Search decisions, investigations, plans, lessons, and navigate naturally to plans, execution, patches, and worksets |
 | Project | Project metadata and Forge configuration |
-| Verification | CLI verification execution and artifact reports |
+| Verification | Planned |
 | Architecture | Planned |
-| Workflow History | Planned |
 
 The Workbench uses a common relationship vocabulary:
 

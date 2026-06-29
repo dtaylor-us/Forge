@@ -3,8 +3,8 @@
 from forge.workflows.models import (
     WorkflowRun,
     WorkflowStage,
-    WorkflowStatus,
     WorkflowStageStatus,
+    WorkflowStatus,
     WorkflowTemplate,
 )
 from forge.workflows.registry import WorkflowRegistry

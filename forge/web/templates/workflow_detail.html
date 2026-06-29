@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %} — Workflow {{ run.id[:8] }}{% endblock %}
+{% block breadcrumb %}<a href="/workflows" style="color:var(--text-2);text-decoration:none;">Workflows</a> / {{ run.id[:8] }}{% endblock %}
+
+{% block content %}
+
+{% set status_class = 'status-active' if run.status == 'completed' else 'status-error' if run.status == 'failed' else 'status-warning' if run.status == 'running' else 'status-neutral' %}
+
+<!-- Summary hero -->
+<div class="hero-card mb-6">
+  <div class="hero-eyebrow">
+    <i data-lucide="git-branch-plus" style="width:13px;height:13px;"></i>
+    {{ run.template | title }} Workflow
+  </div>
+  <h1 class="hero-title" style="font-size:22px;">{{ run.task }}</h1>
+  <div class="hero-meta">
+    <span class="status-pill {{ status_class }}">{{ run.status | title }}</span>
+    <div class="hero-tag"><i data-lucide="hash"></i>{{ run.id[:12] }}</div>
+    <div class="hero-tag"><i data-lucide="folder"></i>{{ run.repository | truncate(32, true, '…') }}</div>
+    {% if run.duration_seconds %}<div class="hero-tag"><i data-lucide="timer"></i>{{ "%.1f"|format(run.duration_seconds) }}s</div>{% endif %}
+    {% if run.workset_name %}<div class="hero-tag"><i data-lucide="layers"></i>{{ run.workset_name }}</div>{% endif %}
+    <div class="hero-tag"><i data-lucide="calendar"></i>{{ run.started_at[:16] if run.started_at else '—' }}</div>
+  </div>
+</div>
+
+<div class="grid grid-2 mb-6">
+
+  <!-- Visual pipeline -->
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Engineering Pipeline</span>
+      <span class="tag tag-orange">{{ run.stages | length }} stages</span>
+    </div>
+    <div class="pipeline-stack">
+      {% set stage_map = {} %}
+      {% for stage in run.stages %}{% set _ = stage_map.update({stage.name: stage}) %}{% endfor %}
+
+      {% set all_stage_names = ['repository', 'workset', 'context', 'plan', 'patch', 'validate', 'verify', 'policy'] %}
+      {% set stage_labels = {
+        'repository': 'Repository Intelligence',
+        'workset': 'Workset',
+        'context': 'Context Bundle',
+        'plan': 'Implementation Plan',
+        'patch': 'Patch Generation',
+        'validate': 'Patch Validation',
+        'verify': 'Verification',
+        'policy': 'Policy Evaluation'
+      } %}
+
+      {% for sname in all_stage_names %}
+        {% if sname in stage_map %}
+          {% set stage = stage_map[sname] %}
+          {% set node_class = 'pipeline-complete' if stage.status == 'completed' else 'pipeline-failed' if stage.status == 'failed' else 'pipeline-running' if stage.status == 'running' else 'pipeline-available' %}
+          <div class="pipeline-node {{ node_class }}">
+            <div class="pipeline-marker">
+              {% if stage.status == 'completed' %}<i data-lucide="check" style="width:12px;height:12px;"></i>
+              {% elif stage.status == 'failed' %}<i data-lucide="x" style="width:12px;height:12px;"></i>
+              {% else %}{{ loop.index }}{% endif %}
+            </div>
+            <div class="pipeline-label">{{ stage_labels.get(sname, sname | title) }}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="tag {% if stage.status == 'completed' %}tag-green{% elif stage.status == 'failed' %}tag-red{% elif stage.status == 'running' %}tag-orange{% endif %}">
+                {{ stage.status | title }}
+              </span>
+              {% if stage.duration_seconds %}<span style="font-size:11px;color:var(--text-3);">{{ "%.1fs"|format(stage.duration_seconds) }}</span>{% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="pipeline-node pipeline-future">
+            <div class="pipeline-marker">{{ loop.index }}</div>
+            <div class="pipeline-label">{{ stage_labels.get(sname, sname | title) }}</div>
+            <span class="tag">Pending</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Artifact relationships -->
+  <div class="card card-flush">
+    <div class="panel-heading">
+      <span class="section-title">Produced Artifacts</span>
+      <a class="btn btn-ghost btn-sm" href="/artifacts">Registry</a>
+    </div>
+    {% if run.artifacts %}
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for key, artifact in run.artifacts.items() %}
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <i data-lucide="{% if key == 'repository' %}git-branch{% elif key == 'workset' %}layers{% elif key == 'context' %}file-text{% elif key == 'plan' %}file-pen{% elif key in ('patch','validate') %}git-pull-request-arrow{% elif key == 'verify' %}badge-check{% elif key == 'policy' %}shield{% else %}box{% endif %}" style="width:14px;height:14px;color:var(--orange);"></i>
+          <span style="font-size:12px;font-weight:600;color:var(--text);">{{ key | title | replace('_', ' ') }}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-3);font-family:var(--font-mono);">
+          {% if artifact is mapping %}
+            {% for k, v in artifact.items() %}{% if v and k not in ('metadata',) %}<span style="margin-right:8px;">{{ k }}: {{ v | string | truncate(40) }}</span>{% endif %}{% endfor %}
+          {% else %}
+            {{ artifact | string | truncate(80) }}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:24px 0;">
+      <div class="empty-state-icon"><i data-lucide="box"></i></div>
+      <div class="empty-state-title">No artifacts produced</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Stage cards -->
+<div class="panel-heading mb-4" style="padding:0;">
+  <span class="section-title">Stage Details</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+  {% for stage in run.stages %}
+  <div class="card card-flush" style="{% if stage.status == 'failed' %}border-color:var(--red);{% endif %}">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:32px;height:32px;border-radius:var(--r-sm);background:{% if stage.status == 'completed' %}var(--green-dim){% elif stage.status == 'failed' %}var(--red-dim){% else %}var(--surface-3){% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="{% if stage.status == 'completed' %}check{% elif stage.status == 'failed' %}x{% elif stage.status == 'running' %}loader{% else %}clock{% endif %}" style="width:14px;height:14px;color:{% if stage.status == 'completed' %}var(--green){% elif stage.status == 'failed' %}var(--red){% elif stage.status == 'running' %}var(--amber){% else %}var(--text-3){% endif %};"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;">{{ stage.description or stage.name | title }}</div>
+        <div style="font-size:11px;color:var(--text-3);">{{ stage.service }}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        {% if stage.duration_seconds %}<span style="font-size:11px;color:var(--text-3);">{{ "%.1fs"|format(stage.duration_seconds) }}</span>{% endif %}
+        <span class="tag {% if stage.status == 'completed' %}tag-green{% elif stage.status == 'failed' %}tag-red{% elif stage.status == 'running' %}tag-orange{% endif %}">{{ stage.status | title }}</span>
+      </div>
+    </div>
+    {% if stage.artifact_refs %}
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">Artifacts</div>
+      <div class="chip-row">{% for ref in stage.artifact_refs %}<span class="tech-chip">{{ ref }}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+    {% if stage.error %}
+    <div style="margin-top:10px;padding:10px;background:var(--red-dim);border-radius:var(--r-sm);border:1px solid rgba(239,68,68,0.2);">
+      <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:4px;">Error</div>
+      <div style="font-size:12px;color:var(--text-2);font-family:var(--font-mono);">{{ stage.error }}</div>
+    </div>
+    {% endif %}
+    {% if stage.started_at %}
+    <div style="margin-top:8px;font-size:11px;color:var(--text-3);">
+      Started {{ stage.started_at[:19] }}{% if stage.completed_at %} → {{ stage.completed_at[:19] }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Engineering Timeline -->
+<div class="panel-heading mb-4" style="padding:0;">
+  <span class="section-title">Engineering Timeline</span>
+</div>
+<div class="card card-flush mb-6">
+  <div class="timeline table-timeline">
+    {% for stage in run.stages %}
+    {% if stage.status != 'pending' %}
+    <div class="timeline-item">
+      <div class="timeline-dot-col">
+        <div class="timeline-dot {% if stage.status == 'completed' %}decision{% elif stage.status == 'failed' %}danger{% else %}{% endif %}"></div>
+        {% if not loop.last %}<div class="timeline-line"></div>{% endif %}
+      </div>
+      <div class="timeline-body">
+        <div class="timeline-type" style="color:{% if stage.status == 'completed' %}var(--green){% elif stage.status == 'failed' %}var(--red){% else %}var(--amber){% endif %};">
+          {{ stage.status | title }}
+        </div>
+        <div class="timeline-title">{{ stage.description or stage.name | title }}</div>
+        <div class="timeline-date">
+          {{ stage.service }} · {{ stage.started_at[:19] if stage.started_at else '' }}
+          {% if stage.duration_seconds %} · {{ "%.1f"|format(stage.duration_seconds) }}s{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state" style="padding:24px 0;">
+      <div class="empty-state-title">No stage activity yet</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Actions -->
+<div style="display:flex;gap:10px;margin-bottom:24px;">
+  <a class="btn btn-ghost btn-sm" href="/workflows">← All Workflows</a>
+  {% if run.patch_path %}
+  <a class="btn btn-ghost btn-sm" href="/patches">View Patches</a>
+  {% endif %}
+  <a class="btn btn-ghost btn-sm" href="/artifacts">Artifact Registry</a>
+  {% if run.status == 'completed' or run.status == 'failed' %}
+  <a class="btn btn-primary btn-sm" href="/workflows" onclick="localStorage.setItem('prefill_template','{{ run.template }}')">
+    Run Again
+  </a>
+  {% endif %}
+</div>
+
+{% endblock %}

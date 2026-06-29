@@ -1639,6 +1639,77 @@ details[open] > summary svg.chevron { transform: rotate(90deg); }
   .artifact-layout { grid-template-columns: 1fr; }
 }
 
+/* ── Status pills (extended) ───────────────────────────────── */
+.status-error   { color: var(--red);    background: var(--red-dim); }
+.status-neutral { color: var(--text-3); background: var(--surface-3); }
+
+/* ── Pipeline nodes (extended) ────────────────────────────── */
+.pipeline-failed {
+  border-color: rgba(239,68,68,0.3);
+  background: var(--red-dim);
+}
+.pipeline-failed .pipeline-marker {
+  background: var(--red);
+  color: #fff;
+}
+.pipeline-running {
+  border-color: rgba(245,158,11,0.3);
+}
+.pipeline-running .pipeline-marker {
+  background: var(--amber);
+  color: #fff;
+}
+
+/* ── Timeline dot states ───────────────────────────────────── */
+.timeline-dot.danger { border-color: var(--red); background: var(--red); }
+
+/* ── Data table ────────────────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: var(--surface-2); }
+
+/* ── Filter buttons ────────────────────────────────────────── */
+.filter-btn.active {
+  background: var(--orange-dim);
+  color: var(--orange);
+  border-color: rgba(249,115,22,0.3);
+}
+
+/* ── Primary action button ─────────────────────────────────── */
+.action-btn-primary {
+  background: var(--orange-dim);
+  border-color: rgba(249,115,22,0.3);
+  color: var(--orange);
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.action-btn-primary:hover {
+  background: rgba(249,115,22,0.2);
+  color: var(--orange-2);
+}
+.action-btn-primary svg { color: var(--orange); }
+
 @media (max-width: 860px) {
   .sidebar { position: fixed; z-index: 200; }
   .sidebar:not(.collapsed) { box-shadow: var(--shadow-lg); }

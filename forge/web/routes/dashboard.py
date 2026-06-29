@@ -7,7 +7,13 @@ from fastapi.responses import HTMLResponse
 
 from forge.artifacts.registry import ArtifactRegistry
 from forge.config.manager import ConfigManager
-from forge.services import memory_service, project_service, repository_service, workset_service
+from forge.services import (
+    memory_service,
+    project_service,
+    repository_service,
+    workflow_service,
+    workset_service,
+)
 from forge.web.deps import repo_root, template_context, templates
 
 router = APIRouter()
@@ -23,6 +29,8 @@ def dashboard(request: Request) -> HTMLResponse:
     worksets = workset_service.list_all(root)
     plans = project_service.recent_plans(root, limit=5)
     memory_items = memory_service.list_timeline(root)[:5]
+    workflow_runs = workflow_service.list_runs(root)
+    latest_run = workflow_runs[0] if workflow_runs else None
     context = template_context(
         request,
         active="dashboard",
@@ -31,10 +39,12 @@ def dashboard(request: Request) -> HTMLResponse:
         worksets=worksets[:5],
         plans=plans,
         memory_items=memory_items,
-        metrics=_metrics(artifacts, worksets, plans, memory_items),
+        metrics=_metrics(artifacts, worksets, plans, memory_items, workflow_runs),
         workflow=_workflow(),
-        activity=_activity(artifacts, memory_items),
+        activity=_activity(artifacts, memory_items, workflow_runs),
         model_config=_model_config(),
+        latest_run=latest_run,
+        next_action=_next_action(latest_run, artifacts),
     )
     return templates(request).TemplateResponse(request, "dashboard.html", context)
 
@@ -44,6 +54,7 @@ def _metrics(
     worksets: list[dict[str, object]],
     plans: list[dict[str, object]],
     memory_items: list[dict[str, object]],
+    workflow_runs: list[dict[str, object]] | None = None,
 ) -> dict[str, int]:
     artifact_counts: dict[str, int] = {}
     for artifact in artifacts:
@@ -58,6 +69,7 @@ def _metrics(
         "patches": artifact_counts.get("patch", 0),
         "execution_requests": artifact_counts.get("execution", 0),
         "artifact_count": len(artifacts),
+        "workflow_runs": len(workflow_runs) if workflow_runs else 0,
     }
 
 
@@ -74,9 +86,38 @@ def _workflow() -> list[dict[str, str]]:
     ]
 
 
+def _next_action(
+    latest_run: dict[str, object] | None,
+    artifacts: list[dict[str, object]],
+) -> dict[str, str]:
+    if latest_run is None:
+        return {
+            "label": "Start your first workflow",
+            "href": "/workflows",
+            "icon": "git-branch-plus",
+        }
+    status = str(latest_run.get("status") or "")
+    patch_path = latest_run.get("patch_path")
+    verification_status = latest_run.get("verification_status")
+    policy_status = latest_run.get("policy_status")
+    if status == "failed":
+        return {"label": "Review failed workflow", "href": f"/workflows/{latest_run.get('id', '')}", "icon": "alert-circle"}
+    if status == "completed":
+        if policy_status == "pass" and patch_path:
+            return {"label": "Apply patch", "href": "/patches", "icon": "git-pull-request-arrow"}
+        if verification_status == "fail":
+            return {"label": "Open Verification Report", "href": "/artifacts", "icon": "badge-check"}
+        if policy_status == "fail":
+            return {"label": "Open Policy Report", "href": "/artifacts", "icon": "shield-alert"}
+        if patch_path:
+            return {"label": "Review generated patch", "href": "/patches", "icon": "git-pull-request-arrow"}
+    return {"label": "Start a new workflow", "href": "/workflows", "icon": "git-branch-plus"}
+
+
 def _activity(
     artifacts: list[dict[str, object]],
     memory_items: list[dict[str, object]],
+    workflow_runs: list[dict[str, object]] | None = None,
 ) -> list[dict[str, str]]:
     events: list[dict[str, str]] = []
     for artifact in artifacts:
@@ -88,6 +129,7 @@ def _activity(
                 "related_workset": str(artifact.get("workset_name") or "Repository"),
                 "status": _status_for_artifact(artifact_type),
                 "type": artifact_type.replace("_", " ").title(),
+                "href": "",
             }
         )
     for item in memory_items:
@@ -98,6 +140,19 @@ def _activity(
                 "related_workset": str(item.get("workset") or "Engineering Memory"),
                 "status": "memory updated",
                 "type": str(item.get("type") or "Memory"),
+                "href": "/memory",
+            }
+        )
+    for run in (workflow_runs or []):
+        run_status = str(run.get("status") or "")
+        events.append(
+            {
+                "time": str(run.get("completed_at") or run.get("started_at") or ""),
+                "artifact": str(run.get("task") or run.get("id") or "Workflow"),
+                "related_workset": str(run.get("template") or "workflow").title(),
+                "status": f"workflow {run_status}",
+                "type": "Workflow Run",
+                "href": f"/workflows/{run.get('id', '')}",
             }
         )
     events.sort(key=lambda event: event["time"], reverse=True)

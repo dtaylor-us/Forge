@@ -65,7 +65,7 @@ class VerificationExecutor:
             summary=summary,
             duration=duration,
             overall_status=overall_status,
-            recommendations=[],
+            recommendations=_build_recommendations(steps),
             artifact=VerificationArtifactMetadata(),
             metadata={key: value for key, value in (metadata or {}).items() if value},
         )
@@ -112,6 +112,45 @@ def _summary(steps: list[VerificationStepResult]) -> dict[str, object]:
         for kind in ("formatter", "linter", "build", "tests")
     }
     return {"counts": counts, "by_kind": by_kind}
+
+
+def _build_recommendations(steps: list[VerificationStepResult]) -> list[str]:
+    """Generate deterministic recommendations for failed verification steps."""
+    recommendations: list[str] = []
+    for step in steps:
+        if step.status in (VerificationStatus.fail, VerificationStatus.error):
+            tool = step.tool.lower() if step.tool else ""
+            kind = step.kind or ""
+            if tool == "black" or (kind == "formatter" and "black" in (step.command or "")):
+                recommendations.append("Run black . to auto-format source files.")
+            elif tool == "ruff" or (kind == "linter" and "ruff" in (step.command or "")):
+                recommendations.append(
+                    "Run ruff check . to see lint errors, or ruff check --fix . to auto-fix."
+                )
+            elif tool == "pytest" or (kind == "tests" and "pytest" in (step.command or "")):
+                recommendations.append(
+                    "Run pytest -v to see failing tests."
+                    " Check imports and PYTHONPATH if tests fail to collect."
+                )
+            elif kind == "tests" and "npm" in (step.command or ""):
+                recommendations.append(
+                    "Run npm test to see failing tests. Inspect test output for assertion failures."
+                )
+            elif kind == "build":
+                recommendations.append(
+                    "Inspect build output above. Check for missing dependencies or syntax errors."
+                )
+            elif step.status == VerificationStatus.error and step.exception:
+                if "not found" in (step.exception or "").lower():
+                    recommendations.append(
+                        f"Tool '{step.tool}' was not found."
+                        " Install it or update the verification strategy."
+                    )
+                else:
+                    recommendations.append(
+                        f"Step '{step.name or step.tool}' raised an error: {step.exception}"
+                    )
+    return recommendations
 
 
 def _tool_value(tool: VerificationTool | str) -> str:

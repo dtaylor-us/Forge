@@ -9,18 +9,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forge.workflows.engine import WorkflowEngine, WorkflowEngineError, _workset_name
+from forge.services import workflow_service
+from forge.workflows.engine import WorkflowEngine
 from forge.workflows.models import (
     WorkflowRun,
     WorkflowStage,
-    WorkflowStatus,
     WorkflowStageStatus,
+    WorkflowStatus,
     WorkflowTemplate,
 )
 from forge.workflows.registry import WorkflowRegistry
-from forge.workflows.templates import ALL_DEFINITIONS, BUGFIX, FEATURE, REFACTOR
-from forge.services import workflow_service
-
+from forge.workflows.templates import ALL_DEFINITIONS, FEATURE
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -71,7 +70,13 @@ def _mock_services(
     impl_mock.return_value.implement.return_value = impl_result
 
     validate_mock = MagicMock(
-        return_value={"valid": patch_valid, "name": "my.patch", "validation_errors": []}
+        return_value={
+            "valid": patch_valid,
+            "structural_valid": patch_valid,
+            "apply_check_valid": patch_valid if patch_valid else False,
+            "name": "my.patch",
+            "validation_errors": [] if patch_valid else ["hunk line count mismatch"],
+        }
     )
     verify_mock = MagicMock(
         return_value={"overall_status": verify_status, "summary": {}}
@@ -79,6 +84,14 @@ def _mock_services(
     policy_mock = MagicMock(
         return_value={"patch": "my.patch", "evaluation": {"status": policy_status, "checks": []}}
     )
+
+    from forge.git.service import GitServiceError
+
+    def _apply_check_side_effect(patch_path):  # type: ignore[no-untyped-def]
+        if not patch_valid:
+            raise GitServiceError("patch fragment without header")
+
+    git_apply_check_mock = MagicMock(side_effect=_apply_check_side_effect)
 
     return {
         "repo": repo_mock,
@@ -89,6 +102,7 @@ def _mock_services(
         "validate": validate_mock,
         "verify": verify_mock,
         "policy": policy_mock,
+        "git_apply_check": git_apply_check_mock,
     }
 
 
@@ -104,6 +118,8 @@ def _patch_all(mocks: dict[str, MagicMock]):
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ]
 
 
@@ -209,6 +225,8 @@ def test_stage_ordering(tmp_root: Path, registry: WorkflowRegistry):
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ):
         run = engine.run(WorkflowTemplate.feature, "add button")
 
@@ -240,6 +258,8 @@ def test_workflow_completes(tmp_root: Path, registry: WorkflowRegistry, template
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ):
         run = engine.run(template, "some task")
 
@@ -329,6 +349,8 @@ def test_no_patch_applied(tmp_root: Path, registry: WorkflowRegistry):
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
         patch("forge.services.apply_service.apply") as apply_mock,
     ):
         run = engine.run(WorkflowTemplate.feature, "task")
@@ -355,6 +377,8 @@ def test_workflow_artifact_registered(tmp_root: Path, registry: WorkflowRegistry
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ):
         run = engine.run(WorkflowTemplate.feature, "task")
 
@@ -413,11 +437,13 @@ def test_engine_delegates_to_existing_services(tmp_root: Path, registry: Workflo
         patch("forge.services.workset_service.create", mocks["workset_create"]) as ws_mock,
         patch("forge.services.workset_service.generate_context", mocks["context"]) as ctx_mock,
         patch("forge.services.planning_service.generate", mocks["plan"]) as plan_mock,
-        patch("forge.services.implementation_service.ImplementationService", mocks["impl_cls"]) as impl_mock,
-        patch("forge.services.patch_service.validate", mocks["validate"]) as val_mock,
+        patch("forge.services.implementation_service.ImplementationService", mocks["impl_cls"]),
+        patch("forge.services.patch_service.validate", mocks["validate"]),
         patch("forge.services.verification_service.run", mocks["verify"]) as ver_mock,
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]) as pol_mock,
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ):
         engine.run(WorkflowTemplate.feature, "task")
 
@@ -447,6 +473,8 @@ def test_workflow_run_json_output(tmp_root: Path, registry: WorkflowRegistry):
         patch("forge.services.verification_service.run", mocks["verify"]),
         patch("forge.services.verification_service.VerificationServiceError", Exception),
         patch("forge.services.policy_service.check", mocks["policy"]),
+        patch("forge.patches.service.resolve_patch_path", return_value=Path("/tmp/my.patch")),
+        patch("forge.git.service.GitService.apply_check", mocks["git_apply_check"]),
     ):
         run = engine.run(WorkflowTemplate.feature, "task")
 

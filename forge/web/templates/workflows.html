@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %} — Workflows{% endblock %}
+{% block breadcrumb %}Workflows{% endblock %}
+
+{% block content %}
+
+<div class="hero-card mb-6">
+  <div class="hero-eyebrow">
+    <i data-lucide="git-branch-plus" style="width:13px;height:13px;"></i>
+    Engineering Orchestration
+  </div>
+  <h1 class="hero-title">Workflows</h1>
+  <p class="hero-sub">
+    Workflows orchestrate the full engineering lifecycle — from repository intelligence through worksets, planning, implementation, verification, and policy evaluation.
+  </p>
+  <div class="hero-meta">
+    <span class="status-pill status-active">{{ runs | length }} run{{ 's' if runs | length != 1 else '' }}</span>
+    <div class="hero-tag"><i data-lucide="layers"></i>{{ template_defs | length }} templates</div>
+  </div>
+</div>
+
+{% if runs %}
+
+<!-- Filters -->
+<div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+  <button class="btn btn-sm btn-ghost filter-btn active" data-filter="all" onclick="filterRuns(this, 'all')">All</button>
+  <button class="btn btn-sm btn-ghost filter-btn" data-filter="completed" onclick="filterRuns(this, 'completed')">Completed</button>
+  <button class="btn btn-sm btn-ghost filter-btn" data-filter="failed" onclick="filterRuns(this, 'failed')">Failed</button>
+  <button class="btn btn-sm btn-ghost filter-btn" data-filter="running" onclick="filterRuns(this, 'running')">Running</button>
+  <div style="flex:1;"></div>
+  <a class="btn btn-primary btn-sm" href="#start-workflow" onclick="openStartModal()">
+    <i data-lucide="plus" style="width:14px;height:14px;"></i>Start Workflow
+  </a>
+</div>
+
+<!-- Workflow runs -->
+<div class="card card-flush mb-6">
+  <table class="data-table" id="runs-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Template</th>
+        <th>Task</th>
+        <th>Repository</th>
+        <th>Started</th>
+        <th>Duration</th>
+        <th>Stages</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr class="run-row" data-status="{{ run.status }}">
+        <td>
+          <span class="status-pill {% if run.status == 'completed' %}status-active{% elif run.status == 'failed' %}status-error{% elif run.status == 'running' %}status-warning{% else %}status-neutral{% endif %}">
+            {{ run.status | title }}
+          </span>
+        </td>
+        <td><span class="tag tag-orange">{{ run.template | title }}</span></td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ run.task }}">{{ run.task }}</td>
+        <td><code style="font-size:11px;">{{ run.repository | truncate(24, true, '…') }}</code></td>
+        <td style="color:var(--text-2);font-size:12px;">{{ run.started_at[:16] if run.started_at else '—' }}</td>
+        <td style="color:var(--text-2);font-size:12px;">
+          {% if run.duration_seconds %}{{ "%.1f"|format(run.duration_seconds) }}s{% else %}—{% endif %}
+        </td>
+        <td style="font-size:12px;">
+          {{ run.stages | selectattr('status', 'equalto', 'completed') | list | length }}/{{ run.stages | length }}
+        </td>
+        <td><a class="btn btn-ghost btn-sm" href="/workflows/{{ run.id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+
+<!-- Empty state -->
+<div class="card card-flush mb-6">
+  <div class="empty-state" style="padding:48px 24px;">
+    <div class="empty-state-icon"><i data-lucide="git-branch-plus"></i></div>
+    <div class="empty-state-title">No workflows yet</div>
+    <div class="empty-state-desc">
+      Workflows guide you through the full engineering lifecycle automatically.<br>
+      Start with a Feature, Bug Fix, or Refactor workflow.
+    </div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="openStartModal()">
+      Start your first workflow
+    </button>
+  </div>
+</div>
+
+{% endif %}
+
+<!-- Template cards -->
+<div class="panel-heading mb-4" style="padding:0;">
+  <span class="section-title">Workflow Templates</span>
+</div>
+<div class="grid grid-3 mb-6">
+  {% for tmpl in template_defs %}
+  <div class="card card-flush">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <div style="width:36px;height:36px;border-radius:var(--r);background:var(--orange-dim);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="{% if tmpl.template == 'feature' %}sparkles{% elif tmpl.template == 'bugfix' %}bug{% elif tmpl.template == 'refactor' %}layers{% else %}workflow{% endif %}" style="width:18px;height:18px;color:var(--orange);"></i>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:14px;">{{ tmpl.name }}</div>
+        <div style="font-size:11px;color:var(--text-3);">{{ tmpl.template }}</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">{{ tmpl.description }}</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">Stages</div>
+      <div class="chip-row">
+        {% for stage in tmpl.stages %}<span class="tech-chip">{{ stage }}</span>{% endfor %}
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="openStartModal('{{ tmpl.template }}')">
+      Start {{ tmpl.name }}
+    </button>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Start Workflow Modal -->
+<div class="palette-overlay" id="start-modal" onclick="closeStartModalOutside(event)">
+  <div class="palette-box" style="max-width:480px;">
+    <div style="padding:20px 20px 0;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:4px;">Start Workflow</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:16px;">Orchestrate the full engineering lifecycle for a task.</div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--text-2);display:block;margin-bottom:6px;">Template</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="template-selector">
+          {% for tmpl in template_defs %}
+          <button class="btn btn-ghost btn-sm tmpl-btn" data-template="{{ tmpl.template }}" onclick="selectTemplate(this)">
+            {{ tmpl.name }}
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="selected-template" value="">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--text-2);display:block;margin-bottom:6px;">Task Description</label>
+        <textarea id="workflow-task" rows="3" placeholder="Describe the engineering task…"
+          style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical;outline:none;"></textarea>
+      </div>
+
+      <div id="modal-error" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    </div>
+
+    <div class="palette-footer" style="justify-content:flex-end;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="closeStartModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="start-btn" onclick="startWorkflow()">
+        <i data-lucide="play" style="width:13px;height:13px;"></i>Start Workflow
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterRuns(btn, status) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.run-row').forEach(row => {
+    row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
+  });
+}
+
+function openStartModal(template) {
+  document.getElementById('start-modal').classList.add('open');
+  document.getElementById('workflow-task').focus();
+  document.getElementById('modal-error').style.display = 'none';
+  if (template) selectTemplateByValue(template);
+}
+
+function closeStartModal() {
+  document.getElementById('start-modal').classList.remove('open');
+}
+
+function closeStartModalOutside(e) {
+  if (e.target === document.getElementById('start-modal')) closeStartModal();
+}
+
+function selectTemplate(btn) {
+  document.querySelectorAll('.tmpl-btn').forEach(b => b.classList.remove('active', 'btn-primary'));
+  btn.classList.add('active', 'btn-primary');
+  document.getElementById('selected-template').value = btn.dataset.template;
+}
+
+function selectTemplateByValue(val) {
+  const btn = document.querySelector(`.tmpl-btn[data-template="${val}"]`);
+  if (btn) selectTemplate(btn);
+}
+
+async function startWorkflow() {
+  const template = document.getElementById('selected-template').value;
+  const task = document.getElementById('workflow-task').value.trim();
+  const errEl = document.getElementById('modal-error');
+  const startBtn = document.getElementById('start-btn');
+
+  errEl.style.display = 'none';
+  if (!template) { errEl.textContent = 'Please select a template.'; errEl.style.display = 'block'; return; }
+  if (!task) { errEl.textContent = 'Please enter a task description.'; errEl.style.display = 'block'; return; }
+
+  startBtn.disabled = true;
+  startBtn.textContent = 'Starting…';
+
+  try {
+    const res = await fetch('/api/workflows', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({template, task}),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      closeStartModal();
+      window.location.href = '/workflows/' + json.data.run.id;
+    } else {
+      errEl.textContent = json.error?.message || 'Failed to start workflow.';
+      errEl.style.display = 'block';
+    }
+  } catch (e) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<i data-lucide="play" style="width:13px;height:13px;"></i>Start Workflow';
+    lucide.createIcons();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeStartModal();
+});
+</script>
+{% endblock %}

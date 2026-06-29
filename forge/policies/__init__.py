@@ -4,10 +4,10 @@ from forge.policies.evaluator import PolicyEvaluator
 from forge.policies.models import (
     CheckSeverity,
     CheckStatus,
+    ForgePolicy,
     PolicyCheck,
     PolicyEvaluation,
     PolicyEvaluationStatus,
-    ForgePolicy,
 )
 
 __all__ = [

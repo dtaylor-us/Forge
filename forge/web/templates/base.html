@@ -25,6 +25,9 @@
         <a class="nav-item {{ 'active' if active == 'dashboard' else '' }}" href="/" title="Dashboard">
           <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
         </a>
+        <a class="nav-item {{ 'active' if active == 'workflows' else '' }}" href="/workflows" title="Workflows">
+          <i data-lucide="git-branch-plus"></i><span>Workflows</span>
+        </a>
         <a class="nav-item {{ 'active' if active == 'repository' else '' }}" href="/repository" title="Repository">
           <i data-lucide="git-branch"></i><span>Repository</span>
         </a>
@@ -58,10 +61,6 @@
         </a>
         <a class="nav-item nav-disabled" href="#" title="Architecture (planned)" aria-disabled="true">
           <i data-lucide="network"></i><span>Architecture</span>
-          <span class="nav-badge">planned</span>
-        </a>
-        <a class="nav-item nav-disabled" href="#" title="Workflow History (planned)" aria-disabled="true">
-          <i data-lucide="history"></i><span>Workflow History</span>
           <span class="nav-badge">planned</span>
         </a>
       </div>
@@ -126,6 +125,11 @@
       <a class="palette-result" href="/">
         <div class="palette-result-icon"><i data-lucide="layout-dashboard"></i></div>
         <span class="palette-result-label">Dashboard</span>
+        <span class="palette-result-type">Page</span>
+      </a>
+      <a class="palette-result" href="/workflows">
+        <div class="palette-result-icon"><i data-lucide="git-branch-plus"></i></div>
+        <span class="palette-result-label">Workflows</span>
         <span class="palette-result-type">Page</span>
       </a>
       <a class="palette-result" href="/repository">

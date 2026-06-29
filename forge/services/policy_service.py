@@ -10,7 +10,6 @@ from forge.git.service import GitService
 from forge.patches import validate_patch_file
 from forge.policies.service import evaluate_policy, show_policy
 from forge.project.paths import ForgePaths
-from forge.verification.report import VerificationReport, VerificationStatus
 
 
 class PolicyServiceError(Exception):
@@ -39,7 +38,9 @@ def check(
     return {
         "patch": patch_meta["name"],
         "evaluation": evaluation.to_dict(),
-        "verification_report_used": str(verification_path) if verification_path else _latest_report_path(root),
+        "verification_report_used": (
+            str(verification_path) if verification_path else _latest_report_path(root)
+        ),
     }
 
 

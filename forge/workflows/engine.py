@@ -176,6 +176,8 @@ class WorkflowEngine:
         }
 
     def _stage_validate(self, run: WorkflowRun, stage: WorkflowStage) -> None:
+        from forge.git.service import GitService, GitServiceError
+        from forge.patches.service import resolve_patch_path
         from forge.services import patch_service
 
         patch_info = run.artifacts.get("patch", {})
@@ -185,9 +187,28 @@ class WorkflowEngine:
         result = patch_service.validate(self._root, patch_name)
         run.artifacts["validation"] = result
         stage.output = result
-        if not result.get("valid"):
+        if not result.get("structural_valid", result.get("valid")):
             errors = "; ".join(result.get("validation_errors", []))
-            raise WorkflowEngineError(f"Patch validation failed: {errors}")
+            raise WorkflowEngineError(
+                f"Patch validation failed: {errors}\n\n"
+                f"Next steps:\n"
+                f"  inspect:    forge patch show {patch_name}\n"
+                f"  regenerate: forge implement \"<task>\" --workset <workset>\n"
+                f"  validate:   forge patch validate {patch_name}"
+            )
+
+        patch_path = resolve_patch_path(self._root, patch_name)
+        git_svc = GitService(cwd=self._root)
+        try:
+            git_svc.apply_check(patch_path)
+        except GitServiceError as exc:
+            raise WorkflowEngineError(
+                f"Patch does not apply cleanly to the working tree: {exc}\n\n"
+                f"Next steps:\n"
+                f"  inspect:    forge patch show {patch_name}\n"
+                f"  regenerate: forge implement \"<task>\" --workset <workset>\n"
+                f"  validate:   forge patch validate {patch_name}"
+            ) from exc
 
     def _stage_verify(self, run: WorkflowRun, stage: WorkflowStage) -> None:
         from forge.services import verification_service

@@ -147,6 +147,8 @@ def validate_patch_content(content: str) -> tuple[bool, list[str], list[str]]:
 
     if not any(line.startswith("@@") for line in lines):
         errors.append("Patch must contain at least one hunk marker beginning with '@@'.")
+    elif _has_orphan_hunk(lines):
+        errors.append("Patch contains a hunk marker '@@' without a preceding file header.")
 
     return not errors, errors, extract_affected_files(content)
 
@@ -165,6 +167,17 @@ def extract_affected_files(content: str) -> list[str]:
             _add_file(files, _strip_header_path(line[4:]))
 
     return files
+
+
+def _has_orphan_hunk(lines: list[str]) -> bool:
+    """Return True if any @@ hunk marker lacks a preceding file header."""
+    has_header = False
+    for line in lines:
+        if line.startswith("diff --git ") or line.startswith("--- ") or line.startswith("+++ "):
+            has_header = True
+        elif line.startswith("@@") and not has_header:
+            return True
+    return False
 
 
 def _first_nonempty_line(lines: list[str]) -> str:

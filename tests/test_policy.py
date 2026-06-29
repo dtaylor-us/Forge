@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -15,11 +14,9 @@ from forge.git.service import GitService, GitServiceError
 from forge.policies.defaults import default_policy, load_policy
 from forge.policies.evaluator import PolicyEvaluator
 from forge.policies.models import (
-    CheckStatus,
     ForgePolicy,
     PolicyEvaluationStatus,
 )
-from forge.services import apply_service, policy_service
 
 runner = CliRunner()
 
@@ -29,11 +26,19 @@ runner = CliRunner()
 @pytest.fixture()
 def tmp_git_repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "test@forge.dev"], cwd=tmp_path, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Forge Test"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@forge.dev"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Forge Test"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
     (tmp_path / "hello.py").write_text("print('hello')\n")
     subprocess.run(["git", "add", "hello.py"], cwd=tmp_path, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True
+    )
     return tmp_path
 
 

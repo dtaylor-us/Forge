@@ -15,7 +15,6 @@ from forge.commands.doctor import CheckResult, run_doctor
 from forge.commands.project_context import build_project_explanation_prompt
 from forge.config.manager import ConfigManager
 from forge.execution import ExecutionServiceError
-from forge.services.apply_service import ApplyError, PolicyBlockedError
 from forge.memory.store import MemoryStoreError
 from forge.models.errors import ModelProviderError
 from forge.models.manager import ModelManager, ModelNotFoundError
@@ -36,6 +35,7 @@ from forge.services import (
     workflow_service,
     workset_service,
 )
+from forge.services.apply_service import ApplyError, PolicyBlockedError
 from forge.utils.logging import configure_logging
 from forge.version import __version__
 from forge.web.app import create_app
@@ -1431,7 +1431,7 @@ def git_status(
         console.print("[red]Not a git repository.[/red]")
         raise typer.Exit(code=1)
 
-    console.print(f"Repository: git")
+    console.print("Repository: git")
     console.print(f"Branch: {result['branch']}")
     console.print(f"Commit: {result['commit']}")
     console.print(f"Clean: {'true' if result['clean'] else 'false'}")
@@ -1535,8 +1535,9 @@ def policy_check(
     console.print(f"Patch: {result['patch']}")
 
     for check in evaluation["checks"]:
-        icon = "✓" if check["status"] == "pass" else ("⚠" if check["status"] == "warn" else ("–" if check["status"] == "skip" else "✗"))
-        sev_color = "green" if check["status"] == "pass" else ("yellow" if check["status"] in ("warn", "skip") else "red")
+        st = check["status"]
+        icon = "✓" if st == "pass" else ("⚠" if st == "warn" else ("–" if st == "skip" else "✗"))
+        sev_color = "green" if st == "pass" else ("yellow" if st in ("warn", "skip") else "red")
         console.print(f"  [{sev_color}]{icon}[/{sev_color}] {check['name']}: {check['message']}")
 
     raise typer.Exit(code=0 if status == "pass" else 1)
@@ -1568,6 +1569,37 @@ def apply_command(
 ) -> None:
     """Apply a patch after policy evaluation and confirmation."""
     resolved = project_service.resolve_project_root(root)
+
+    # Validate patch existence and structure before prompting
+    try:
+        pre_check = patch_service.validate(resolved.root, patch_path_or_name)
+    except PatchError as exc:
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Patch not found:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if not pre_check.get("valid"):
+        errors = "; ".join(pre_check.get("validation_errors", []))
+        suggestions = pre_check.get("suggestions", [])
+        if output_json:
+            payload = {"error": f"Patch is invalid: {errors}", "patch": pre_check}
+            console.print_json(json.dumps(payload))
+        else:
+            console.print("[red]Patch validation failed.[/red]\n")
+            structural = pre_check.get("structural_valid", True)
+            apply_ok = pre_check.get("apply_check_valid")
+            console.print(f"  Structural diff:  {'pass' if structural else 'fail'}")
+            if apply_ok is not None:
+                console.print(f"  Git apply check:  {'pass' if apply_ok else 'fail'}")
+            if errors:
+                console.print(f"\nReason:\n  {errors}")
+            if suggestions:
+                console.print("\nSuggested next steps:")
+                for s in suggestions:
+                    console.print(f"  - {s}")
+        raise typer.Exit(code=1)
 
     if not yes:
         confirm = typer.confirm(f"Apply patch '{patch_path_or_name}' to the working tree?")
@@ -1672,7 +1704,7 @@ def _render_workflow_run(run: dict) -> None:
             import os
 
             patch_name = os.path.basename(patch_path)
-            console.print(f"\nPatch ready:\n\n  forge apply patches/{patch_name}")
+            console.print(f"\nPatch ready:\n\n  forge apply {patch_name}")
     else:
         console.print(f"[red]Workflow failed.[/red] Status: {overall}")
         for stage in run.get("stages", []):

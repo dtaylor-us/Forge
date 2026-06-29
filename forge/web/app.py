@@ -20,6 +20,7 @@ from forge.web.routes import (
     planning,
     project,
     repository,
+    workflows,
     worksets,
 )
 from forge.web.schemas import error_response
@@ -38,6 +39,7 @@ def create_app(root: Path | str | None = None) -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
     app.include_router(dashboard.router)
+    app.include_router(workflows.router)
     app.include_router(project.router)
     app.include_router(repository.router)
     app.include_router(worksets.router)

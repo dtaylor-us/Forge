@@ -105,8 +105,15 @@ STRICT OUTPUT CONTRACT:
 - Preserve existing architecture and style.
 - Do not include secrets.
 - Do not perform destructive changes.
-- Include valid hunk markers.
+- Include valid hunk markers with correct line counts.
 - Use paths relative to the repository root.
+
+CRITICAL DIFF RULES:
+- For EXISTING files (listed in the workset context below), NEVER use a new-file diff
+  from /dev/null. Use standard unified diff hunks showing the exact lines changed.
+- Only use /dev/null in --- header when creating a file that does NOT currently exist.
+- Hunk line counts in @@ -L,N +L,N @@ markers MUST be accurate. Count carefully.
+- The output must pass: git apply --check
 """
 
 _IMPLEMENTATION_TEMPLATE = """\
@@ -126,7 +133,7 @@ Query: {query}
 Root: {root}
 Generated: {generated_at}
 
-# Workset Files Summary
+# Workset Files (ALL EXISTING in repository — do NOT use /dev/null for these)
 
 | File | Category | Score | Lines | Symbols |
 | --- | --- | ---: | ---: | --- |
@@ -148,6 +155,9 @@ Return only a raw unified diff.
 No Markdown fences.
 No explanations.
 Use diff headers and valid hunk markers.
+All files in the Workset Files table ALREADY EXIST — use normal unified diff hunks,
+never /dev/null for them.
+Hunk counts in @@ markers must be exact.
 """
 
 
