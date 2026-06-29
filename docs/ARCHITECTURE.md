@@ -264,6 +264,56 @@ evaluated. `--force` bypasses policy failures only when
 
 No model calls occur during apply. No repair loop exists.
 
+## Engineering Workflow Engine
+
+`forge/workflows/` is a pure orchestration package. It contains no business
+logic and owns no domain models beyond workflow state tracking.
+
+**Package layout:**
+
+```
+forge/workflows/
+    __init__.py       — public surface
+    models.py         — WorkflowTemplate, WorkflowRun, WorkflowStage, WorkflowStatus
+    templates.py      — Feature, BugFix, Refactor WorkflowDefinitions
+    registry.py       — WorkflowRegistry: read/write .forge/workflows/*.json
+    engine.py         — WorkflowEngine: stage loop, error containment
+    workflow.py       — convenience re-exports
+```
+
+`forge/services/workflow_service.py` is the public entry point. CLI calls
+`workflow_service.run_workflow(root, template, task)`. The service constructs
+a `WorkflowEngine` and delegates execution.
+
+**Stage execution model:**
+
+`WorkflowEngine.run()` iterates eight named stages in fixed order:
+
+```
+repository → workset → context → plan → patch → validate → verify → policy
+```
+
+Each stage calls exactly one existing application service. On failure the run
+is marked `failed`, remaining stages are skipped, and all produced artifacts
+are preserved in the `WorkflowRun`. The registry persists the run record after
+every stage so partial state is always recoverable.
+
+**Artifact lineage:**
+
+Each `WorkflowRun` is registered as a `workflow` artifact in `.forge/workflows/`.
+The `ArtifactRegistry` discovers workflow artifacts via `_workflow_artifacts()`
+in `forge/artifacts/discovery.py`. Relationships to workset and patch artifacts
+are emitted as `ArtifactRelationship` entries.
+
+**Key invariants:**
+
+- No patch is automatically applied. The workflow stops before `apply`.
+- The engine imports services inside stage methods (lazy imports) to keep the
+  module boundary clean and allow service-level mocking in tests.
+- `WorkflowEngine` never calls models directly. All model calls remain inside
+  `PlanningService` and `ImplementationService`.
+- `WorkflowRegistry` is the only component that writes to `.forge/workflows/`.
+
 ## Future Services
 
 Future orchestration should follow the `PlanningService` pattern:

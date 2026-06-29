@@ -1,5 +1,40 @@
 # Dev Log
 
+## 2026-06-28 — Phase 6.0: Engineering Workflow Engine
+
+### Completed
+
+- Added `forge/workflows/` orchestration package: `models.py`, `templates.py`, `registry.py`, `engine.py`, `workflow.py`, `__init__.py`.
+- `WorkflowTemplate` StrEnum: `feature`, `bugfix`, `refactor`, `custom`.
+- `WorkflowRun` dataclass tracks id, template, task, repository, status, stages, artifacts, workset/patch/verification/policy references, and timing.
+- `WorkflowStage` dataclass captures name, description, service, status, timing, artifact references, and error message.
+- `WorkflowDefinition` describes static template metadata (stage names, output artifact types).
+- Three initial templates: `Feature`, `BugFix`, `Refactor` — each runs identical eight-stage pipeline.
+- `WorkflowEngine` orchestrates eight stages in fixed order: repository → workset → context → plan → patch → validate → verify → policy. Each stage calls exactly one existing application service. Stage failure stops the run, preserves prior artifacts, and marks status `failed`.
+- `WorkflowRegistry` reads/writes workflow run records to `.forge/workflows/*.json`.
+- `forge/services/workflow_service.py` is the public entry point: `run_workflow`, `list_templates`, `list_runs`, `show_run`.
+- `forge/artifacts/discovery.py` extended with `_workflow_artifacts()` — workflow runs surface as `ArtifactType.workflow` with relationships to workset and patch artifacts.
+- `forge/project/paths.py` extended with `workflows_dir = .forge/workflows`.
+- CLI commands: `forge workflow feature|bugfix|refactor "<task>"`, `forge workflow run <template> "<task>"`, `forge workflow templates`, `forge workflow list`, `forge workflow show <id>`. All support `--json`.
+- 23 new tests in `tests/test_workflow.py` covering templates, models, registry, stage ordering, all three workflow types, stage failure, partial artifact preservation, no-apply guarantee, artifact registration, JSON output, artifact discovery, service delegation, and service reuse invariants.
+- No existing tests broken. Total test count: 424.
+
+### Architecture Notes
+
+The Workflow Engine is a pure orchestration layer. It contains no business logic, no domain models beyond run state, and no model calls. All substantive work remains in existing application services. The engine imports services inside stage methods (lazy local imports) to keep the module boundary clean and make service-level mocking straightforward in tests.
+
+The `WorkflowRegistry` is the sole writer to `.forge/workflows/`. The `ArtifactRegistry` discovers workflow runs read-only via `forge/artifacts/discovery.py`.
+
+No patch is ever automatically applied. The workflow stops at policy evaluation and emits `forge apply patches/<name>` as the next step.
+
+### Design Decisions
+
+- Three templates share identical stage pipelines by intent. Template identity is preserved in run metadata and artifact descriptions. Future templates (Documentation, Review, Repair) can introduce different stage sets without redesign.
+- Stage failure preserves all artifacts produced before the failing stage. This supports future repair loop workflows that resume from the last successful stage.
+- `WorkflowEngine` uses local imports inside stage methods rather than module-level imports so tests can patch at the service module level without import-order sensitivity.
+
+---
+
 ## 2026-06-28 — Phase 5.8: Engineering Policies and Guarded Patch Apply
 
 ### Completed

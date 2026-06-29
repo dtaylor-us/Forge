@@ -33,6 +33,7 @@ from forge.services import (
     project_service,
     repository_service,
     verification_service,
+    workflow_service,
     workset_service,
 )
 from forge.utils.logging import configure_logging
@@ -54,6 +55,7 @@ memory_app = typer.Typer(help="Manage the engineering memory knowledge base.")
 patch_app = typer.Typer(help="Inspect and validate saved patches.")
 git_app = typer.Typer(help="Inspect Git repository state.")
 policy_app = typer.Typer(help="Inspect and evaluate engineering policy.")
+workflow_app = typer.Typer(help="Run guided engineering workflows.")
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
@@ -63,6 +65,7 @@ app.add_typer(memory_app, name="memory")
 app.add_typer(patch_app, name="patch")
 app.add_typer(git_app, name="git")
 app.add_typer(policy_app, name="policy")
+app.add_typer(workflow_app, name="workflow")
 console = Console()
 
 
@@ -1613,6 +1616,222 @@ def apply_command(
             console.print("[yellow]Note: policy overridden with --force[/yellow]")
 
     raise typer.Exit(code=0)
+
+
+def _run_workflow(
+    template: str,
+    task: str,
+    root: Path | None,
+    model: str | None,
+    output_json: bool,
+) -> None:
+    """Shared workflow execution logic used by feature / bugfix / refactor commands."""
+    from forge.services.workflow_service import WorkflowServiceError
+
+    resolved = project_service.resolve_project_root(root)
+    if not output_json:
+        console.print(f"[bold]forge workflow {template}[/bold] — {task}")
+        console.print("")
+
+    try:
+        run = workflow_service.run_workflow(resolved.root, template, task, model=model)
+    except WorkflowServiceError as exc:
+        if output_json:
+            console.print_json(json.dumps({"error": str(exc), "status": "failed"}))
+        else:
+            console.print(f"[red]Workflow error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if output_json:
+        console.print_json(json.dumps(run))
+        raise typer.Exit(code=0 if run.get("status") == "completed" else 1)
+
+    _render_workflow_run(run)
+    raise typer.Exit(code=0 if run.get("status") == "completed" else 1)
+
+
+def _render_workflow_run(run: dict) -> None:
+    for stage in run.get("stages", []):
+        name = stage["name"]
+        status = stage["status"]
+        if status == "completed":
+            console.print(f"  [green]✓[/green] {name}")
+        elif status == "failed":
+            console.print(f"  [red]✗[/red] {name}: {stage.get('error', '')}")
+        elif status == "skipped":
+            console.print(f"  [dim]–[/dim] {name}")
+        else:
+            console.print(f"  [yellow]?[/yellow] {name}")
+
+    console.print("")
+    overall = run.get("status", "unknown")
+    if overall == "completed":
+        console.print("[green]Workflow complete.[/green]")
+        patch_path = run.get("patch_path")
+        if patch_path:
+            import os
+
+            patch_name = os.path.basename(patch_path)
+            console.print(f"\nPatch ready:\n\n  forge apply patches/{patch_name}")
+    else:
+        console.print(f"[red]Workflow failed.[/red] Status: {overall}")
+        for stage in run.get("stages", []):
+            if stage["status"] == "failed":
+                console.print(f"  Failed stage: {stage['name']}")
+                if stage.get("error"):
+                    console.print(f"  Error: {stage['error']}")
+
+
+@workflow_app.command("feature")
+def workflow_feature(
+    task: Annotated[str, typer.Argument(help="Feature description.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Model to use.")] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Run a Feature engineering workflow."""
+    _run_workflow("feature", task, root, model, output_json)
+
+
+@workflow_app.command("bugfix")
+def workflow_bugfix(
+    task: Annotated[str, typer.Argument(help="Bug description.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Model to use.")] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Run a Bug Fix engineering workflow."""
+    _run_workflow("bugfix", task, root, model, output_json)
+
+
+@workflow_app.command("refactor")
+def workflow_refactor(
+    task: Annotated[str, typer.Argument(help="Refactor description.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Model to use.")] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Run a Refactor engineering workflow."""
+    _run_workflow("refactor", task, root, model, output_json)
+
+
+@workflow_app.command("run")
+def workflow_run(
+    template: Annotated[str, typer.Argument(help="Workflow template name.")],
+    task: Annotated[str, typer.Argument(help="Engineering task description.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Model to use.")] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Run an engineering workflow by template name."""
+    _run_workflow(template, task, root, model, output_json)
+
+
+@workflow_app.command("templates")
+def workflow_templates(
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """List available workflow templates."""
+    templates = workflow_service.list_templates()
+    if output_json:
+        console.print_json(json.dumps(templates))
+        return
+    table = Table(title="Workflow Templates")
+    table.add_column("Template")
+    table.add_column("Name")
+    table.add_column("Description")
+    table.add_column("Stages")
+    for tmpl in templates:
+        table.add_row(
+            tmpl["template"],
+            tmpl["name"],
+            tmpl["description"],
+            ", ".join(tmpl["stages"]),
+        )
+    console.print(table)
+
+
+@workflow_app.command("list")
+def workflow_list(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    template: Annotated[
+        str | None,
+        typer.Option("--template", help="Filter by template name."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """List workflow runs for this repository."""
+    resolved = project_service.resolve_project_root(root)
+    runs = workflow_service.list_runs(resolved.root, template=template)
+    if output_json:
+        console.print_json(json.dumps(runs))
+        return
+    if not runs:
+        console.print("[yellow]No workflow runs found.[/yellow]")
+        return
+    table = Table(title="Workflow Runs")
+    table.add_column("ID")
+    table.add_column("Template")
+    table.add_column("Status")
+    table.add_column("Task")
+    table.add_column("Duration", justify="right")
+    for run in runs:
+        dur = run.get("duration_seconds")
+        dur_str = f"{dur:.1f}s" if dur is not None else "—"
+        table.add_row(
+            run.get("id", "")[:12],
+            run.get("template", ""),
+            run.get("status", ""),
+            (run.get("task") or "")[:60],
+            dur_str,
+        )
+    console.print(table)
+
+
+@workflow_app.command("show")
+def workflow_show(
+    run_id: Annotated[str, typer.Argument(help="Workflow run ID.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show details of a workflow run."""
+    resolved = project_service.resolve_project_root(root)
+    run = workflow_service.show_run(resolved.root, run_id)
+    if run is None:
+        console.print(f"[red]Workflow run {run_id!r} not found.[/red]")
+        raise typer.Exit(code=1)
+    if output_json:
+        console.print_json(json.dumps(run))
+        return
+    console.print(f"[bold]Run:[/bold] {run['id']}")
+    console.print(f"[bold]Template:[/bold] {run['template']}")
+    console.print(f"[bold]Status:[/bold] {run['status']}")
+    console.print(f"[bold]Task:[/bold] {run['task']}")
+    console.print(f"[bold]Repository:[/bold] {run['repository']}")
+    console.print(f"[bold]Started:[/bold] {run.get('started_at', '—')}")
+    console.print(f"[bold]Completed:[/bold] {run.get('completed_at', '—')}")
+    if run.get("patch_path"):
+        console.print(f"[bold]Patch:[/bold] {run['patch_path']}")
+    console.print("")
+    _render_workflow_run(run)
 
 
 def main() -> None:

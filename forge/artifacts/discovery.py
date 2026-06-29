@@ -31,6 +31,7 @@ def discover_artifacts(root: Path) -> list[Artifact]:
     discovered.extend(_memory_entry_artifacts(paths))
     discovered.extend(_patch_artifacts(paths))
     discovered.extend(_verification_artifacts(paths))
+    discovered.extend(_workflow_artifacts(paths))
     return sorted(discovered, key=lambda artifact: (artifact.artifact_type.value, artifact.name))
 
 
@@ -248,6 +249,52 @@ def _verification_artifacts(paths: ForgePaths) -> Iterable[Artifact]:
                 "summary": data.get("summary", {}),
                 "repository": data.get("repository", {}),
                 "strategy": data.get("strategy", {}),
+            },
+            relationships=tuple(relationships),
+        )
+
+
+def _workflow_artifacts(paths: ForgePaths) -> Iterable[Artifact]:
+    for path in _json_files(paths.workflows_dir):
+        data = read_json(path)
+        run_id = str(data.get("id") or path.stem)
+        template = str(data.get("template") or "workflow")
+        task = str(data.get("task") or "")
+        relative_path = relative_to_root(path, paths.repo_root)
+        source_id = artifact_id(ArtifactType.workflow, relative_path, run_id)
+        relationships: list[ArtifactRelationship] = []
+        workset_name = data.get("workset_name")
+        if workset_name:
+            relationships.extend(_workset_relationship(source_id, str(workset_name)))
+        patch_path = data.get("patch_path")
+        if patch_path:
+            relationships.append(
+                ArtifactRelationship(
+                    source_id=source_id,
+                    target_id=artifact_id(ArtifactType.patch, "", str(patch_path)),
+                    relationship_type="produced_patch",
+                )
+            )
+        yield Artifact(
+            id=source_id,
+            artifact_type=ArtifactType.workflow,
+            name=run_id,
+            description=f"{template}: {task[:80]}" if task else template,
+            created_at=data.get("started_at") or file_created_at(path),
+            updated_at=data.get("completed_at") or file_updated_at(path),
+            project_root=paths.repo_root,
+            relative_path=relative_path,
+            producing_service="WorkflowService",
+            producing_command=f"forge workflow {template}",
+            workset_name=str(workset_name) if workset_name else None,
+            metadata={
+                "template": template,
+                "status": data.get("status"),
+                "task": task,
+                "patch_path": patch_path,
+                "verification_status": data.get("verification_status"),
+                "policy_status": data.get("policy_status"),
+                "duration_seconds": data.get("duration_seconds"),
             },
             relationships=tuple(relationships),
         )

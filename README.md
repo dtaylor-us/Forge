@@ -308,6 +308,66 @@ Verification does not apply patches, edit source files, or start repair loops.
 
 ---
 
+# Engineering Workflow Engine
+
+Forge includes a Workflow Engine that orchestrates existing capabilities into guided end-to-end engineering workflows. The engine is a pure orchestration layer — it delegates to existing application services and produces all artifacts without applying changes.
+
+## Run a Guided Workflow
+
+```bash
+# Feature workflow
+forge workflow feature "Add Copy Mermaid button"
+
+# Bug fix workflow
+forge workflow bugfix "Fix null pointer in auth handler"
+
+# Refactor workflow
+forge workflow refactor "Extract retry logic into shared utility"
+
+# Explicit template + task form
+forge workflow run feature "Add GitHub OAuth"
+
+# JSON output
+forge workflow feature "Add Copy Mermaid button" --json
+```
+
+Each workflow executes eight stages in order:
+
+```
+Repository → Workset → Context → Plan → Patch → Validate → Verify → Policy
+```
+
+After completion, the patch is ready for review and guarded apply:
+
+```bash
+forge apply patches/<patch-name>.patch
+```
+
+## Inspect Workflow History
+
+```bash
+forge workflow list
+
+forge workflow show <run-id>
+
+forge workflow templates
+```
+
+## Workflow Artifacts
+
+Each workflow run is registered as a `workflow` artifact under `.forge/workflows/`.  The run record includes all produced artifacts:
+
+- Workset
+- Context bundle
+- Implementation plan
+- Patch
+- Verification report
+- Policy evaluation
+
+Workflow runs surface in `forge artifacts` alongside all other engineering artifacts.
+
+---
+
 # Engineering Policy and Guarded Apply
 
 Forge enforces a policy gate before any patch is applied to the working tree.
@@ -743,6 +803,7 @@ Never store secrets under `.forge/`.
 | Engineering Knowledge | ✅ Complete |
 | Planning | ✅ Complete |
 | Web Workbench | ✅ Complete |
+| Engineering Workflow Engine | ✅ Complete |
 | Guided Engineering Experience | 🚧 In Progress |
 | Architecture Intelligence | ⏳ Planned |
 | Patch Generation | ✅ Complete |
