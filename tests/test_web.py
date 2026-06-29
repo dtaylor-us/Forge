@@ -246,7 +246,7 @@ def test_decision_and_investigation_create_api(tmp_path: Path) -> None:
     assert decision.status_code == 200
     assert decision.json()["data"]["type"] == "decision"
     assert investigation.status_code == 200
-    assert investigation.json()["data"]["type"] == "bug"
+    assert investigation.json()["data"]["type"] == "investigation"
 
 
 def test_error_response_shape(tmp_path: Path) -> None:

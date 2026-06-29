@@ -19,6 +19,7 @@ _TYPE_SUBDIRS = {
     MemoryType.architecture: "architecture",
     MemoryType.bug: "bugs",
     MemoryType.decision: "decisions",
+    MemoryType.investigation: "investigations",
     MemoryType.followup: "decisions",
 }
 SCHEMA_VERSION = 1

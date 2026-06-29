@@ -103,25 +103,47 @@ def add_item(
     return item.to_dict()
 
 
-def create_decision(root: Path, title: str, summary: str, workset: str = "") -> dict[str, Any]:
+def create_decision(
+    root: Path,
+    title: str,
+    summary: str = "",
+    workset: str = "",
+    tags: list[str] | None = None,
+    related_files: list[str] | None = None,
+) -> dict[str, Any]:
     """Create an engineering decision memory item."""
+    extra_tags = list(tags) if tags else []
+    if "decision" not in extra_tags:
+        extra_tags.insert(0, "decision")
     return add_item(
         root,
         type=MemoryType.decision,
         title=title,
         summary=summary,
         workset=workset,
-        tags=["decision"],
+        tags=extra_tags,
+        related_files=related_files,
     )
 
 
-def create_investigation(root: Path, title: str, summary: str, workset: str = "") -> dict[str, Any]:
-    """Create a bug investigation memory item."""
+def create_investigation(
+    root: Path,
+    title: str,
+    summary: str = "",
+    workset: str = "",
+    tags: list[str] | None = None,
+    related_files: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create an engineering investigation memory item."""
+    extra_tags = list(tags) if tags else []
+    if "investigation" not in extra_tags:
+        extra_tags.insert(0, "investigation")
     return add_item(
         root,
-        type=MemoryType.bug,
+        type=MemoryType.investigation,
         title=title,
         summary=summary,
         workset=workset,
-        tags=["investigation"],
+        tags=extra_tags,
+        related_files=related_files,
     )

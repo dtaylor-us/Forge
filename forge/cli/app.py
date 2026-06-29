@@ -146,6 +146,22 @@ workflow_app = typer.Typer(
     ),
     rich_markup_mode="rich",
 )
+decision_app = typer.Typer(
+    help=_help_with_examples(
+        "Capture durable engineering decisions.",
+        'forge decision create "Use JWT for gateway authentication"',
+        'forge decision create "Use JWT" --summary "Chosen for statelessness" --tag auth',
+    ),
+    rich_markup_mode="rich",
+)
+investigation_app = typer.Typer(
+    help=_help_with_examples(
+        "Capture engineering findings and analysis.",
+        'forge investigation create "Planning timeout with Ollama"',
+        'forge investigation create "Planning timeout" --tag performance --workset gateway',
+    ),
+    rich_markup_mode="rich",
+)
 app.add_typer(config_app, name="config")
 app.add_typer(models_app, name="models")
 app.add_typer(repo_app, name="repo")
@@ -156,6 +172,8 @@ app.add_typer(patch_app, name="patch")
 app.add_typer(git_app, name="git")
 app.add_typer(policy_app, name="policy")
 app.add_typer(workflow_app, name="workflow")
+app.add_typer(decision_app, name="decision")
+app.add_typer(investigation_app, name="investigation")
 console = Console()
 
 
@@ -1459,6 +1477,122 @@ def memory_rebuild(
     resolved = project_service.resolve_project_root(root)
     count = memory_service.rebuild(resolved.root)["count"]
     console.print(f"[green]Memory index rebuilt.[/green] {count} item(s) indexed.")
+
+
+@memory_app.command("timeline")
+def memory_timeline(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Show engineering memory in reverse chronological order."""
+    resolved = project_service.resolve_project_root(root)
+    items = memory_service.list_timeline(resolved.root)
+    if output_json:
+        console.print_json(json.dumps(items))
+        return
+    if not items:
+        console.print("[yellow]No engineering memory found.[/yellow]")
+        console.print()
+        console.print("Create one:")
+        console.print('  forge decision create "Use JWT"')
+        console.print('  forge investigation create "Planning timeout"')
+        return
+    console.print("[bold cyan]Engineering Memory Timeline[/bold cyan]")
+    console.print()
+    for item in items:
+        date = item["created_at"][:10]
+        item_type = item["type"]
+        title = item["title"]
+        workset = f"  [{item['workset']}]" if item["workset"] else ""
+        tags = f"  {', '.join(item['tags'])}" if item["tags"] else ""
+        short_id = item["id"][:12]
+        console.print(
+            f"[dim]{date}[/dim]  [magenta]{item_type:<15}[/magenta]  {title}"
+            f"[dim]{workset}{tags}[/dim]  [dim]{short_id}[/dim]"
+        )
+
+
+@decision_app.command("create")
+def decision_create(
+    title: Annotated[str, typer.Argument(help="Decision title.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    summary: Annotated[str, typer.Option("--summary", help="Short summary.")] = "",
+    workset: Annotated[str, typer.Option("--workset", help="Related workset name.")] = "",
+    tag: Annotated[
+        list[str] | None, typer.Option("--tag", help="Tag to attach (repeatable).")
+    ] = None,
+    file: Annotated[
+        list[str] | None, typer.Option("--file", help="Related file path (repeatable).")
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Capture a durable engineering decision."""
+    resolved = project_service.resolve_project_root(root)
+    item = memory_service.create_decision(
+        resolved.root,
+        title=title,
+        summary=summary,
+        workset=workset,
+        tags=list(tag) if tag else None,
+        related_files=list(file) if file else None,
+    )
+    if output_json:
+        console.print_json(json.dumps(item))
+        return
+    console.print("[green]Decision captured.[/green]")
+    console.print()
+    console.print(f"  ID:    {item['id']}")
+    console.print(f"  Title: {item['title']}")
+    console.print(f"  Type:  {item['type']}")
+    console.print()
+    console.print("View:")
+    console.print(f"  forge memory show {item['id']}")
+
+
+@investigation_app.command("create")
+def investigation_create(
+    title: Annotated[str, typer.Argument(help="Investigation title.")],
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    summary: Annotated[str, typer.Option("--summary", help="Short summary.")] = "",
+    workset: Annotated[str, typer.Option("--workset", help="Related workset name.")] = "",
+    tag: Annotated[
+        list[str] | None, typer.Option("--tag", help="Tag to attach (repeatable).")
+    ] = None,
+    file: Annotated[
+        list[str] | None, typer.Option("--file", help="Related file path (repeatable).")
+    ] = None,
+    output_json: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """Capture engineering findings and analysis."""
+    resolved = project_service.resolve_project_root(root)
+    item = memory_service.create_investigation(
+        resolved.root,
+        title=title,
+        summary=summary,
+        workset=workset,
+        tags=list(tag) if tag else None,
+        related_files=list(file) if file else None,
+    )
+    if output_json:
+        console.print_json(json.dumps(item))
+        return
+    console.print("[green]Investigation captured.[/green]")
+    console.print()
+    console.print(f"  ID:    {item['id']}")
+    console.print(f"  Title: {item['title']}")
+    console.print(f"  Type:  {item['type']}")
+    console.print()
+    console.print("View:")
+    console.print(f"  forge memory show {item['id']}")
 
 
 @patch_app.command("list")

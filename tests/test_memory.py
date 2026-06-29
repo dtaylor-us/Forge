@@ -557,3 +557,167 @@ def test_cli_memory_rebuild_empty(tmp_path: Path) -> None:
     result = runner.invoke(app, ["memory", "rebuild", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "0" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Phase 6.3: decision / investigation CLI commands and memory timeline
+# ---------------------------------------------------------------------------
+
+
+def _empty_repo(tmp_path: Path) -> Path:
+    (tmp_path / ".git").mkdir()
+    return tmp_path
+
+
+def test_decision_create_basic(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    result = runner.invoke(
+        app, ["decision", "create", "Use JWT for gateway authentication", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Decision captured" in result.output
+    assert "forge memory show" in result.output
+    items = MemoryManager(tmp_path).list()
+    assert len(items) == 1
+    assert items[0].type == MemoryType.decision
+    assert items[0].title == "Use JWT for gateway authentication"
+    assert "decision" in items[0].tags
+
+
+def test_investigation_create_basic(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    result = runner.invoke(
+        app, ["investigation", "create", "Planning timeout with Ollama", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Investigation captured" in result.output
+    assert "forge memory show" in result.output
+    items = MemoryManager(tmp_path).list()
+    assert len(items) == 1
+    assert items[0].type == MemoryType.investigation
+    assert items[0].title == "Planning timeout with Ollama"
+    assert "investigation" in items[0].tags
+
+
+def test_decision_can_be_shown(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(app, ["decision", "create", "Use JWT", "--root", str(tmp_path)])
+    item_id = MemoryManager(tmp_path).list()[0].id
+    result = runner.invoke(app, ["memory", "show", item_id, "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Use JWT" in result.output
+
+
+def test_investigation_found_by_search(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(
+        app, ["investigation", "create", "Planning timeout with Ollama", "--root", str(tmp_path)]
+    )
+    result = runner.invoke(app, ["memory", "search", "timeout", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Planning timeout" in result.output
+
+
+def test_memory_timeline_lists_entries(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(app, ["decision", "create", "Use JWT", "--root", str(tmp_path)])
+    runner.invoke(
+        app, ["investigation", "create", "Planning timeout", "--root", str(tmp_path)]
+    )
+    result = runner.invoke(app, ["memory", "timeline", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Use JWT" in result.output
+    assert "Planning timeout" in result.output
+
+
+def test_memory_timeline_json(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(app, ["decision", "create", "Use JWT", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["memory", "timeline", "--json", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert data[0]["title"] == "Use JWT"
+
+
+def test_decision_create_with_workset(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(
+        app,
+        ["decision", "create", "Use JWT", "--workset", "gateway", "--root", str(tmp_path)],
+    )
+    item = MemoryManager(tmp_path).list()[0]
+    assert item.workset == "gateway"
+
+
+def test_decision_create_with_tags(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(
+        app,
+        [
+            "decision", "create", "Use JWT",
+            "--tag", "auth", "--tag", "security",
+            "--root", str(tmp_path),
+        ],
+    )
+    item = MemoryManager(tmp_path).list()[0]
+    assert "auth" in item.tags
+    assert "security" in item.tags
+
+
+def test_decision_create_with_file(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    runner.invoke(
+        app,
+        [
+            "decision", "create", "Use JWT",
+            "--file", "forge/auth.py",
+            "--root", str(tmp_path),
+        ],
+    )
+    item = MemoryManager(tmp_path).list()[0]
+    assert "forge/auth.py" in item.related_files
+
+
+def test_memory_timeline_empty_state(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    result = runner.invoke(app, ["memory", "timeline", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No engineering memory found" in result.output
+    assert "forge decision create" in result.output
+
+
+def test_readme_commands_work(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    r1 = runner.invoke(app, ["decision", "create", "Use JWT", "--root", str(tmp_path)])
+    assert r1.exit_code == 0
+    r2 = runner.invoke(
+        app, ["investigation", "create", "Planning timeout", "--root", str(tmp_path)]
+    )
+    assert r2.exit_code == 0
+    r3 = runner.invoke(app, ["memory", "timeline", "--root", str(tmp_path)])
+    assert r3.exit_code == 0
+    assert "Use JWT" in r3.output
+    assert "Planning timeout" in r3.output
+
+
+def test_decision_create_json(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    result = runner.invoke(
+        app, ["decision", "create", "Use JWT", "--json", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["type"] == "decision"
+    assert data["title"] == "Use JWT"
+
+
+def test_investigation_create_json(tmp_path: Path) -> None:
+    _empty_repo(tmp_path)
+    result = runner.invoke(
+        app, ["investigation", "create", "Planning timeout", "--json", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["type"] == "investigation"
+    assert data["title"] == "Planning timeout"

@@ -1,0 +1,44 @@
+{
+  "id": "f75e1b73",
+  "type": "plan",
+  "title": "add request tracing",
+  "created_at": "2026-06-29T14:21:52+00:00",
+  "repository": "/Users/derektaylor/projects/forge",
+  "workset": "workflow-feature-2722db0d",
+  "tags": [
+    "add",
+    "request",
+    "tracing",
+    "workflow",
+    "feature",
+    "2722db0d"
+  ],
+  "summary": "Implementation plan for: add request tracing",
+  "related_files": [
+    "forge/cli/app.py",
+    "README.md",
+    "forge/execution/execution_prompt.py",
+    "forge/services/planning_service.py",
+    "forge/web/routes/memory.py",
+    "forge/web/routes/patches.py",
+    "docs/ARCHITECTURE.md",
+    "docs/development/DEVELOPMENT_LOG.md",
+    "forge/context/excerpt.py",
+    "forge/execution/__init__.py",
+    "forge/execution/execution_models.py",
+    "forge/execution/execution_service.py",
+    "forge/execution/models.py",
+    "forge/execution/orchestrator.py",
+    "forge/execution/pipeline.py",
+    "forge/execution/stages.py",
+    "forge/memory/manager.py",
+    "forge/memory/store.py",
+    "forge/models/anthropic.py",
+    "forge/models/errors.py"
+  ],
+  "related_plans": [],
+  "related_worksets": [
+    "workflow-feature-2722db0d"
+  ],
+  "source_path": ""
+}

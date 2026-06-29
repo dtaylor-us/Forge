@@ -1,0 +1,477 @@
+{
+  "id": "c92605e4899c41b4",
+  "template": "feature",
+  "task": "add request tracing",
+  "repository": "/Users/derektaylor/projects/forge",
+  "status": "failed",
+  "started_at": "2026-06-29T14:23:05.715555+00:00",
+  "completed_at": "2026-06-29T14:25:05.849731+00:00",
+  "duration_seconds": 120.134176,
+  "workset_name": "workflow-feature-c92605e4",
+  "patch_path": null,
+  "verification_status": null,
+  "policy_status": null,
+  "stages": [
+    {
+      "name": "repository",
+      "description": "Detect repository",
+      "service": "RepositoryService",
+      "status": "completed",
+      "started_at": "2026-06-29T14:23:05.716368+00:00",
+      "completed_at": "2026-06-29T14:23:05.771622+00:00",
+      "duration_seconds": 0.055254,
+      "artifact_refs": [],
+      "error": null
+    },
+    {
+      "name": "workset",
+      "description": "Create workset",
+      "service": "WorksetService",
+      "status": "completed",
+      "started_at": "2026-06-29T14:23:05.772236+00:00",
+      "completed_at": "2026-06-29T14:23:05.802696+00:00",
+      "duration_seconds": 0.03046,
+      "artifact_refs": [
+        "workset:workflow-feature-c92605e4"
+      ],
+      "error": null
+    },
+    {
+      "name": "context",
+      "description": "Generate context",
+      "service": "WorksetService",
+      "status": "completed",
+      "started_at": "2026-06-29T14:23:05.803119+00:00",
+      "completed_at": "2026-06-29T14:23:05.821000+00:00",
+      "duration_seconds": 0.017881,
+      "artifact_refs": [
+        "context_bundle:/Users/derektaylor/projects/forge/.forge/context/workflow-feature-c92605e4-2026-06-29T14-23-0500-00.md"
+      ],
+      "error": null
+    },
+    {
+      "name": "plan",
+      "description": "Generate plan",
+      "service": "PlanningService",
+      "status": "failed",
+      "started_at": "2026-06-29T14:23:05.821660+00:00",
+      "completed_at": "2026-06-29T14:25:05.847256+00:00",
+      "duration_seconds": 120.025596,
+      "artifact_refs": [],
+      "error": "Model provider error: Ollama request timed out for model qwen2.5-coder:32b at http://localhost:11434 after 120 seconds. Try a smaller model or increase providers.ollama.timeout_seconds in ~/.forge/config.yaml."
+    }
+  ],
+  "artifacts": {
+    "repository": {
+      "root_path": "/Users/derektaylor/projects/forge",
+      "languages": [
+        "Python"
+      ],
+      "build_systems": [
+        "pyproject"
+      ],
+      "package_managers": [
+        "pip"
+      ],
+      "frameworks": [],
+      "source_roots": [
+        "forge"
+      ],
+      "test_roots": [
+        "tests"
+      ],
+      "important_files": [
+        "README.md",
+        "pyproject.toml"
+      ],
+      "current_branch": "main"
+    },
+    "workset": {
+      "schema_version": 1,
+      "name": "workflow-feature-c92605e4",
+      "query": "add request tracing",
+      "root": "/Users/derektaylor/projects/forge",
+      "created_at": "2026-06-29T14:23:05+00:00",
+      "updated_at": "2026-06-29T14:23:05+00:00",
+      "include_tests": false,
+      "max_results": 20,
+      "files": [
+        {
+          "path": "forge/cli/app.py",
+          "score": 27,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request', 'tracing'",
+              "points": 24
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "README.md",
+          "score": 24,
+          "category": "doc",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "important project file",
+              "points": 6
+            },
+            {
+              "signal": "match",
+              "detail": "documentation file",
+              "points": 2
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/execution_prompt.py",
+          "score": 19,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/services/planning_service.py",
+          "score": 19,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/web/routes/memory.py",
+          "score": 19,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/web/routes/patches.py",
+          "score": 19,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "score": 18,
+          "category": "doc",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "documentation file",
+              "points": 2
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "docs/development/DEVELOPMENT_LOG.md",
+          "score": 18,
+          "category": "doc",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add', 'request'",
+              "points": 16
+            },
+            {
+              "signal": "match",
+              "detail": "documentation file",
+              "points": 2
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/context/excerpt.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/__init__.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/execution_models.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/execution_service.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/models.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/orchestrator.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/pipeline.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/execution/stages.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/memory/manager.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/memory/store.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'add'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/models/anthropic.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/models/errors.py",
+          "score": 11,
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "content matched 'request'",
+              "points": 8
+            },
+            {
+              "signal": "match",
+              "detail": "source file",
+              "points": 3
+            }
+          ],
+          "manual": false
+        }
+      ]
+    },
+    "context": {
+      "path": "/Users/derektaylor/projects/forge/.forge/context/workflow-feature-c92605e4-2026-06-29T14-23-0500-00.md",
+      "content": "# Forge Context Bundle: workflow-feature-c92605e4\n\n## Metadata\n\n- Workset: workflow-feature-c92605e4\n- Query: add request tracing\n- Root: /Users/derektaylor/projects/forge\n- Generated: 2026-06-29T14:23:05+00:00\n- Files: 20\n- Character estimate: 255,592\n- Token estimate: 63,889\n\n## Workset Files\n\n| Path | Category | Score | Lines | Chars |\n| --- | --- | ---: | ---: | ---: |\n| forge/cli/app.py | source | 27 | 2,354 | 83,473 |\n| README.md | doc | 24 | 848 | 21,848 |\n| forge/execution/execution_prompt.py | source | 19 | 328 | 8,675 |\n| forge/services/planning_service.py | source | 19 | 213 | 7,172 |\n| forge/web/routes/memory.py | source | 19 | 112 | 3,674 |\n| forge/web/routes/patches.py | source | 19 | 67 | 2,412 |\n| docs/ARCHITECTURE.md | doc | 18 | 399 | 15,378 |\n| docs/development/DEVELOPMENT_LOG.md | doc | 18 | 1,450 | 75,610 |\n| forge/context/excerpt.py | source | 11 | 70 | 1,799 |\n| forge/execution/__init__.py | source | 11 | 29 | 791 |\n| forge/execution/execution_models.py | source | 11 | 19 | 393 |\n| forge/execution/execution_service.py | source | 11 | 186 | 6,271 |\n| forge/execution/models.py | source | 11 | 137 | 4,351 |\n| forge/execution/orchestrator.py | source | 11 | 101 | 3,727 |\n| forge/execution/pipeline.py | source | 11 | 36 | 1,177 |\n| forge/execution/stages.py | source | 11 | 199 | 6,783 |\n| forge/memory/manager.py | source | 11 | 77 | 2,316 |\n| forge/memory/store.py | source | 11 | 165 | 5,354 |\n| forge/models/anthropic.py | source | 11 | 123 | 4,227 |\n| forge/models/errors.py | source | 11 | 7 | 161 |\n\n## File Context\n\n### forge/cli/app.py\n\n**Reason selected**\n- match:content matched 'add', 'request', 'tracing' (+24)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Forge command-line interface.\n- Public functions: configure, version, doctor, verify, config_show, config_edit, config_set_default_model, models_command.\n\n**Detected symbols**\n- def _help_with_examples(summary: str, *examples: str)\n- def _table(title: str, **kwargs: object)\n- def _running(message: str, *, enabled: bool = True)\n- def _config_manager()\n- def _model_manager()\n- def _handle_provider_error(exc: ModelProviderError)\n- def _handle_model_not_found(exc: ModelNotFoundError)\n- def version()\n- def doctor()\n- def config_show()\n- def config_edit()\n- def models_command(ctx: typer.Context)\n- def _status(check: CheckResult)\n- def _join_values(values: list[str])\n- def _first_command(steps: object, kind: str)\n- def _render_detection(result: dict[str, object])\n- def _render_verification_report(report: dict[str, object])\n- def _status_label(status: str)\n- def _format_duration(seconds: float)\n- def _human_ecosystem(ecosystem: str)\n- def _render_workflow_run(run: dict)\n- def _add_command_examples(callback: object, *examples: str)\n- def _install_command_examples()\n- def main()\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports os\n- imports collections.abc\n- imports contextlib\n- imports pathlib\n- imports typing\n- imports typer\n- imports rich.console\n- imports rich.table\n- imports forge.commands.doctor\n- imports forge.commands.project_context\n- imports forge.config.manager\n- imports forge.execution\n- imports forge.memory.store\n- imports forge.models.errors\n- imports forge.models.manager\n- imports forge.patches\n- imports forge.planning\n- imports forge.planning.render\n\n**Relevant excerpt**\n```py\n\"\"\"Forge command-line interface.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport os\nfrom collections.abc import Iterator\nfrom contextlib import contextmanager\nfrom pathlib import Path\nfrom typing import Annotated\n\nimport typer\nfrom rich.console import Console\nfrom rich.table import Table\n\nfrom forge.commands.doctor import CheckResult, run_doctor\nfrom forge.commands.project_context import (\n    build_guardrailed_ask_prompt,\n    build_project_explanation_prompt,\n)\nfrom forge.config.manager import ConfigManager\nfrom forge.execution import ExecutionServiceError\nfrom forge.memory.store import MemoryStoreError\nfrom forge.models.errors import ModelProviderError\n... (lines omitted) ...\n        \"[bold cyan]forge[/bold cyan] - local-first AI software engineering workbench.\",\n        \"forge doctor\",\n        \"forge repo detect\",\n        'forge workset suggest \"add request tracing\"',\n    ),\n    no_args_is_help=True,\n    rich_markup_mode=\"rich\",\n... (lines omitted) ...\nworkflow_app = typer.Typer(\n    help=_help_with_examples(\n        \"Run guided engineering workflows.\",\n        'forge workflow feature \"add CSV export\"',\n        'forge workflow run bugfix \"fix failing login test\"',\n    ),\n    rich_markup_mode=\"rich\",\n... (lines omitted) ...\n    ),\n    rich_markup_mode=\"rich\",\n)\napp.add_typer(config_app, name=\"config\")\napp.add_typer(models_app, name=\"models\")\napp.add_typer(repo_app, name=\"repo\")\napp.add_typer(workset_app, name=\"workset\")\napp.add_typer(project_app, name=\"project\")\napp.add_typer(memory_app, name=\"memory\")\napp.add_typer(patch_app, name=\"patch\")\napp.add_typer(git_app, name=\"git\")\napp.add_typer(policy_app, name=\"policy\")\napp.add_typer(workflow_app, name=\"workflow\")\napp.add_typer(decision_app, name=\"decision\")\napp.add_typer(investigation_app, name=\"investigation\")\nconsole = Console()\n\n\n... (lines omitted) ...\n\n\ndef _handle_model_not_found(exc: ModelNotFoundError) -> None:\n    console.print(f\"[red]Model not found:[/red] {exc.requested_model}\")\n    console.print(\"Run [bold]forge models[/bold] to see installed models.\")\n    if exc.suggestions:\n        console.print(\"Closest installed models:\")\n... (lines omitted) ...\n    \"\"\"Verify local tools needed by Forge.\"\"\"\n    checks = run_doctor(_config_manager().load())\n    table = _table(\"Forge Doctor\")\n    table.add_column(\"Check\")\n    table.add_column(\"Status\")\n    table.add_column(\"Detail\")\n\n    for check in checks:\n        table.add_row(check.name, _status(check), check.detail)\n\n    console.print(table)\n    failed_required = [check for check in checks if check.required and not check.ok]\n... (lines omitted) ...\n        _handle_provider_error(exc)\n\n    table = _table(f\"Forge Models ({config.provider.value})\")\n    table.add_column(\"Provider\")\n    table.add_column(\"Model\")\n    table.add_column(\"Active\")\n    table.add_column(\"Details\")\n    for model in models:\n        active = \"*\" if model.name == config.default_model else \"\"\n        table.add_row(model.provider, model.name, active, model.details or \"\")\n    console.print(table)\n\n\n... (lines omitted) ...\n    prompt: Annotated[str, typer.Argument(help=\"Prompt to send to the configured model.\")],\n    model: Annotated[\n        str | None,\n        typer.Option(\"--model\", \"-m\", help=\"Model override for this request.\"),\n    ] = None,\n    timeout_seconds: Annotated[\n        int | None,\n        typer.Option(\n            \"--timeout\",\n            help=\"Request timeout in seconds for this ask.\",\n        ),\n    ] = None,\n) -> None:\n... (lines omitted) ...\ndef explain_project(\n    model: Annotated[\n        str | None,\n        typer.Option(\"--model\", \"-m\", help=\"Model override for this request.\"),\n    ] = None,\n    timeout_seconds: Annotated[\n        int | None,\n        typer.Option(\n            \"--timeout\",\n            help=\"Request timeout in seconds for this explanation.\",\n        ),\n    ] = None,\n    root: Annotated[\n... (lines omitted) ...\n    resolved = project_service.resolve_project_root(root)\n    detection = repository_service.detect(resolved.root)\n    table = _table(\"Repository Detection\")\n    table.add_column(\"Property\")\n    table.add_column(\"Value\")\n    table.add_row(\"Root path\", detection[\"root_path\"])\n... (lines omitted) ...\n```\n\n### README.md\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:important project file (+6)\n- match:documentation file (+2)\n\n**File summary**\n- Title: Forge.\n- Sections: Forge, Why Forge?, What Makes Forge Different?, Who Is Forge For?, \ud83d\udc68\u200d\ud83d\udcbb Software Engineers, \ud83c\udfd7 Software Architects.\n- First paragraph: > **AI-Native Software Engineering Workbench**\n\n**Relevant excerpt**\n```md\n# Forge\n\n> **AI-Native Software Engineering Workbench**\n>\n> **Understand Software Before You Change It**\n\n[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)]()\n[![CLI](https://img.shields.io/badge/Interface-CLI%20%7C%20Web%20UI-orange)]()\n[![Local First](https://img.shields.io/badge/Local-First-success)]()\n[![AI Providers](https://img.shields.io/badge/Providers-Ollama%20%7C%20OpenAI%20%7C%20Anthropic-blue)]()\n[![Status](https://img.shields.io/badge/Status-Active%20Development-orange)]()\n[![License](https://img.shields.io/badge/License-MIT-green)]()\n\nForge is an **AI-native software engineering workbench** that helps engineers understand, plan, and evolve software using **deterministic repository intelligence**, **engineering knowledge**, and **architecture-aware workflows**.\n\nRather than immediately asking an AI to write code, Forge first builds engineering context that both humans and AI can trust.\n\n---\n\n# Why Forge?\n\nModern AI coding tools excel at implementation.\n\nForge focuses on everything that should happen **before implementation**.\n\nInstead of asking an AI:\n\n> \"Write code.\"\n\nForge asks:\n\n- What kind of repository is this?\n... (lines omitted) ...\n\nforge workset context auth\n\nforge plan \"Add GitHub OAuth\" --workset auth\n```\n\nWorkflow\n... (lines omitted) ...\n```bash\nforge workset create copy-mermaid --query \"mermaid copy button\"\n\nforge implement \"Add a Copy Mermaid button next to rendered Mermaid diagrams\" \\\n  --workset copy-mermaid\n\nforge patch show <generated-patch>\n... (lines omitted) ...\n\n```bash\n# Feature workflow\nforge workflow feature \"Add Copy Mermaid button\"\n\n# Bug fix workflow\nforge workflow bugfix \"Fix null pointer in auth handler\"\n... (lines omitted) ...\nforge workflow refactor \"Extract retry logic into shared utility\"\n\n# Explicit template + task form\nforge workflow run feature \"Add GitHub OAuth\"\n\n# JSON output\nforge workflow feature \"Add Copy Mermaid button\" --json\n```\n\nEach workflow executes eight stages in order:\n... (lines omitted) ...\n## Generate a Plan\n\n```bash\nforge plan \"Add GitHub OAuth\" --workset authentication\n```\n\nThe model receives structured engineering context rather than a blind prompt.\n... (lines omitted) ...\n| Repository | Engineering overview with detected languages, frameworks, package managers, roots, important files, and build systems |\n| Worksets | Build, inspect, refresh, and relate task-scoped file sets to plans, patches, context bundles, and artifacts |\n| Planning | Generate implementation plans and browse saved plan artifacts connected to execution, memory, patches, and verification |\n| Execution | Read-only visualization of the prepared `ExecutionRequest`, selected model, pipeline stages, prompt summary, memory summary, and context summary |\n| Artifacts | Unified Artifact Explorer backed by the read-only registry for repositories, worksets, context bundles, plans, memory entries, patches, and workflows |\n| Patches | Patch Explorer for saved unified diffs with affected files, validation state, source metadata, show, validate, and download actions |\n| Engineering Memory | Search decisions, investigations, plans, lessons, and navigate naturally to plans, execution, patches, and worksets |\n... (lines omitted) ...\nPlan\n        |\n        v\nExecution Request\n        |\n        v\nPatch\n... (lines omitted) ...\n\n- Update the Development Log\n- Create ADRs for architectural decisions\n- Add tests for every meaningful feature\n- Keep repository intelligence deterministic\n- Preserve clean architecture\n- Update documentation alongside user-facing changes\n... (lines omitted) ...\n```\n\n### forge/execution/execution_prompt.py\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Build Engineering Execution prompts from prepared orchestration inputs.\n- Public functions: build_execution_prompt, build_implementation_prompt, build_repair_prompt.\n\n**Detected symbols**\n- def _is_test_file(path: str)\n\n**Dependency hints**\n- imports __future__\n- imports forge.context.bundle\n- imports forge.memory.search\n- imports forge.planning.planner\n- imports forge.planning.prompts\n\n**Relevant excerpt**\n```py\n\"\"\"Build Engineering Execution prompts from prepared orchestration inputs.\"\"\"\n\nfrom __future__ import annotations\n\nfrom forge.context.bundle import ContextBundle\nfrom forge.memory.search import MemorySearchResult\nfrom forge.planning.planner import ImplementationPlan\nfrom forge.planning.prompts import build_context_sections, build_memory_section\n\n_EXECUTION_SYSTEM_INSTRUCTIONS = \"\"\"\\\nYou are a senior software engineer preparing for Engineering Execution.\n\nSTRICT RULES:\n- Do NOT generate code patches or diffs.\n- Do NOT claim any files have been modified.\n- Do NOT modify any files.\n- Do NOT invoke git.\n- Reason only from the task, workset context, engineering memory, and implementation plan.\n- Preserve human control: describe intended execution inputs and constraints, not actions taken.\n- Keep provider-specific assumptions out of the response.\n- Leave room for future patch generation, validation, review, application, verification, and repair.\n\nOutput format: Markdown with the exact section headings specified in the prompt.\n\"\"\"\n\n_EXECUTION_TEMPLATE = \"\"\"\\\n... (lines omitted) ...\n\n---\n\n# Execution Request\n\n## Task\n{task}\n... (lines omitted) ...\nAt the end of the brief, include this footer verbatim:\n\n---\n*This is an execution preparation request only. No files were modified.*\n*Workset used: {workset_name}. Model: {{model_placeholder}}.*\n\"\"\"\n\n... (lines omitted) ...\n\n## Test File Requirement\n\nThe task explicitly requests tests. The Workset Files table above includes test files.\nYou MUST include changes to those test files in your patch.\nDo not return a patch that only modifies source files when the task requests tests.\n\"\"\"\n\n_TEST_MISSING_NOTE = \"\"\"\\\n\n## Test File Warning\n\nThe task requests tests, but no test files are present in this workset.\nThe patch will not include test changes unless test files are added to the workset.\n\"\"\"\n\n\n... (lines omitted) ...\n\n---\n\n# Patch Repair Request\n\nThe patch you previously generated failed validation. You must return a corrected raw unified diff.\n\n... (lines omitted) ...\n```\n\n### forge/services/planning_service.py\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Planning application service.\n- Defines class: PlanningService.\n- Public functions: generate_plan, generate_payload, plan_payload, generate.\n\n**Detected symbols**\n- class PlanningService\n- def plan_payload(plan: ImplementationPlan, *, memory_used...)\n- def _extract_tags(task: str, workset: str)\n\n**Dependency hints**\n- imports __future__\n- imports collections.abc\n- imports pathlib\n- imports typing\n- imports forge.context.bundle\n- imports forge.memory.manager\n- imports forge.memory.models\n- imports forge.memory.search\n- imports forge.models.errors\n- imports forge.models.manager\n- imports forge.planning.planner\n- imports forge.planning.prompts\n- imports forge.planning.store\n- imports forge.project.paths\n- imports forge.worksets.store\n- imports datetime\n- imports re\n\n**Relevant excerpt**\n```py\n\"\"\"Planning application service.\n\nApplication services own workflow coordination across deterministic domain\npackages, provider abstractions, and project-local infrastructure. Planning is\nthe reference pattern for future execution, verification, patch, and\narchitecture services.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom collections.abc import Callable\nfrom pathlib import Path\nfrom typing import Any\n\nfrom forge.context.bundle import ContextBundle, generate_bundle\nfrom forge.memory.manager import MemoryManager\nfrom forge.memory.models import MemoryType\nfrom forge.memory.search import search_memory\nfrom forge.models.errors import ModelProviderError\nfrom forge.models.manager import ModelManager, ModelNotFoundError\nfrom forge.planning.planner import ImplementationPlan, PlannerError\nfrom forge.planning.prompts import build_planning_prompt\nfrom forge.planning.store import save_plan\nfrom forge.project.paths import ForgePaths\n... (lines omitted) ...\n                timeout_seconds=timeout_seconds,\n            )\n        except ModelNotFoundError as exc:\n            raise PlannerError(f\"Model not found: {exc.requested_model}\") from exc\n        except ModelProviderError as exc:\n            raise PlannerError(f\"Model provider error: {exc}\") from exc\n\n... (lines omitted) ...\n            mem_manager = MemoryManager.from_root(root)\n            related_files = [f.path for f in bundle.files]\n            related_plans = [r.item.id for r in memory_results if r.item.type == MemoryType.plan]\n            item = mem_manager.add(\n                type=MemoryType.plan,\n                title=task,\n                repository=str(root),\n... (lines omitted) ...\n```\n\n### forge/web/routes/memory.py\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Engineering memory routes.\n- Public functions: memory_page, memory_detail_page, memory_search_api, memory_timeline_api, memory_add_api, decision_create_api, investigation_create_api.\n\n**Detected symbols**\n- def memory_page(request: Request)\n- def memory_detail_page(request: Request, item_id: str)\n- def memory_search_api(request: Request, q: str = \"\", max_resul...)\n- def memory_timeline_api(request: Request)\n\n**Dependency hints**\n- imports __future__\n- imports fastapi\n- imports fastapi.responses\n- imports forge.memory.models\n- imports forge.services\n- imports forge.web.deps\n- imports forge.web.schemas\n\n**Relevant excerpt**\n```py\n\"\"\"Engineering memory routes.\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import APIRouter, Body, Request\nfrom fastapi.responses import HTMLResponse\n\nfrom forge.memory.models import MemoryType\nfrom forge.services import memory_service\nfrom forge.web.deps import repo_root, template_context, templates\nfrom forge.web.schemas import error_response, success\n\nrouter = APIRouter()\nJSON_BODY = Body(default_factory=dict)\n\n\n@router.get(\"/memory\", response_class=HTMLResponse)\ndef memory_page(request: Request) -> HTMLResponse:\n    context = template_context(\n        request,\n        active=\"memory\",\n        items=memory_service.list_timeline(repo_root(request)),\n    )\n    return templates(request).TemplateResponse(request, \"memory.html\", context)\n\n\n@router.get(\"/memory/{item_id}\", response_class=HTMLResponse)\ndef memory_detail_page(request: Request, item_id: str) -> HTMLResponse:\n    try:\n        item = memory_service.get(repo_root(request), item_id)\n    except Exception as exc:\n        return templates(request).TemplateResponse(\n            request,\n            \"error.html\",\n            template_context(request, active=\"memory\", message=str(exc)),\n            status_code=404,\n        )\n    return templates(request).TemplateResponse(\n        request,\n        \"memory_detail.html\",\n        template_context(request, active=\"memory\", item=item),\n    )\n\n\n@router.get(\"/api/memory/search\")\ndef memory_search_api(request: Request, q: str = \"\", max_results: int = 10):\n    return success(memory_service.search(repo_root(request), q, max_results=max_results))\n\n\n@router.get(\"/api/memory/timeline\")\ndef memory_timeline_api(request: Request):\n    return success({\"items\": memory_service.list_timeline(repo_root(request))})\n\n\n@router.post(\"/api/memory/add\")\ndef memory_add_api(\n    request: Request,\n    payload: dict[str, object] = JSON_BODY,\n):\n    try:\n... (lines omitted) ...\n        if isinstance(tags, str):\n            tags = [tag.strip() for tag in tags.split(\",\") if tag.strip()]\n        return success(\n            memory_service.add_item(\n                repo_root(request),\n                type=MemoryType(type_name),\n                title=str(payload.get(\"title\", \"\")),\n                summary=str(payload.get(\"summary\", \"\")),\n... (lines omitted) ...\n\n@router.post(\"/api/decisions/create\")\ndef decision_create_api(\n    request: Request,\n    payload: dict[str, object] = JSON_BODY,\n):\n    try:\n        return success(\n            memory_service.create_decision(\n                repo_root(request),\n                str(payload.get(\"title\", \"\")),\n                str(payload.get(\"summary\", \"\")),\n                str(payload.get(\"workset\", \"\")),\n... (lines omitted) ...\n\n@router.post(\"/api/investigations/create\")\ndef investigation_create_api(\n    request: Request,\n    payload: dict[str, object] = JSON_BODY,\n):\n    try:\n        return success(\n            memory_service.create_investigation(\n                repo_root(request),\n                str(payload.get(\"title\", \"\")),\n                str(payload.get(\"summary\", \"\")),\n                str(payload.get(\"workset\", \"\")),\n... (lines omitted) ...\n```\n\n### forge/web/routes/patches.py\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Patch explorer routes.\n- Public functions: patches_page, patches_api, patch_show_api, patch_validate_api.\n\n**Detected symbols**\n- def patches_page(request: Request)\n- def patches_api(request: Request)\n- def patch_show_api(request: Request, name: str)\n- def patch_validate_api(request: Request, name: str)\n- def _enrich_patch(patch: dict[str, object] | None)\n\n**Dependency hints**\n- imports __future__\n- imports fastapi\n- imports fastapi.responses\n- imports forge.services\n- imports forge.web.deps\n- imports forge.web.schemas\n\n**Relevant excerpt**\n```py\n\"\"\"Patch explorer routes.\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import APIRouter, Request\nfrom fastapi.responses import HTMLResponse\n\nfrom forge.services import patch_service\nfrom forge.web.deps import repo_root, template_context, templates\nfrom forge.web.schemas import error_response, success\n\nrouter = APIRouter()\n\n\n@router.get(\"/patches\", response_class=HTMLResponse)\ndef patches_page(request: Request) -> HTMLResponse:\n    root = repo_root(request)\n    patches = [_enrich_patch(patch) for patch in patch_service.list_all(root)]\n    selected = patch_service.show(root, patches[0][\"name\"]) if patches else None\n    context = template_context(\n        request,\n        active=\"patches\",\n        patches=patches,\n        selected=_enrich_patch(selected) if selected else None,\n    )\n    return templates(request).TemplateResponse(request, \"patches.html\", context)\n\n\n@router.get(\"/api/patches\")\ndef patches_api(request: Request) -> dict[str, object]:\n    patches = [_enrich_patch(patch) for patch in patch_service.list_all(repo_root(request))]\n    return success({\"patches\": patches})\n\n\n@router.get(\"/api/patches/{name}\")\ndef patch_show_api(request: Request, name: str) -> dict[str, object]:\n    try:\n        return success(_enrich_patch(patch_service.show(repo_root(request), name)))\n    except Exception as exc:\n        return error_response(str(exc), type_name=exc.__class__.__name__, status_code=404)\n\n\n@router.post(\"/api/patches/{name}/validate\")\ndef patch_validate_api(request: Request, name: str) -> dict[str, object]:\n    try:\n        return success(_enrich_patch(patch_service.validate(repo_root(request), name)))\n    except Exception as exc:\n        return error_response(str(exc), type_name=exc.__class__.__name__, status_code=404)\n\n... (lines omitted) ...\n    if patch is None:\n        return {}\n    content = str(patch.get(\"content\") or \"\")\n    added = 0\n    removed = 0\n    for line in content.splitlines():\n        if line.startswith(\"+\") and not line.startswith(\"+++\"):\n            added += 1\n        elif line.startswith(\"-\") and not line.startswith(\"---\"):\n            removed += 1\n    enriched = dict(patch)\n    enriched[\"lines_added\"] = added\n    enriched[\"lines_removed\"] = removed\n    enriched[\"status\"] = \"valid\" if patch.get(\"valid\") else \"needs_review\"\n    enriched[\"source_model\"] = \"forge implement\"\n... (lines omitted) ...\n```\n\n### docs/ARCHITECTURE.md\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:documentation file (+2)\n\n**File summary**\n- Title: Forge Architecture.\n- Sections: Forge Architecture, Responsibilities, CLI and Web Adapters, Application Services, Domain Packages, Provider Abstractions.\n- First paragraph: Forge follows an Application Service architecture:\n\n**Relevant excerpt**\n```md\n# Forge Architecture\n\nForge follows an Application Service architecture:\n\n```text\nCLI and Web Adapters\n        |\n        v\nApplication Services\n        |\n        v\nDomain Services\n        |\n        v\nProvider Abstractions\n        |\n        v\nInfrastructure\n```\n\nThis keeps Forge deterministic first, provider independent, local first, and easy\nto test as orchestration grows.\n\n## Responsibilities\n... (lines omitted) ...\n- Gather deterministic context through domain services.\n- Search and update Engineering Memory.\n- Call the model provider through the provider abstraction.\n- Save application artifacts such as plans when requested.\n- Return domain objects for Python callers or serializable payloads for\n  adapters.\n\nOther service modules use module-level functions when no stateful dependency is\nneeded. This is intentional: Forge adds classes only where dependency injection\nor workflow state makes them useful.\n\n### Domain Packages\n... (lines omitted) ...\n\nFuture orchestration should follow the `PlanningService` pattern:\n\n- `ExecutionService`: prepare execution requests for pipeline consumption while\n  preserving the Planning/Execution boundary.\n- `PatchService`: coordinate patch artifact creation, validation, and review\n  state. Patch parsing and validation remain in `forge/patches/`.\n... (lines omitted) ...\n```\n\n### docs/development/DEVELOPMENT_LOG.md\n\n**Reason selected**\n- match:content matched 'add', 'request' (+16)\n- match:documentation file (+2)\n\n**File summary**\n- Title: Dev Log.\n- Sections: Dev Log, Phase 6.3 \u2014 Engineering Knowledgebase CLI Completion, Summary, Changes, CLI Surface, Verification.\n- First paragraph: Exposed the `forge decision create` and `forge investigation create` command groups, and added `forge memory timeline`, \n\n**Relevant excerpt**\n```md\n# Dev Log\n\n## Phase 6.3 \u2014 Engineering Knowledgebase CLI Completion\n\n### Summary\n\nExposed the `forge decision create` and `forge investigation create` command groups, and added `forge memory timeline`, so the README-documented workflows now work exactly as written.\n\n### Changes\n\n- **`forge/memory/models.py`**: Added `MemoryType.investigation` to the enum so investigations have their own first-class type rather than piggybacking on `bug`.\n- **`forge/memory/store.py`**: Mapped `MemoryType.investigation` \u2192 `investigations/` subdirectory.\n- **`forge/services/memory_service.py`**: Updated `create_decision` and `create_investigation` to accept `tags` and `related_files`; `create_investigation` now uses `MemoryType.investigation`.\n- **`forge/cli/app.py`**: Added `decision_app` and `investigation_app` typer groups; added `forge decision create`, `forge investigation create`, and `forge memory timeline` commands with `--summary`, `--workset`, `--tag`, `--file`, and `--json` options.\n- **`tests/test_web.py`**: Updated web test assertion to reflect `investigation` type (was `bug`).\n- **`tests/test_memory.py`**: Added 13 new tests covering all Phase 6.3 requirements.\n\n### CLI Surface\n\n```bash\nforge decision create \"Use JWT for gateway authentication\"\nforge decision create \"Use JWT\" --summary \"Stateless, scales well\" --tag auth --workset gateway\nforge investigation create \"Planning timeout with Ollama\"\nforge investigation create \"Planning timeout\" --tag performance --file forge/planning/planner.py\nforge memory timeline\nforge memory timeline --json\n```\n... (lines omitted) ...\n\n### Completed\n\n- Added `forge/web/routes/workflows.py` with GET `/workflows`, GET `/workflows/{run_id}`, GET `/api/workflows`, GET `/api/workflows/templates`, GET `/api/workflows/{run_id}`, POST `/api/workflows`.\n- Created `forge/web/templates/workflows.html` \u2014 workflow list page with table, status/template filters, empty state, template cards with metadata, and a Start Workflow modal.\n- Created `forge/web/templates/workflow_detail.html` \u2014 rich detail view showing summary hero, visual pipeline with per-node status/duration, artifact relationships, per-stage cards with error display, and engineering timeline.\n- Updated `forge/web/templates/base.html` \u2014 added Workflows as second nav item (after Dashboard), added to command palette, removed stale \"Workflow History (planned)\" item.\n- Updated `forge/web/templates/dashboard.html` \u2014 evolved to Engineering Command Center: added Current Workflow card, updated hero copy, added `workflow_runs` metric at top of metrics grid, updated activity timeline to link workflow runs, replaced \"What To Do Next\" with smart `next_action` recommendation.\n- Updated `forge/web/routes/dashboard.py` \u2014 loads `workflow_service.list_runs()`, computes `latest_run`, adds `next_action()` and `_next_action()` helper, adds `workflow_runs` metric, extends `_activity()` with workflow run events.\n- Updated `forge/web/app.py` \u2014 registered `workflows.router`.\n- Extended `forge/web/static/styles.css` \u2014 added `status-error`, `status-neutral`, `pipeline-failed`, `pipeline-running`, `timeline-dot.danger`, `data-table`, `filter-btn.active`, `action-btn-primary`.\n- Added 11 new web tests in `tests/test_web.py` covering: workflow list page, empty API, templates API, 404 detail, 404 detail API, detail page with run, list with persisted runs, invalid template start, missing task start, dashboard workflow metrics, detail stage state.\n- All 31 web tests pass. All 23 workflow engine tests pass.\n\n### Architecture Notes\n... (lines omitted) ...\n\n### Completed\n\n- Added `forge/workflows/` orchestration package: `models.py`, `templates.py`, `registry.py`, `engine.py`, `workflow.py`, `__init__.py`.\n- `WorkflowTemplate` StrEnum: `feature`, `bugfix`, `refactor`, `custom`.\n- `WorkflowRun` dataclass tracks id, template, task, repository, status, stages, artifacts, workset/patch/verification/policy references, and timing.\n- `WorkflowStage` dataclass captures name, description, service, status, timing, artifact references, and error message.\n... (lines omitted) ...\n\n### Completed\n\n- Added `forge/policies/` domain package: `models.py`, `defaults.py`, `evaluator.py`, `service.py`, `__init__.py`.\n- `ForgePolicy` dataclass captures four policy sections: `patch`, `verification`, `git`, `apply`.\n- Default policy enforces: valid patch, max 25 changed files, max 1000 added/removed lines, verification required and must pass, git repo required, clean worktree required, human confirmation required.\n- Optional `.forge/policy.yaml` override; defaults used when file is absent.\n- `PolicyEvaluator` produces a `PolicyEvaluation` with per-check `status` / `message` / `severity`.\n- `PolicyEvaluation` status: `pass | warn | fail`. Failures with `severity=error` block apply.\n- Added `forge/services/policy_service.py` and `forge/services/apply_service.py`.\n- `apply_service.apply()` enforces the full guarded workflow:\n  1. Resolve and validate patch.\n  2. `git apply --check` (dry run) \u2014 apply is aborted if this fails.\n... (lines omitted) ...\n  6. Apply patch via `GitService.apply()`.\n  7. Persist apply record under `.forge/applications/`.\n- `GitService` extended with `apply_check(patch_path)` and `apply(patch_path)`. Never commits. Never creates branches.\n- Added `added_lines` and `removed_lines` to `Patch` model and `inspect_patch()`.\n- Added `applications_dir` to `ForgePaths` and `_SUBDIRS`.\n- Added `ArtifactType.policy_evaluation` and `ArtifactType.patch_application`.\n- CLI commands:\n  - `forge policy show [--json]` \u2014 display active policy.\n  - `forge policy check <patch> [--json] [--verification <report>]` \u2014 evaluate policy.\n... (lines omitted) ...\n\n### Completed\n\n- Added `forge/git/` domain package: `models.py`, `service.py`, `__init__.py`.\n- `GitService` is read-only. It never applies patches, creates commits, or\n  modifies any file. All `git` subprocess calls are centralized here.\n- `GitStatus` datamodel captures: `is_git_repository`, `root`, `branch`,\n  `commit`, `clean`, `staged_files`, `modified_files`, `deleted_files`,\n  `untracked_files`.\n- Added `forge/services/git_service.py` application service facade.\n- Added `forge git status` and `forge git status --json` CLI commands.\n- Added `forge git branch` and `forge git branch --json` CLI commands.\n- CLI exits non-zero when outside a git repository.\n- Added 14 tests covering: non-git directory, clean repo, dirty repo, staged\n  files, modified files, untracked files, branch detection, JSON output, and\n  CLI error paths.\n\n... (lines omitted) ...\n\n### Completed\n\n- Added `forge verify` execution while preserving `forge verify --detect` for\n  strategy inspection.\n- Added `forge/verification/runner.py`, `executor.py`, `report.py`, and\n  `artifact.py`.\n- Verification now executes detected formatter, linter, build, and test steps\n  through a reusable command runner instead of the CLI.\n... (lines omitted) ...\n- Verification continues after recoverable failures and returns deterministic\n  exit codes: `0` for pass, `1` for verification failure, and `2` for\n  infrastructure errors.\n- Added JSON output and optional `--patch`, `--plan`, `--workset`, `--output`,\n  and `--timeout` metadata/configuration flags.\n- Persisted structured reports under `.forge/verifications/` and registered\n  them as Engineering Artifacts with optional workset, plan, and patch\n... (lines omitted) ...\n- Rebuilt the Dashboard as the engineering command center with repository\n  summary, workflow visualization, registry-backed metrics, recent engineering\n  activity, and next-step links.\n- Added a read-only Execution page that visualizes the canonical execution\n  pipeline and the latest prepared `ExecutionRequest` when a saved plan/workset\n  is available.\n- Added a unified Artifact Explorer backed by `ArtifactRegistry`, including\n  artifact type, name, created time, metadata, origin, and relationship detail.\n- Added a Patch Explorer for saved patch artifacts with searchable rows,\n  affected-file counts, validation status, unified diff preview, validate, show,\n  and browser download actions. Verify, Apply, and Repair are visible as coming\n  soon.\n... (lines omitted) ...\n\n### Architecture Decisions\n\n- Added `forge/artifacts/` as a new internal package with models, metadata\n... (lines omitted) ...\n```\n\n### forge/context/excerpt.py\n\n**Reason selected**\n- match:content matched 'add' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Relevant excerpt extraction from file content.\n- Public functions: extract_excerpts.\n\n**Dependency hints**\n- imports __future__\n- imports re\n\n**Relevant excerpt**\n```py\n\"\"\"Relevant excerpt extraction from file content.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\n\n_OMIT_MARKER = \"... (lines omitted) ...\"\n\n\ndef extract_excerpts(\n    content: str,\n    query_tokens: list[str],\n    *,\n    max_lines: int = 120,\n    include_full: bool = False,\n) -> list[str]:\n    \"\"\"Return a list of excerpt lines from content.\n\n    Includes:\n    - First meaningful lines (up to 20)\n    - Lines around query token matches (\u00b13 context lines)\n    Caps total output at max_lines unless include_full is True.\n    \"\"\"\n    lines = content.splitlines()\n    if include_full:\n        return lines\n... (lines omitted) ...\n    for i, line in enumerate(lines):\n        if count >= 20:\n            break\n        selected.add(i)\n        if line.strip():\n            count += 1\n\n    # Add context around query matches\n    if query_tokens:\n        pattern = re.compile(\"|\".join(re.escape(t) for t in query_tokens), re.IGNORECASE)\n        for i, line in enumerate(lines):\n            if pattern.search(line):\n                for j in range(max(0, i - 3), min(total, i + 4)):\n                    selected.add(j)\n\n    # Sort and cap\n    sorted_indices = sorted(selected)\n... (lines omitted) ...\n```\n\n### forge/execution/__init__.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Engineering Execution orchestration package.\n\n**Dependency hints**\n- imports forge.execution.execution_service\n- imports forge.execution.models\n- imports forge.execution.orchestrator\n- imports forge.execution.pipeline\n\n**Relevant excerpt**\n```py\n\"\"\"Engineering Execution orchestration package.\"\"\"\n\nfrom forge.execution.execution_service import ExecutionService, ExecutionServiceError\nfrom forge.execution.models import (\n    ExecutionContext,\n    ExecutionRequest,\n    ExecutionResult,\n    ExecutionStage,\n    ExecutionStageResult,\n    ExecutionStatus,\n    ExecutionTarget,\n)\nfrom forge.execution.orchestrator import ExecutionOrchestrator\nfrom forge.execution.pipeline import ExecutionPipeline, run_execution_pipeline\n\n__all__ = [\n    \"ExecutionContext\",\n    \"ExecutionOrchestrator\",\n    \"ExecutionPipeline\",\n    \"ExecutionRequest\",\n    \"ExecutionResult\",\n    \"ExecutionStage\",\n    \"ExecutionStageResult\",\n... (lines omitted) ...\n```\n\n### forge/execution/execution_models.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Compatibility exports for Engineering Execution models.\n\n**Dependency hints**\n- imports forge.execution.models\n\n**Relevant excerpt**\n```py\n\"\"\"Compatibility exports for Engineering Execution models.\"\"\"\n\nfrom forge.execution.models import (\n    ExecutionContext,\n    ExecutionRequest,\n    ExecutionStage,\n    ExecutionStageResult,\n    ExecutionStatus,\n    ExecutionTarget,\n)\n\n__all__ = [\n    \"ExecutionContext\",\n    \"ExecutionRequest\",\n    \"ExecutionStage\",\n    \"ExecutionStageResult\",\n    \"ExecutionStatus\",\n    \"ExecutionTarget\",\n]\n```\n\n### forge/execution/execution_service.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Engineering Execution application service.\n- Defines classes: ExecutionServiceError, ExecutionService.\n- Public functions: create_request.\n\n**Detected symbols**\n- class ExecutionServiceError\n- class ExecutionService\n- def __init__(self, model_manager: ModelManager | None...)\n- def _latest_saved_plan_path(root: Path, workset: str)\n- def _workset_from_plan_path(path: Path)\n- def _generated_at_from_plan_path(path: Path)\n- def _parse_datetime(value: str)\n\n**Dependency hints**\n- imports __future__\n- imports re\n- imports datetime\n- imports pathlib\n- imports forge.context.bundle\n- imports forge.execution.execution_models\n- imports forge.execution.execution_prompt\n- imports forge.memory.models\n- imports forge.memory.search\n- imports forge.models.manager\n- imports forge.planning.planner\n- imports forge.planning.store\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Engineering Execution application service.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom datetime import UTC, datetime\nfrom pathlib import Path\n\nfrom forge.context.bundle import ContextBundle, generate_bundle\nfrom forge.execution.execution_models import ExecutionRequest, ExecutionTarget\nfrom forge.execution.execution_prompt import build_execution_prompt\nfrom forge.memory.models import MemoryType\nfrom forge.memory.search import MemorySearchResult, search_memory\nfrom forge.models.manager import ModelManager\nfrom forge.planning.planner import ImplementationPlan\nfrom forge.planning.store import plans_dir\nfrom forge.worksets.store import WorksetStoreError\n\n\nclass ExecutionServiceError(Exception):\n    \"\"\"Raised when an execution request cannot be prepared.\"\"\"\n\n\nclass ExecutionService:\n    \"\"\"\n    Prepare Engineering Execution requests.\n\n    This service intentionally performs orchestration only. It loads existing\n    context, memory, and plan artifacts, then returns a structured request for\n    future execution phases to consume.\n    \"\"\"\n\n    def __init__(self, model_manager: ModelManager | None = None) -> None:\n        self._model_manager = model_manager or ModelManager()\n\n    def create_request(\n        self,\n        root: Path,\n        task: str,\n... (lines omitted) ...\n        max_lines_per_file: int = 120,\n        include_full: bool = False,\n        max_memory_results: int = 5,\n    ) -> ExecutionRequest:\n        \"\"\"Assemble an execution request without executing it.\"\"\"\n        try:\n            bundle: ContextBundle = generate_bundle(\n                root,\n... (lines omitted) ...\n        )\n        prompt = build_execution_prompt(task, bundle, plan, selected_model, related_memory or None)\n\n        return ExecutionRequest(\n            task=task,\n            workset=workset,\n            target=ExecutionTarget(root=str(root), workset_name=workset),\n... (lines omitted) ...\n```\n\n### forge/execution/models.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Typed models for Engineering Execution orchestration.\n- Defines classes: ExecutionStatus, ExecutionStage, ExecutionTarget, ExecutionRequest, ExecutionContext.\n- Public functions: from_request.\n\n**Detected symbols**\n- class ExecutionStatus\n- class ExecutionStage\n- class ExecutionTarget\n- class ExecutionRequest\n- def __post_init__(self)\n- class ExecutionContext\n- def from_request(cls, request: ExecutionRequest)\n- class ExecutionStageResult\n- class ExecutionResult\n\n**Dependency hints**\n- imports __future__\n- imports dataclasses\n- imports datetime\n- imports enum\n- imports pathlib\n- imports typing\n- imports forge.context.bundle\n- imports forge.memory.search\n- imports forge.planning.planner\n\n**Relevant excerpt**\n```py\n\"\"\"Typed models for Engineering Execution orchestration.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\nfrom datetime import UTC, datetime\nfrom enum import StrEnum\nfrom pathlib import Path\nfrom typing import Any\n\nfrom forge.context.bundle import ContextBundle\nfrom forge.memory.search import MemorySearchResult\nfrom forge.planning.planner import ImplementationPlan\n\n\nclass ExecutionStatus(StrEnum):\n    \"\"\"Lifecycle states shared by execution requests, stages, and results.\"\"\"\n\n    prepared = \"prepared\"\n    running = \"running\"\n    completed = \"completed\"\n    blocked = \"blocked\"\n    failed = \"failed\"\n    skipped = \"skipped\"\n\n\nclass ExecutionStage(StrEnum):\n    \"\"\"Canonical read-only stages for the initial execution pipeline.\"\"\"\n... (lines omitted) ...\n\n\n@dataclass\nclass ExecutionRequest:\n    \"\"\"\n    Input contract for execution orchestration.\n\n    Existing request-preparation callers may populate the prepared fields\n    directly. The pipeline only requires root, task, and workset, then loads the\n    remaining read-only context through stages.\n    \"\"\"\n... (lines omitted) ...\nclass ExecutionContext:\n    \"\"\"Mutable context passed between execution stages.\"\"\"\n\n    request: ExecutionRequest\n    root: Path\n    task: str\n    workset: str\n... (lines omitted) ...\n    metadata: dict[str, Any] = field(default_factory=dict)\n\n    @classmethod\n    def from_request(cls, request: ExecutionRequest) -> ExecutionContext:\n        if request.root is None:\n            raise ValueError(\"ExecutionRequest.root is required for pipeline execution.\")\n        return cls(\n            request=request,\n            root=Path(request.root),\n            task=request.task,\n            workset=request.workset,\n            context_bundle=request.context_bundle,\n            related_memory=list(request.related_memory),\n            implementation_plan=request.implementation_plan,\n            metadata=dict(request.metadata),\n        )\n\n\n... (lines omitted) ...\n    \"\"\"Final result for an execution pipeline run.\"\"\"\n\n    status: ExecutionStatus\n    request: ExecutionRequest | None = None\n    context: ExecutionContext | None = None\n    stages: list[ExecutionStageResult] = field(default_factory=list)\n    started_at: datetime | None = None\n... (lines omitted) ...\n```\n\n### forge/execution/orchestrator.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Provider-independent orchestration for Engineering Execution.\n- Defines class: ExecutionOrchestrator.\n- Public functions: stages, run.\n\n**Detected symbols**\n- class ExecutionOrchestrator\n- def __init__(self, stages: Iterable[Stage] | None = N...)\n- def stages(self)\n- def run(self, request: ExecutionRequest)\n\n**Dependency hints**\n- imports __future__\n- imports collections.abc\n- imports datetime\n- imports forge.execution.models\n- imports forge.execution.stages\n\n**Relevant excerpt**\n```py\n\"\"\"Provider-independent orchestration for Engineering Execution.\"\"\"\n\nfrom __future__ import annotations\n\nfrom collections.abc import Iterable\nfrom datetime import UTC, datetime\n\nfrom forge.execution.models import (\n    ExecutionContext,\n    ExecutionRequest,\n    ExecutionResult,\n    ExecutionStageResult,\n    ExecutionStatus,\n)\nfrom forge.execution.stages import Stage, default_execution_stages\n\n\nclass ExecutionOrchestrator:\n    \"\"\"\n    Coordinate execution stages without invoking providers or mutating repos.\n\n    Stages receive and return an ExecutionContext, which lets future execution\n    capabilities plug into the pipeline without changing the orchestrator.\n    \"\"\"\n\n    def __init__(self, stages: Iterable[Stage] | None = None) -> None:\n        self._stages = list(stages) if stages is not None else default_execution_stages()\n... (lines omitted) ...\n\n        return list(self._stages)\n\n    def run(self, request: ExecutionRequest) -> ExecutionResult:\n        \"\"\"Run the configured execution stages and return a structured result.\"\"\"\n\n        started_at = datetime.now(tz=UTC)\n        context = ExecutionContext.from_request(request)\n        request.status = ExecutionStatus.running\n        stage_results: list[ExecutionStageResult] = []\n        errors: list[str] = []\n\n... (lines omitted) ...\n                    )\n                )\n                completed_at = datetime.now(tz=UTC)\n                request.status = ExecutionStatus.failed\n                return ExecutionResult(\n                    status=ExecutionStatus.failed,\n                    request=request,\n                    context=context,\n                    stages=stage_results,\n                    started_at=started_at,\n... (lines omitted) ...\n            )\n\n        completed_at = datetime.now(tz=UTC)\n        request.status = ExecutionStatus.completed\n        return ExecutionResult(\n            status=ExecutionStatus.completed,\n            request=request,\n            context=context,\n            stages=stage_results,\n            started_at=started_at,\n... (lines omitted) ...\n```\n\n### forge/execution/pipeline.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Canonical Engineering Execution pipeline entrypoints.\n- Defines class: ExecutionPipeline.\n- Public functions: stages, run, run_execution_pipeline.\n\n**Detected symbols**\n- class ExecutionPipeline\n- def __init__(self, stages: Iterable[Stage] | None = N...)\n- def stages(self)\n- def run(self, request: ExecutionRequest)\n- def run_execution_pipeline(request: ExecutionRequest)\n\n**Dependency hints**\n- imports __future__\n- imports collections.abc\n- imports forge.execution.models\n- imports forge.execution.orchestrator\n- imports forge.execution.stages\n\n**Relevant excerpt**\n```py\n\"\"\"Canonical Engineering Execution pipeline entrypoints.\"\"\"\n\nfrom __future__ import annotations\n\nfrom collections.abc import Iterable\n\nfrom forge.execution.models import ExecutionRequest, ExecutionResult\nfrom forge.execution.orchestrator import ExecutionOrchestrator\nfrom forge.execution.stages import Stage, default_execution_stages\n\n\nclass ExecutionPipeline:\n    \"\"\"Reusable pipeline facade for Engineering Execution orchestration.\"\"\"\n\n    def __init__(self, stages: Iterable[Stage] | None = None) -> None:\n        self._orchestrator = ExecutionOrchestrator(\n            stages=list(stages) if stages is not None else default_execution_stages()\n        )\n\n    @property\n    def stages(self) -> list[Stage]:\n        \"\"\"Return the configured stages in execution order.\"\"\"\n\n        return self._orchestrator.stages\n\n    def run(self, request: ExecutionRequest) -> ExecutionResult:\n        \"\"\"Execute the read-only pipeline for a prepared request.\"\"\"\n\n        return self._orchestrator.run(request)\n\n\ndef run_execution_pipeline(request: ExecutionRequest) -> ExecutionResult:\n    \"\"\"Run the default Engineering Execution pipeline.\"\"\"\n\n    return ExecutionPipeline().run(request)\n\n```\n\n### forge/execution/stages.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Composable read-only stages for Engineering Execution.\n- Defines classes: Stage, LoadWorksetStage, LoadContextStage, LoadEngineeringMemoryStage, LoadImplementationPlanStage.\n- Public functions: run, run, run, run, run, run, run, default_execution_stages.\n\n**Detected symbols**\n- class Stage\n- def run(self, context: ExecutionContext)\n- class LoadWorksetStage\n- def __init__(self, loader: Callable[[Path, str], dict...)\n- def run(self, context: ExecutionContext)\n- class LoadContextStage\n- def __init__(self, bundle_factory: Callable[..., Cont...)\n- def run(self, context: ExecutionContext)\n- class LoadEngineeringMemoryStage\n- def run(self, context: ExecutionContext)\n- class LoadImplementationPlanStage\n- def __init__(self, plan_loader: Callable[[Path], str]...)\n- def run(self, context: ExecutionContext)\n- class AssembleExecutionContextStage\n- def run(self, context: ExecutionContext)\n- class ExecutionCompleteStage\n- def run(self, context: ExecutionContext)\n- def default_execution_stages()\n- def _read_text(path: Path)\n- def _latest_saved_plan_path(root: Path, workset: str)\n- def _workset_from_plan_path(path: Path)\n- def _generated_at_from_plan_path(path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports re\n- imports collections.abc\n- imports datetime\n- imports pathlib\n- imports typing\n- imports forge.context.bundle\n- imports forge.execution.models\n- imports forge.memory.search\n- imports forge.planning.planner\n- imports forge.planning.store\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Composable read-only stages for Engineering Execution.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom collections.abc import Callable\nfrom datetime import UTC, datetime\nfrom pathlib import Path\nfrom typing import Any, Protocol\n\nfrom forge.context.bundle import ContextBundle, generate_bundle\nfrom forge.execution.models import ExecutionContext, ExecutionStage\nfrom forge.memory.search import MemorySearchResult, search_memory\nfrom forge.planning.planner import ImplementationPlan\nfrom forge.planning.store import plans_dir\nfrom forge.worksets.store import load\n\n\nclass Stage(Protocol):\n    \"\"\"Common interface implemented by all execution stages.\"\"\"\n\n    name: str\n\n    def run(self, context: ExecutionContext) -> ExecutionContext:\n        \"\"\"Perform read-only work and return the updated execution context.\"\"\"\n\n\nclass LoadWorksetStage:\n    \"\"\"Load the persisted workset selected for execution.\"\"\"\n... (lines omitted) ...\n\n    def run(self, context: ExecutionContext) -> ExecutionContext:\n        if context.context_bundle is None:\n            request = context.request\n            context.context_bundle = self._bundle_factory(\n                context.root,\n                context.workset,\n                max_lines_per_file=request.max_lines_per_file,\n                include_full=request.include_full,\n            )\n        context.metadata[\"context_file_count\"] = len(context.context_bundle.files)\n        context.metadata[\"context_total_tokens\"] = context.context_bundle.total_tokens\n... (lines omitted) ...\n            context.related_memory = self._memory_search(\n                context.root,\n                context.task,\n                max_results=context.request.max_memory_results,\n            )\n        context.metadata[\"memory_result_count\"] = len(context.related_memory)\n        return context\n... (lines omitted) ...\n\n    def run(self, context: ExecutionContext) -> ExecutionContext:\n        if context.implementation_plan is None:\n            path = context.request.plan_path or _latest_saved_plan_path(\n                context.root,\n                context.workset,\n            )\n... (lines omitted) ...\n                path,\n                task=context.task,\n                workset=context.workset,\n                model=context.request.selected_model or \"unknown\",\n                reader=self._plan_loader,\n            )\n        context.metadata[\"plan_available\"] = True\n... (lines omitted) ...\n\n\nclass AssembleExecutionContextStage:\n    \"\"\"Assemble stage outputs into the request contract for future phases.\"\"\"\n\n    name = ExecutionStage.assemble_execution_context.value\n\n    def run(self, context: ExecutionContext) -> ExecutionContext:\n        request = context.request\n        request.context_bundle = context.context_bundle\n        request.related_memory = list(context.related_memory)\n        request.implementation_plan = context.implementation_plan\n        request.metadata.update(context.metadata)\n        context.metadata[\"execution_context_ready\"] = True\n        return context\n\n... (lines omitted) ...\n```\n\n### forge/memory/manager.py\n\n**Reason selected**\n- match:content matched 'add' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- High-level operations on the Engineering Memory store.\n- Defines class: MemoryManager.\n- Public functions: add, get, list, delete, rebuild, from_root.\n\n**Detected symbols**\n- class MemoryManager\n- def __init__(self, root: Path)\n- def get(self, item_id: str)\n- def list(self)\n- def delete(self, item_id: str)\n- def rebuild(self)\n- def from_root(root: Path)\n\n**Dependency hints**\n- imports __future__\n- imports uuid\n- imports pathlib\n- imports forge.memory.models\n- imports forge.memory.store\n\n**Relevant excerpt**\n```py\n\"\"\"High-level operations on the Engineering Memory store.\"\"\"\n\nfrom __future__ import annotations\n\nimport uuid\nfrom pathlib import Path\n\nfrom forge.memory.models import MemoryItem, MemoryType\nfrom forge.memory.store import (\n    delete_item,\n    list_items,\n    load_item,\n    now_iso,\n    rebuild_index,\n    save_item,\n)\n\n\nclass MemoryManager:\n    \"\"\"Provides CRUD and indexing operations for engineering memory.\"\"\"\n\n    def __init__(self, root: Path) -> None:\n        self._root = root\n\n    def add(\n        self,\n        *,\n        type: MemoryType,\n... (lines omitted) ...\n```\n\n### forge/memory/store.py\n\n**Reason selected**\n- match:content matched 'add' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Persistence layer for engineering memory items.\n- Defines class: MemoryStoreError.\n- Public functions: memory_dir, index_path, now_iso, save_item, load_item, list_items, load_index, rebuild_index.\n\n**Detected symbols**\n- class MemoryStoreError\n- def memory_dir(root: Path)\n- def index_path(root: Path)\n- def _item_dir(root: Path, item_type: MemoryType)\n- def _item_path(root: Path, item: MemoryItem)\n- def now_iso()\n- def _ensure_dirs(root: Path)\n- def save_item(root: Path, item: MemoryItem)\n- def load_item(root: Path, item_id: str)\n- def list_items(root: Path)\n- def load_index(root: Path)\n- def _save_index(root: Path, entries: list[dict[str, Any]...)\n- def _update_index(root: Path, item: MemoryItem)\n- def rebuild_index(root: Path)\n- def delete_item(root: Path, item_id: str)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports datetime\n- imports pathlib\n- imports typing\n- imports forge.memory.models\n\n**Relevant excerpt**\n```py\n\"\"\"Persistence layer for engineering memory items.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom datetime import UTC, datetime\nfrom pathlib import Path\nfrom typing import Any\n\nfrom forge.memory.models import MemoryItem, MemoryType\n\n_MEMORY_DIR = \".forge/memory\"\n_INDEX_FILENAME = \"index.json\"\n_TYPE_SUBDIRS = {\n    MemoryType.plan: \"plans\",\n    MemoryType.workset: \"worksets\",\n    MemoryType.context_bundle: \"context\",\n    MemoryType.adr: \"architecture\",\n    MemoryType.architecture: \"architecture\",\n    MemoryType.bug: \"bugs\",\n    MemoryType.decision: \"decisions\",\n    MemoryType.investigation: \"investigations\",\n    MemoryType.followup: \"decisions\",\n}\n... (lines omitted) ...\n            try:\n                item = MemoryItem.from_dict(json.loads(path.read_text(encoding=\"utf-8\")))\n                if item.id not in seen:\n                    seen.add(item.id)\n                    entries.append(\n                        {\n                            \"id\": item.id,\n... (lines omitted) ...\n```\n\n### forge/models/anthropic.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Anthropic model provider.\n- Defines class: AnthropicProvider.\n- Public functions: list_models, ask, normalize_model_name.\n\n**Detected symbols**\n- class AnthropicProvider\n- def list_models(self)\n- def _require_configured(self)\n- def normalize_model_name(self, model: str)\n- def _extract_message_text(payload: dict[str, Any])\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports http.client\n- imports typing\n- imports urllib.parse\n- imports forge.models.errors\n- imports forge.models.types\n\n**Relevant excerpt**\n```py\n\"\"\"Anthropic model provider.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom http.client import HTTPConnection, HTTPSConnection\nfrom typing import Any\nfrom urllib.parse import urlparse\n\nfrom forge.models.errors import ModelProviderError\nfrom forge.models.types import ModelInfo, ModelResponse\n\n\nclass AnthropicProvider:\n    \"\"\"Anthropic provider behind the shared interface.\"\"\"\n\n    name = \"anthropic\"\n\n    def __init__(\n        self,\n        api_key: str | None,\n        base_url: str = \"https://api.anthropic.com/v1\",\n        max_tokens: int = 1024,\n    ) -> None:\n        self.api_key = api_key\n        self.base_url = base_url.rstrip(\"/\")\n        self.endpoint = self.base_url\n        self.max_tokens = max_tokens\n\n    def list_models(self) -> list[ModelInfo]:\n        payload = self._request(\"GET\", \"/models\")\n        models = payload.get(\"data\", [])\n        return [\n            ModelInfo(\n... (lines omitted) ...\n        model: str,\n        timeout_seconds: int | None = None,\n    ) -> ModelResponse:\n        payload = self._request(\n            \"POST\",\n            \"/messages\",\n            {\n... (lines omitted) ...\n        \"\"\"Return Anthropic's canonical model identifier.\"\"\"\n        return model\n\n    def _request(\n        self, method: str, path: str, body: dict[str, Any] | None = None\n    ) -> dict[str, Any]:\n        self._require_configured()\n        parsed = urlparse(self.base_url)\n        connection_cls = HTTPSConnection if parsed.scheme == \"https\" else HTTPConnection\n        request_path = f\"{parsed.path.rstrip('/')}{path}\" if parsed.path else path\n        encoded_body = json.dumps(body).encode(\"utf-8\") if body is not None else None\n        headers = {\n            \"x-api-key\": str(self.api_key),\n... (lines omitted) ...\n            connection = connection_cls(\n                parsed.hostname or \"api.anthropic.com\", parsed.port, timeout=30\n            )\n            connection.request(method, request_path, body=encoded_body, headers=headers)\n            response = connection.getresponse()\n            data = response.read().decode(\"utf-8\")\n        except OSError as exc:\n... (lines omitted) ...\n```\n\n### forge/models/errors.py\n\n**Reason selected**\n- match:content matched 'request' (+8)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Provider errors.\n- Defines class: ModelProviderError.\n\n**Detected symbols**\n- class ModelProviderError\n\n**Dependency hints**\n- imports __future__\n\n**Relevant excerpt**\n```py\n\"\"\"Provider errors.\"\"\"\n\nfrom __future__ import annotations\n\n\nclass ModelProviderError(RuntimeError):\n    \"\"\"Raised when a provider cannot complete a request.\"\"\"\n```\n",
+      "preview": "# Forge Context Bundle: workflow-feature-c92605e4\n\n## Metadata\n\n- Workset: workflow-feature-c92605e4\n- Query: add request tracing\n- Root: /Users/derektaylor/projects/forge\n- Generated: 2026-06-29T14:23:05+00:00\n- Files: 20\n- Character estimate: 255,592\n- Token estimate: 63,889\n\n## Workset Files\n\n| Path | Category | Score | Lines | Chars |\n| --- | --- | ---: | ---: | ---: |\n| forge/cli/app.py | source | 27 | 2,354 | 83,473 |\n| README.md | doc | 24 | 848 | 21,848 |\n| forge/execution/execution_prompt.py | source | 19 | 328 | 8,675 |\n| forge/services/planning_service.py | source | 19 | 213 | 7,172 |\n| forge/web/routes/memory.py | source | 19 | 112 | 3,674 |\n| forge/web/routes/patches.py | source | 19 | 67 | 2,412 |\n| docs/ARCHITECTURE.md | doc | 18 | 399 | 15,378 |\n| docs/development/DEVELOPMENT_LOG.md | doc | 18 | 1,450 | 75,610 |\n| forge/context/excerpt.py | source | 11 | 70 | 1,799 |\n| forge/execution/__init__.py | source | 11 | 29 | 791 |\n| forge/execution/execution_models.py | source | 11 | 19 | 393 |\n| forge/execution/execution_service.py | source | 11 | 186 | 6,271 |\n| forge/execution/models.py | source | 11 | 137 | 4,351 |\n| forge/execution/orchestrator.py | source | 11 | 101 | 3,727 |\n| forge/execution/pipeline.py | source | 11 | 36 | 1,177 |\n| forge/execution/stages.py | source | 11 | 199 | 6,783 |\n| forge/memory/manager.py | source | 11 | 77 | 2,316 |\n| forge/memory/store.py | source | 11 | 165 | 5,354 |\n| forge/models/anthropic.py | source | 11 | 123 | 4,227 |\n| forge/models/errors.py | source | 11 | 7 | 161 |\n\n## File Context\n\n### forge/cli/app.py\n\n**Reason selected**\n- match:content matched 'add', 'request', 'tracing' (+24)\n- match:source file (+3)\n\n**File summary**\n- Python source file.\n- Forge command-line interface.\n- Public functions: configure, version, doctor, verify, config_show, config_edit, config_set_default_model, models_command.\n\n**Detected symbols**\n- def _help_with_examples(summary: str, *examples: str)\n- def _table(title: str, **kwargs: object)\n- def _running(message: str, *, enabled: bool = True)\n- def _config_manager()\n- def _model_manager()\n- def _handle_provider_error(exc: ModelProviderError)\n- def _handle_model_not_found(exc: ModelNotFoundError)\n- def version()\n- def doctor()\n- def config_show()\n- def config_edit()\n- def models_command(ctx: typer.Context)\n- def _status(check: CheckResult)\n- def _join_values(values: list[str])\n- def _first_command(steps: object, kind: str)\n- def _render_detection(result: dict[str, object])\n- def _render_verification_report(report: dict[str, object])\n- def _status_label(status: str)\n- def _format_duration(seconds: float)\n- def _human_ecosystem(ecosystem: str)\n- def _render_workflow_run(run: dict)\n- def _add_command_examples(callback: object, *examples: str)\n- def _install_command_examples()\n- def main()\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports os\n- imports collections.abc\n- imports contextlib\n- imports pathlib\n- imports typing\n- imports typer\n- imports rich.console\n- imports rich.table\n- imports forge.commands.doctor\n- imports forge.commands.project_context\n- imports forge.config.manager\n- imports forge.execution\n- imports forge.memory.store\n- imports forge.models.errors\n- imports forge.models.manager\n- imports forge.patches\n- imports forge.planning\n- imports forge.planning.render\n\n**Relevant excerpt**\n```py\n\"\"\"Forge command-line interface.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport os\nfrom collections.abc import Iterator\nfrom contextlib import contextmanager\nfrom pathlib import Path\nfrom typing import Annotated\n\nimport typer\nfrom rich.console import Console\nfrom rich.table import Table\n\nfrom forge.commands.doctor import CheckResult, run_doctor\nfrom forge.commands.project_context import (\n    build_guardrailed_ask_prompt,\n    build_project_explanation_prompt,\n)\nfrom forge.config.manager import ConfigManager\nfrom forge.execution import ExecutionServiceError\nfrom forge.memory.store import MemoryStoreError\nfrom forge.models.er",
+      "workset_name": "workflow-feature-c92605e4",
+      "file_count": 20,
+      "total_chars": 255592,
+      "total_tokens": 63889
+    }
+  },
+  "metadata": {}
+}

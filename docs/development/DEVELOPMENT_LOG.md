@@ -1,5 +1,38 @@
 # Dev Log
 
+## Phase 6.3 — Engineering Knowledgebase CLI Completion
+
+### Summary
+
+Exposed the `forge decision create` and `forge investigation create` command groups, and added `forge memory timeline`, so the README-documented workflows now work exactly as written.
+
+### Changes
+
+- **`forge/memory/models.py`**: Added `MemoryType.investigation` to the enum so investigations have their own first-class type rather than piggybacking on `bug`.
+- **`forge/memory/store.py`**: Mapped `MemoryType.investigation` → `investigations/` subdirectory.
+- **`forge/services/memory_service.py`**: Updated `create_decision` and `create_investigation` to accept `tags` and `related_files`; `create_investigation` now uses `MemoryType.investigation`.
+- **`forge/cli/app.py`**: Added `decision_app` and `investigation_app` typer groups; added `forge decision create`, `forge investigation create`, and `forge memory timeline` commands with `--summary`, `--workset`, `--tag`, `--file`, and `--json` options.
+- **`tests/test_web.py`**: Updated web test assertion to reflect `investigation` type (was `bug`).
+- **`tests/test_memory.py`**: Added 13 new tests covering all Phase 6.3 requirements.
+
+### CLI Surface
+
+```bash
+forge decision create "Use JWT for gateway authentication"
+forge decision create "Use JWT" --summary "Stateless, scales well" --tag auth --workset gateway
+forge investigation create "Planning timeout with Ollama"
+forge investigation create "Planning timeout" --tag performance --file forge/planning/planner.py
+forge memory timeline
+forge memory timeline --json
+```
+
+### Verification
+
+- `python3 -m pytest` passed with 494 tests (13 new).
+- `python3 -m ruff check .` passed.
+
+---
+
 ## 2026-06-28 — Phase 6.1: Dogfood Readiness Hardening
 
 ### Completed
@@ -1414,3 +1447,4 @@ be a read-only scaffold (not applied automatically) and should build on the `for
 package already in place. Key additions: `forge scaffold "<task>" --plan <path>`,
 a `forge/scaffold/` package, and a unified diff or file-edit representation that can
 later feed `forge apply`.
+

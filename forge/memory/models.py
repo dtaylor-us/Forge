@@ -15,6 +15,7 @@ class MemoryType(StrEnum):
     architecture = "architecture"
     bug = "bug"
     decision = "decision"
+    investigation = "investigation"
     followup = "followup"
 
 
