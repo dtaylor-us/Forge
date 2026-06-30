@@ -424,8 +424,8 @@ def test_anchor_realign_two_anchors_must_agree(tmp_path: Path) -> None:
         "+// new\n"
     )
     corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
-    # beta is unique, so single-anchor realignment should fire (delta = 1-10+1 = -8? let's check)
-    # beta is at file idx 1 (1-based: 2), expected at block_idx=1 -> old_start-1+1 = 10-1+1 = 10 (0-based 9)
+    # beta is unique, so single-anchor realignment should fire.
+    # beta is at file idx 1 (1-based: 2), expected at block_idx=1.
     # delta = 1 - 9 = -8, new_old_start = 10 + (-8) = 2
     assert "@@ -2," in corrected
 

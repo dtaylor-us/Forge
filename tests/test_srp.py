@@ -8,20 +8,17 @@ from pathlib import Path
 
 import pytest
 
+from forge.srp import (
+    SearchReplaceBlock,
+    apply_blocks,
+    parse_search_replace_blocks,
+)
+
 # forge.execution requires Python 3.11+ (datetime.UTC).
 _requires_py311 = pytest.mark.skipif(
     sys.version_info < (3, 11),
     reason="forge.execution requires Python 3.11+ (datetime.UTC)",
 )
-
-from forge.srp import (
-    BlockApplication,
-    SearchReplaceBlock,
-    SearchReplaceResult,
-    apply_blocks,
-    parse_search_replace_blocks,
-)
-from forge.srp.parser import ParseError, SEARCH_MARKER, SEP_MARKER, REPLACE_MARKER
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +336,10 @@ class TestApplyBlocks:
         result = apply_blocks(tmp_path, blocks)
 
         assert not result.valid
-        assert any("2 locations" in e or "ambiguous" in e.lower() or "matches" in e for e in result.errors)
+        assert any(
+            "2 locations" in e or "ambiguous" in e.lower() or "matches" in e
+            for e in result.errors
+        )
 
     def test_file_missing_returns_invalid(self, tmp_path: Path) -> None:
         blocks = [SearchReplaceBlock(file_path="does/not/exist.py", search="x", replace="y")]
@@ -448,8 +448,9 @@ class TestApplyBlocks:
 class TestSearchReplacePrompts:
     def _make_bundle(self) -> object:
         """Build a minimal ContextBundle-like stub."""
+        from datetime import UTC, datetime
+
         from forge.context.bundle import ContextBundle, ContextBundleFile
-        from datetime import datetime, timezone
 
         bf = ContextBundleFile(
             path="src/Foo.java",
@@ -465,19 +466,20 @@ class TestSearchReplacePrompts:
             workset_name="test",
             query="test query",
             root="/repo",
-            generated_at=datetime.now(tz=timezone.utc),
+            generated_at=datetime.now(tz=UTC),
             files=[bf],
         )
 
     def _make_plan(self) -> object:
+        from datetime import UTC, datetime
+
         from forge.planning.planner import ImplementationPlan
-        from datetime import datetime, timezone
 
         return ImplementationPlan(
             task="test task",
             workset_name="test",
             model="gpt-4",
-            generated_at=datetime.now(tz=timezone.utc),
+            generated_at=datetime.now(tz=UTC),
             content="Make the change.",
         )
 
@@ -536,7 +538,11 @@ class TestEndToEnd:
         f = tmp_path / "src" / "Greeter.java"
         f.parent.mkdir()
         f.write_text(
-            "public class Greeter {\n    public String greet() {\n        return \"hello\";\n    }\n}\n",
+            "public class Greeter {\n"
+            "    public String greet() {\n"
+            '        return "hello";\n'
+            "    }\n"
+            "}\n",
             encoding="utf-8",
         )
 

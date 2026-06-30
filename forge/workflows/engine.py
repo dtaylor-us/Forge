@@ -184,9 +184,30 @@ class WorkflowEngine:
             stage.artifact_refs.append(f"patch:{impl.patch_name}")
         if not impl.valid:
             joined_errors = "; ".join(impl.validation_errors)
-            diagnosis = f"Patch generation produced an invalid patch: {joined_errors}"
+            diagnosis = f"Patch generation rejected model output.\nTask: {run.task}"
+            if run.workset_name:
+                diagnosis += f"\nWorkset: {run.workset_name}"
+            rejected_files = result.get("rejected_files") or []
+            if rejected_files:
+                diagnosis += "\nRejected file(s):\n" + "\n".join(
+                    f"- {path}" for path in rejected_files
+                )
+                diagnosis += "\nReason: File is outside the approved editable target set."
+            editable_targets = result.get("editable_targets") or {}
+            targets = editable_targets.get("targets") or []
+            if targets:
+                diagnosis += "\nApproved editable targets:\n" + "\n".join(
+                    f"- {target.get('path')} ({target.get('reason')})" for target in targets
+                )
+            diagnosis += f"\nValidation errors: {joined_errors}"
             if impl.raw_response_path:
                 diagnosis += f"\nRaw model response saved at: {impl.raw_response_path}"
+            diagnosis += (
+                "\nNext:\n"
+                f"  forge workset show {run.workset_name}\n"
+                f"  forge workset context {run.workset_name}\n"
+                f'  forge implement "{run.task}" --workset {run.workset_name}'
+            )
             raise WorkflowEngineError(diagnosis)
         stage.output = {
             "patch_path": result.get("patch_path"),
@@ -240,8 +261,8 @@ class WorkflowEngine:
         the main working tree and notes the fallback in stage output.
         """
         from forge.git.service import GitService, GitServiceError
-        from forge.patches.service import resolve_patch_path
         from forge.patches import PatchError
+        from forge.patches.service import resolve_patch_path
         from forge.project.paths import ForgePaths
         from forge.services import verification_service
         from forge.verification.executor import timestamp_slug

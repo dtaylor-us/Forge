@@ -627,3 +627,46 @@ def test_patch_stage_failure_surfaces_raw_response_path(tmp_root: Path, registry
     stage_map = {s.name: s for s in run.stages}
     assert stage_map["patch"].status == WorkflowStageStatus.failed
     assert str(raw_path) in stage_map["patch"].error
+
+
+def test_patch_stage_failure_surfaces_editable_target_diagnostics(
+    tmp_root: Path, registry: WorkflowRegistry
+) -> None:
+    mocks = _mock_services(patch_valid=False)
+    impl_result = mocks["impl_cls"].return_value.implement.return_value
+    impl_result.validation_errors = [
+        "Model attempted to edit a file outside the approved target set"
+    ]
+    impl_result.to_dict.return_value = {
+        "patch_name": None,
+        "patch_path": None,
+        "affected_files": [],
+        "validation_errors": impl_result.validation_errors,
+        "valid": False,
+        "rejected_files": ["axiom-ui/src/views/specweaver/SessionView.tsx"],
+        "editable_targets": {
+            "targets": [
+                {
+                    "path": (
+                        "archon-api/src/test/java/com/acme/"
+                        "SessionControllerIntegrationTest.java"
+                    ),
+                    "reason": "exact identifier match: SessionControllerIntegrationTest",
+                }
+            ]
+        },
+    }
+
+    engine = WorkflowEngine(tmp_root, registry=registry)
+    import contextlib
+
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_all(mocks):
+            stack.enter_context(cm)
+        run = engine.run(WorkflowTemplate.bugfix, "fix SessionControllerIntegrationTest")
+
+    patch_stage = {s.name: s for s in run.stages}["patch"]
+    assert patch_stage.status == WorkflowStageStatus.failed
+    assert "axiom-ui/src/views/specweaver/SessionView.tsx" in patch_stage.error
+    assert "SessionControllerIntegrationTest.java" in patch_stage.error
+    assert "outside the approved editable target set" in patch_stage.error

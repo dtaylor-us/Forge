@@ -1,5 +1,41 @@
 # Dev Log
 
+## 2026-06-30 — Editable Target Enforcement
+
+### Summary
+
+Added deterministic editable-file targeting for SEARCH/REPLACE patch generation.
+Worksets remain the broader context set, but patch generation now computes an
+`EditableTargetSet` and only permits model blocks for those approved files.
+
+This addresses the `forge workflow bugfix "fix SessionControllerIntegrationTest"`
+failure mode where the workset contained useful context but the model attempted
+to edit `axiom-ui/src/views/specweaver/SessionView.tsx`. For that task, Forge
+now requires the exact `SessionControllerIntegrationTest` file and may allow
+same-module related implementation files such as `SessionController` or
+`SessionService`; unrelated UI files remain context-only.
+
+### What changed
+
+- Added `forge/edit_targets/` with `EditableTarget`, `EditableTargetSet`, and a
+  selector that reuses workset query parsing and relationship derivation.
+- Updated the SEARCH/REPLACE prompt with an `Approved Editable Files` section
+  and removed the permissive "unless unavoidable" wording.
+- `ImplementationService` now rejects parsed SRP blocks outside the approved
+  target set before calling `apply_blocks()`, saves invalid raw responses, and
+  returns `editable_targets` plus `rejected_files` metadata.
+- Missing required strong-identifier targets fail before the model call with
+  actionable workset recovery commands.
+- Workflow patch-stage failures now include task, workset, rejected files,
+  approved targets, raw response path when present, and next commands.
+
+### Verification
+
+- `pytest tests/test_edit_targets.py tests/test_implement.py tests/test_srp.py tests/test_workflow.py`
+  — 98 passed.
+
+---
+
 ## 2026-06-30 — SEARCH/REPLACE patch generation: fixed root cause and a default-flip regression
 
 ### Summary

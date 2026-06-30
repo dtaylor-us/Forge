@@ -6,6 +6,7 @@ from typing import Any
 
 from forge.context.bundle import ContextBundle
 from forge.context.excerpt import OMIT_MARKER
+from forge.edit_targets import EditableTargetSet, select_editable_targets
 from forge.execution.context_budget import budget_implementation_context
 from forge.execution.edit_plan import derive_edit_plan, render_edit_plan
 from forge.memory.search import MemorySearchResult
@@ -501,7 +502,8 @@ REPLACE CONTENT RULES:
 WHAT NOT TO DO:
 - Do not wrap blocks in Markdown code fences.
 - Do not add explanatory text before, between, or after blocks.
-- Do not modify files that are not listed in the workset unless unavoidable.
+- Only modify files listed in Approved Editable Files.
+- Never emit blocks for files outside that list.
 """
 
 _SRP_TEMPLATE = """\
@@ -526,6 +528,13 @@ Generated: {generated_at}
 | File | Category | Score | Lines | Symbols |
 | --- | --- | ---: | ---: | --- |
 {file_table_rows}
+
+# Approved Editable Files
+
+You may ONLY emit SEARCH/REPLACE blocks for these files:
+{approved_editable_files}
+
+Any block for any other file will be rejected.
 
 # Detailed File Context
 
@@ -593,6 +602,7 @@ def build_search_replace_prompt(
     implementation_plan: ImplementationPlan,
     model: str,
     memory_context: list[MemorySearchResult] | None = None,
+    editable_targets: EditableTargetSet | None = None,
 ) -> tuple[str, str | None]:
     """Construct a provider prompt that asks for SEARCH/REPLACE blocks.
 
@@ -601,6 +611,8 @@ def build_search_replace_prompt(
     human-readable warning string when tests are missing from the workset.
     """
     file_table_rows, _ = build_context_sections(bundle)
+    editable_targets = editable_targets or select_editable_targets(task, bundle)
+    approved_editable_files = _render_approved_editable_files(editable_targets)
     # Use the line-numbered renderer so the model can read SEARCH content
     # directly from the gutter rather than reconstructing it from memory.
     file_details = build_budgeted_numbered_file_details(task, bundle)
@@ -614,6 +626,7 @@ def build_search_replace_prompt(
         root=bundle.root,
         generated_at=bundle.generated_at,
         file_table_rows=file_table_rows,
+        approved_editable_files=approved_editable_files,
         file_details=file_details,
         edit_plan=edit_plan,
         implementation_plan=implementation_plan.content,
@@ -649,6 +662,16 @@ def build_search_replace_prompt(
             "No Markdown fences. No explanations.\n"
         )
     return result, test_warning
+
+
+def _render_approved_editable_files(editable_targets: EditableTargetSet) -> str:
+    if not editable_targets.targets:
+        return "- (none)"
+    lines: list[str] = []
+    for target in editable_targets.targets:
+        required = " Required." if target.required else ""
+        lines.append(f"- {target.path}\n  Reason: {target.reason}.{required}")
+    return "\n".join(lines)
 
 
 def build_search_replace_repair_prompt(

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from forge.edit_targets import EditableTargetSet, select_editable_targets
 from forge.execution import ExecutionService, ExecutionServiceError
 from forge.execution.execution_prompt import (
     build_budgeted_numbered_file_details,
@@ -49,6 +50,8 @@ class ImplementationResult:
     test_warning: str | None = None
     repair_attempts_made: int = 0
     srp_failure_details: list[dict[str, Any]] | None = None
+    editable_targets: EditableTargetSet | None = None
+    rejected_files: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable result."""
@@ -71,6 +74,10 @@ class ImplementationResult:
             "test_warning": self.test_warning,
             "repair_attempts_made": self.repair_attempts_made,
             "srp_failure_details": self.srp_failure_details or [],
+            "editable_targets": (
+                self.editable_targets.to_dict() if self.editable_targets is not None else None
+            ),
+            "rejected_files": self.rejected_files or [],
         }
 
 
@@ -98,6 +105,7 @@ class ImplementationService:
         output_path: Path | None = None,
         repair_attempts: int = 1,
         output_format: Literal["search_replace", "unified_diff"] = "search_replace",
+        editable_targets: EditableTargetSet | None = None,
     ) -> ImplementationResult:
         """Generate and store a model-produced patch, with optional repair.
 
@@ -126,7 +134,26 @@ class ImplementationService:
         if request.context_bundle is None or request.implementation_plan is None:
             raise ExecutionServiceError("Execution context was not prepared.")
 
+        editable_targets = editable_targets or select_editable_targets(task, request.context_bundle)
+
         if output_format == "search_replace":
+            target_errors = _editable_target_errors(
+                task, workset, request.context_bundle, editable_targets
+            )
+            if target_errors:
+                return ImplementationResult(
+                    task=task,
+                    workset=workset,
+                    model=selected_model,
+                    status="rejected",
+                    patch_path=None,
+                    valid=False,
+                    affected_files=[],
+                    validation_errors=target_errors,
+                    patch_name=None,
+                    show_target=None,
+                    editable_targets=editable_targets,
+                )
             return self._implement_search_replace(
                 root=root,
                 task=task,
@@ -137,6 +164,7 @@ class ImplementationService:
                 timeout_seconds=timeout_seconds,
                 output_path=output_path,
                 repair_attempts=repair_attempts,
+                editable_targets=editable_targets,
             )
         return self._implement_unified_diff(
             root=root,
@@ -165,6 +193,7 @@ class ImplementationService:
         timeout_seconds: int | None,
         output_path: Path | None,
         repair_attempts: int,
+        editable_targets: EditableTargetSet,
     ) -> ImplementationResult:
         """Full search-replace pipeline: prompt → parse → apply → diff → validate."""
         prompt, test_warning = build_search_replace_prompt(
@@ -173,6 +202,7 @@ class ImplementationService:
             request.implementation_plan,
             request.selected_model or selected_model,
             request.related_memory,
+            editable_targets,
         )
         request.prompt = prompt
 
@@ -185,10 +215,15 @@ class ImplementationService:
         raw_response = _strip_markdown_fence(response.content)
         attempts_made = 0
 
-        srp_result = _parse_and_apply_srp(root, raw_response, truncated=response.truncated)
+        srp_result, rejected_files = _parse_and_apply_srp(
+            root,
+            raw_response,
+            truncated=response.truncated,
+            editable_targets=editable_targets,
+        )
         file_details = _bundle_file_details(task, request.context_bundle)
 
-        while not srp_result.valid and attempts_made < repair_attempts:
+        while not srp_result.valid and not rejected_files and attempts_made < repair_attempts:
             attempts_made += 1
             auth_excerpts = _srp_authoritative_excerpts(root, srp_result)
             repair_prompt = build_search_replace_repair_prompt(
@@ -206,8 +241,11 @@ class ImplementationService:
             )
             raw_response = _strip_markdown_fence(repair_response.content)
             current_model = repair_response.model
-            srp_result = _parse_and_apply_srp(
-                root, raw_response, truncated=repair_response.truncated
+            srp_result, rejected_files = _parse_and_apply_srp(
+                root,
+                raw_response,
+                truncated=repair_response.truncated,
+                editable_targets=editable_targets,
             )
 
         if srp_result.valid and srp_result.patch_content:
@@ -233,6 +271,7 @@ class ImplementationService:
                     show_target=_show_target(root, patch.path),
                     test_warning=test_warning,
                     repair_attempts_made=attempts_made,
+                    editable_targets=editable_targets,
                 )
             # SRP applied OK but the resulting diff is still invalid (edge case).
             # Fall through to rejected result below.
@@ -255,6 +294,7 @@ class ImplementationService:
                 raw_response_path=invalid_path,
                 test_warning=test_warning,
                 repair_attempts_made=attempts_made,
+                editable_targets=editable_targets,
             )
 
         # SRP itself failed (parse error or block not found).
@@ -274,6 +314,8 @@ class ImplementationService:
             test_warning=test_warning,
             repair_attempts_made=attempts_made,
             srp_failure_details=[detail.to_dict() for detail in srp_result.failure_details],
+            editable_targets=editable_targets,
+            rejected_files=rejected_files,
         )
 
     # ------------------------------------------------------------------
@@ -400,8 +442,12 @@ class ImplementationService:
 
 
 def _parse_and_apply_srp(
-    root: Path, raw_response: str, *, truncated: bool = False
-) -> SearchReplaceResult:
+    root: Path,
+    raw_response: str,
+    *,
+    truncated: bool = False,
+    editable_targets: EditableTargetSet | None = None,
+) -> tuple[SearchReplaceResult, list[str]]:
     """Parse SEARCH/REPLACE blocks from ``raw_response`` and apply them to ``root``.
 
     When the provider reports the response was cut off by an output-length or
@@ -411,6 +457,27 @@ def _parse_and_apply_srp(
     the requested format look identical to the caller.
     """
     blocks = parse_search_replace_blocks(raw_response)
+    rejected_files = _rejected_srp_files(blocks, editable_targets)
+    if rejected_files:
+        allowed = _format_approved_targets(editable_targets)
+        errors = [
+            "Model attempted to edit a file outside the approved target set:\n"
+            + "\n".join(rejected_files)
+            + "\nApproved editable targets:\n"
+            + allowed
+        ]
+        return (
+            SearchReplaceResult(
+                blocks=blocks,
+                applications=[],
+                patch_content=None,
+                valid=False,
+                errors=errors,
+                raw_response=raw_response,
+                failure_details=[],
+            ),
+            rejected_files,
+        )
     result = apply_blocks(root, blocks)
     errors = result.errors
     if truncated and not blocks:
@@ -422,14 +489,66 @@ def _parse_and_apply_srp(
             *errors,
         ]
     # Preserve the raw response so callers can save it as an artifact on failure.
-    return SearchReplaceResult(
-        blocks=result.blocks,
-        applications=result.applications,
-        patch_content=result.patch_content,
-        valid=result.valid,
-        errors=errors,
-        raw_response=raw_response,
-        failure_details=result.failure_details,
+    return (
+        SearchReplaceResult(
+            blocks=result.blocks,
+            applications=result.applications,
+            patch_content=result.patch_content,
+            valid=result.valid,
+            errors=errors,
+            raw_response=raw_response,
+            failure_details=result.failure_details,
+        ),
+        [],
+    )
+
+
+def _editable_target_errors(
+    task: str,
+    workset: str,
+    bundle: Any,
+    editable_targets: EditableTargetSet,
+) -> list[str]:
+    if editable_targets.missing_required:
+        missing = ", ".join(editable_targets.missing_required)
+        return [
+            f"Required edit target not found in workset: {missing}\n"
+            "This usually means workset selection failed.\n"
+            "Run:\n"
+            f'forge workset suggest "{task}"\n'
+            f'forge workset create {workset} --query "{task}"'
+        ]
+    if not editable_targets.targets:
+        files = "\n".join(f"- {getattr(file, 'path', '')}" for file in getattr(bundle, "files", []))
+        return [
+            "No editable targets were found for this task.\n"
+            "This usually means the workset did not contain the target file.\n"
+            f"Task:\n{task}\n"
+            f"Workset files:\n{files or '(none)'}"
+        ]
+    return []
+
+
+def _rejected_srp_files(blocks: list[Any], editable_targets: EditableTargetSet | None) -> list[str]:
+    if editable_targets is None:
+        return []
+    allowed = editable_targets.allowed_paths()
+    rejected: list[str] = []
+    seen: set[str] = set()
+    for block in blocks:
+        path = block.file_path.strip().replace("\\", "/").lstrip("./")
+        if path not in allowed and path not in seen:
+            seen.add(path)
+            rejected.append(path)
+    return rejected
+
+
+def _format_approved_targets(editable_targets: EditableTargetSet | None) -> str:
+    if editable_targets is None or not editable_targets.targets:
+        return "- (none)"
+    return "\n".join(
+        f"- {target.path} ({target.confidence}: {target.reason})"
+        for target in editable_targets.targets
     )
 
 

@@ -274,6 +274,14 @@ but SEARCH/REPLACE is the recommended path because it avoids hunk line-number
 failures. The command does not apply patches or edit source files directly.
 Invalid model output is preserved under `.forge/patches/invalid/` for review.
 
+Forge separates workset context from editable targets. A workset may include
+files that help the model understand the task, but `forge implement` approves a
+stricter editable target set before asking for SEARCH/REPLACE blocks. For a task
+such as `fix SessionControllerIntegrationTest`, the exact test file is required
+and related implementation files are limited to the same module when possible.
+Blocks for unrelated context files, for example UI files in another package, are
+rejected before Forge attempts to apply them.
+
 `forge patch validate` performs a two-phase check: structural format validation
 followed by `git apply --check` against the current working tree. Output
 includes `structural_valid`, `apply_check_valid`, validation errors, and

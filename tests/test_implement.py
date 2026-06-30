@@ -169,6 +169,10 @@ def test_search_replace_prompt_uses_budgeted_context_and_edit_targets(tmp_path: 
 
     assert warning is None
     assert "# Edit Targeting Plan" in prompt
+    assert "# Approved Editable Files" in prompt
+    assert "You may ONLY emit SEARCH/REPLACE blocks" in prompt
+    assert "Any block for any other file will be rejected." in prompt
+    assert "unless unavoidable" not in prompt
     assert "| src/Big.java | modify |" in prompt
     assert "Content mode: focused excerpt" in prompt
     assert "Reason: large primary target, budget-limited" in prompt
@@ -673,7 +677,7 @@ def test_targeted_disk_excerpts_deduplicates_locations(tmp_path: Path) -> None:
 
 
 def test_repair_loop_uses_targeted_excerpts(tmp_path: Path) -> None:
-    """Repair prompt sent to the model must include targeted disk excerpts when context mismatches exist."""
+    """Repair prompts include targeted disk excerpts when context mismatches exist."""
     from forge.services.implementation_service import ImplementationService
 
     # Create a real source file with 40 lines of known content
@@ -772,3 +776,155 @@ def test_srp_empty_response_without_truncation_gets_generic_error(tmp_path: Path
     assert result.valid is False
     assert any("No SEARCH/REPLACE blocks found" in err for err in result.validation_errors)
     assert not any("truncated" in err.lower() for err in result.validation_errors)
+
+
+def _make_session_workset(root: Path, *, include_test: bool = True) -> None:
+    files = []
+    controller = root / "archon-api/src/main/java/com/acme/SessionController.java"
+    controller.parent.mkdir(parents=True, exist_ok=True)
+    controller.write_text(
+        "package com.acme;\n\n"
+        "public class SessionController {\n"
+        '    String status() { return "old"; }\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    files.append(
+        {
+            "path": "archon-api/src/main/java/com/acme/SessionController.java",
+            "score": 80,
+            "category": "source",
+            "reasons": [],
+            "manual": False,
+        }
+    )
+    if include_test:
+        test = root / "archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java"
+        test.parent.mkdir(parents=True, exist_ok=True)
+        test.write_text(
+            "package com.acme;\n\n"
+            "class SessionControllerIntegrationTest {\n"
+            "    void passes() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        files.insert(
+            0,
+            {
+                "path": "archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java",
+                "score": 100,
+                "category": "test",
+                "reasons": [],
+                "manual": False,
+            },
+        )
+    ui = root / "axiom-ui/src/views/specweaver/SessionView.tsx"
+    ui.parent.mkdir(parents=True, exist_ok=True)
+    ui.write_text("export function SessionView() { return null; }\n", encoding="utf-8")
+    files.append(
+        {
+            "path": "axiom-ui/src/views/specweaver/SessionView.tsx",
+            "score": 40,
+            "category": "source",
+            "reasons": [],
+            "manual": False,
+        }
+    )
+    save(
+        root,
+        {
+            "schema_version": 1,
+            "name": "session-fix",
+            "query": "fix SessionControllerIntegrationTest",
+            "root": str(root),
+            "created_at": "2026-06-30T00:00:00+00:00",
+            "updated_at": "2026-06-30T00:00:00+00:00",
+            "include_tests": True,
+            "max_results": 10,
+            "files": files,
+        },
+    )
+
+
+def test_srp_block_for_approved_file_is_allowed(tmp_path: Path) -> None:
+    _make_session_workset(tmp_path)
+    response = """archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java
+<<<<<<< SEARCH
+class SessionControllerIntegrationTest {
+    void passes() {}
+}
+=======
+class SessionControllerIntegrationTest {
+    void passes() {}
+    void failsBeforeFix() {}
+}
+>>>>>>> REPLACE
+"""
+    manager = FakeModelManager(response)
+
+    result = ImplementationService(manager).implement(
+        tmp_path,
+        "fix SessionControllerIntegrationTest",
+        "session-fix",
+        repair_attempts=0,
+        output_format="search_replace",
+    )
+
+    assert result.valid is True
+    assert result.affected_files == [
+        "archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java"
+    ]
+    assert result.rejected_files == [] or result.rejected_files is None
+
+
+def test_srp_block_for_disallowed_file_is_rejected_before_apply(tmp_path: Path) -> None:
+    _make_session_workset(tmp_path)
+    response = """axiom-ui/src/views/specweaver/SessionView.tsx
+<<<<<<< SEARCH
+export function SessionView() { return null; }
+=======
+export function SessionView() { return <div />; }
+>>>>>>> REPLACE
+"""
+    manager = FakeModelManager(response)
+
+    with patch("forge.services.implementation_service.apply_blocks") as apply_mock:
+        result = ImplementationService(manager).implement(
+            tmp_path,
+            "fix SessionControllerIntegrationTest",
+            "session-fix",
+            repair_attempts=0,
+            output_format="search_replace",
+        )
+
+    apply_mock.assert_not_called()
+    assert result.valid is False
+    assert result.status == "rejected"
+    assert result.rejected_files == ["axiom-ui/src/views/specweaver/SessionView.tsx"]
+    assert result.raw_response_path is not None
+    assert result.raw_response_path.parent == tmp_path / ".forge" / "patches" / "invalid"
+    assert any("outside the approved target set" in err for err in result.validation_errors)
+    assert any("SessionControllerIntegrationTest.java" in err for err in result.validation_errors)
+
+
+def test_required_edit_target_missing_fails_before_model_call(tmp_path: Path) -> None:
+    _make_session_workset(tmp_path, include_test=False)
+    manager = FakeModelManager("should not be used")
+
+    result = ImplementationService(manager).implement(
+        tmp_path,
+        "fix SessionControllerIntegrationTest",
+        "session-fix",
+        repair_attempts=0,
+        output_format="search_replace",
+    )
+
+    assert result.valid is False
+    assert result.status == "rejected"
+    assert len(manager.prompts) == 0
+    assert any(
+        "Required edit target not found in workset: SessionControllerIntegrationTest" in err
+        for err in result.validation_errors
+    )
+    assert result.editable_targets is not None
+    assert result.editable_targets.missing_required == ["SessionControllerIntegrationTest"]

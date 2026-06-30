@@ -225,7 +225,11 @@ def realign_patch_hunk_headers(root: Path, content: str) -> tuple[str, list[str]
 
             corrected_header = line
             if old_block and not _matches_at(actual_lines, old_start, old_block):
-                matches = _find_block_matches(actual_lines, old_block)
+                matches = (
+                    []
+                    if _has_ambiguous_distinctive_line(actual_lines, old_block)
+                    else _find_block_matches(actual_lines, old_block)
+                )
                 if len(matches) == 1:
                     new_old_start = matches[0] + 1  # convert 0-based to 1-based
                     delta = new_old_start - old_start
@@ -237,7 +241,8 @@ def realign_patch_hunk_headers(root: Path, content: str) -> tuple[str, list[str]
                             notes.append(
                                 f"{current_file}: realigned hunk header from line "
                                 f"{old_start} to {new_old_start} "
-                                "(content matched uniquely at a different position)."
+                                "(anchor-line/full-block match: content matched uniquely "
+                                "at a different position)."
                             )
                 else:
                     # Full-block match failed (0 or ambiguous matches). Fall back to
@@ -251,7 +256,9 @@ def realign_patch_hunk_headers(root: Path, content: str) -> tuple[str, list[str]
                         new_old_start = old_start + delta
                         corrected_new_start = new_start + delta
                         if new_old_start >= 1:
-                            candidate = _rewrite_hunk_header(line, new_old_start, corrected_new_start)
+                            candidate = _rewrite_hunk_header(
+                                line, new_old_start, corrected_new_start
+                            )
                             if candidate != line:
                                 corrected_header = candidate
                                 if current_file:
@@ -304,6 +311,17 @@ def _find_block_matches(actual_lines: list[str], block: list[str]) -> list[int]:
     return matches
 
 
+def _has_ambiguous_distinctive_line(actual_lines: list[str], block: list[str]) -> bool:
+    """Return True when a block contains a non-trivial line repeated in the file."""
+    for block_line in block:
+        stripped = block_line.strip()
+        if len(stripped) < _ANCHOR_MIN_LEN or _ANCHOR_TRIVIAL_RE.match(block_line):
+            continue
+        if sum(1 for line in actual_lines if line == block_line) > 1:
+            return True
+    return False
+
+
 def _anchor_line_delta(
     actual_lines: list[str], old_block: list[str], old_start: int
 ) -> int | None:
@@ -332,7 +350,7 @@ def _anchor_line_delta(
             # Line missing from file or appears multiple times — not a reliable anchor.
             continue
 
-        actual_idx = file_positions[0]  # 0-based
+        actual_idx = file_positions[0] + 1  # 1-based
         expected_idx = old_start - 1 + block_idx  # 0-based position the patch declares
         delta = actual_idx - expected_idx
         votes[delta] = votes.get(delta, 0) + 1

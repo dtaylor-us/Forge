@@ -64,6 +64,8 @@ Domain packages hold deterministic business logic:
 - `forge/worksets/`: deterministic query analysis, identifier expansion,
   relationship discovery, candidate scoring, ranked assembly, persisted workset
   semantics, and manual file membership rules.
+- `forge/edit_targets/`: deterministic selection of the stricter set of workset
+  files a model is allowed to modify during SEARCH/REPLACE patch generation.
 - `forge/context/`: context bundle construction, summaries, symbols, excerpts,
   and rendering.
 - `forge/memory/`: memory models, storage, search, and similarity scoring.
@@ -123,6 +125,30 @@ implementation candidates exist, files such as `README.md`, `Dockerfile`, and
 build manifests are capped by a small quota. Selected candidates retain
 human-readable reasons for primary matches, relationships, identifier matches,
 content matches, test inclusion, documentation, and infrastructure signals.
+
+### Editable Target Enforcement
+
+A workset is context, not blanket edit permission. Patch generation computes an
+`EditableTargetSet` from the task and prepared context bundle before invoking
+the model. The selector reuses workset query parsing and relationship rules:
+
+- Strong code identifiers such as `SessionControllerIntegrationTest` require an
+  exact matching file in the workset.
+- Test identifiers derive related implementation candidates such as
+  `SessionController`, `SessionService`, `SessionRepository`, `SessionMapper`,
+  `SessionApi`, `SessionClient`, and `SessionProvider`.
+- Related editable targets prefer the same top-level module as the primary
+  target, which protects monorepos from cross-package edits.
+- Documentation, config, generated files, and unrelated context files remain
+  context-only unless the task explicitly targets them.
+
+`ImplementationService` includes the approved editable files in the
+SEARCH/REPLACE prompt and validates every parsed block path against the target
+set before calling the SRP applier. A block for a disallowed file is rejected,
+the raw model response is saved under `.forge/patches/invalid/`, and the result
+metadata includes `editable_targets` and `rejected_files`. If a required target
+is missing, patch generation fails before the model call with workset recovery
+commands.
 
 ### Provider Abstractions
 
@@ -373,6 +399,8 @@ are emitted as `ArtifactRelationship` entries.
 **Key invariants:**
 
 - No patch is automatically applied. The workflow stops before `apply`.
+- SEARCH/REPLACE blocks are constrained by the approved editable target set;
+  wrong-file edits are rejected before patch application or validation.
 - The engine imports services inside stage methods (lazy imports) to keep the
   module boundary clean and allow service-level mocking in tests.
 - `WorkflowEngine` never calls models directly. All model calls remain inside
