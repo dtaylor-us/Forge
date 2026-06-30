@@ -172,6 +172,10 @@ class WorkflowEngine:
             # converge on a hunk a smaller/local model miscounted before the
             # whole run is marked failed.
             repair_attempts=3,
+            # SEARCH/REPLACE is the default: the model only needs to copy
+            # content verbatim (no line numbers), so hunk-header miscount
+            # failures cannot occur.
+            output_format="search_replace",
         )
         result = impl.to_dict()
         run.artifacts["patch"] = result

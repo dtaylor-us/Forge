@@ -1357,6 +1357,18 @@ def implement_command(
             help="Number of repair attempts on invalid patch.",
         ),
     ] = 1,
+    output_format: Annotated[
+        str,
+        typer.Option(
+            "--output-format",
+            help=(
+                "Patch generation strategy: 'search_replace' (default) asks the model for "
+                "SEARCH/REPLACE blocks and converts them to a unified diff — no line numbers "
+                "required, fewer apply failures. 'unified_diff' uses the legacy path where "
+                "the model produces the diff directly."
+            ),
+        ),
+    ] = "search_replace",
     output_json: Annotated[
         bool,
         typer.Option("--json", help="Output as JSON."),
@@ -1364,6 +1376,13 @@ def implement_command(
 ) -> None:
     """Generate a human-reviewable patch without applying it."""
     resolved = project_service.resolve_project_root(root)
+
+    if output_format not in ("search_replace", "unified_diff"):
+        console.print(
+            f"[red]Error:[/red] --output-format must be 'search_replace' or 'unified_diff', "
+            f"got '{output_format}'."
+        )
+        raise typer.Exit(code=1)
 
     try:
         with _running("Generating patch...", enabled=not output_json):
@@ -1377,6 +1396,7 @@ def implement_command(
                 include_full=include_full,
                 output_path=output_path,
                 repair_attempts=repair_attempts,
+                output_format=output_format,  # type: ignore[arg-type]
             )
     except ExecutionServiceError as exc:
         console.print(f"[red]Execution error:[/red] {exc}")

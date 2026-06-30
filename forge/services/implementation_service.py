@@ -6,14 +6,17 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from forge.execution import ExecutionService, ExecutionServiceError
 from forge.execution.execution_prompt import (
     build_implementation_prompt,
     build_numbered_file_details,
     build_repair_prompt,
+    build_search_replace_prompt,
+    build_search_replace_repair_prompt,
 )
+from forge.srp import ParseError, SearchReplaceResult, apply_blocks, parse_search_replace_blocks
 from forge.models.manager import ModelManager
 from forge.patches import (
     Patch,
@@ -92,14 +95,21 @@ class ImplementationService:
         include_full: bool = True,
         output_path: Path | None = None,
         repair_attempts: int = 1,
+        output_format: Literal["search_replace", "unified_diff"] = "search_replace",
     ) -> ImplementationResult:
-        """Generate and store a model-produced unified diff, with optional repair.
+        """Generate and store a model-produced patch, with optional repair.
 
-        ``include_full`` defaults to True: patch generation requires the model to
-        reproduce exact context lines from the real file, so excerpted/truncated
-        content (the default for browsing-oriented commands) is not appropriate
-        here. The context-verification step below independently catches any
-        remaining mismatches between the model's diff and the file on disk.
+        ``output_format`` controls which strategy the model uses:
+        - ``"search_replace"`` (default): Model produces SEARCH/REPLACE blocks; forge
+          applies them in memory and generates the unified diff via difflib.  The model
+          only needs to copy content verbatim — no line numbers required — which
+          eliminates the main failure class of unified-diff generation.
+        - ``"unified_diff"``: Legacy path.  Model produces a raw unified diff directly.
+          Kept for fallback and comparison.
+
+        ``include_full`` defaults to True: both strategies require the model to
+        reproduce exact file content, so excerpted/truncated content (the default
+        for browsing-oriented commands) is not appropriate here.
         """
         selected_model = model or self._model_manager.config().default_model
         request = self._execution_service.create_request(
@@ -114,6 +124,169 @@ class ImplementationService:
         if request.context_bundle is None or request.implementation_plan is None:
             raise ExecutionServiceError("Execution context was not prepared.")
 
+        if output_format == "search_replace":
+            return self._implement_search_replace(
+                root=root,
+                task=task,
+                workset=workset,
+                request=request,
+                selected_model=selected_model,
+                model=model,
+                timeout_seconds=timeout_seconds,
+                output_path=output_path,
+                repair_attempts=repair_attempts,
+            )
+        return self._implement_unified_diff(
+            root=root,
+            task=task,
+            workset=workset,
+            request=request,
+            selected_model=selected_model,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            output_path=output_path,
+            repair_attempts=repair_attempts,
+        )
+
+    # ------------------------------------------------------------------
+    # Search/Replace path
+    # ------------------------------------------------------------------
+
+    def _implement_search_replace(
+        self,
+        root: Path,
+        task: str,
+        workset: str,
+        request: Any,
+        selected_model: str,
+        model: str | None,
+        timeout_seconds: int | None,
+        output_path: Path | None,
+        repair_attempts: int,
+    ) -> ImplementationResult:
+        """Full search-replace pipeline: prompt → parse → apply → diff → validate."""
+        prompt, test_warning = build_search_replace_prompt(
+            task,
+            request.context_bundle,
+            request.implementation_plan,
+            request.selected_model or selected_model,
+            request.related_memory,
+        )
+        request.prompt = prompt
+
+        response = self._model_manager.ask(
+            prompt=prompt,
+            model=model,
+            timeout_seconds=timeout_seconds,
+        )
+        current_model = response.model
+        raw_response = response.content
+        attempts_made = 0
+
+        srp_result = _parse_and_apply_srp(root, raw_response)
+        file_details = _bundle_file_details(request.context_bundle)
+
+        while not srp_result.valid and attempts_made < repair_attempts:
+            attempts_made += 1
+            auth_excerpts = _srp_authoritative_excerpts(root, srp_result)
+            repair_prompt = build_search_replace_repair_prompt(
+                task=task,
+                original_response=raw_response,
+                failures=srp_result.errors,
+                file_details=file_details,
+                authoritative_excerpts=auth_excerpts,
+            )
+            repair_response = self._model_manager.ask(
+                prompt=repair_prompt,
+                model=model,
+                timeout_seconds=timeout_seconds,
+            )
+            raw_response = repair_response.content
+            current_model = repair_response.model
+            srp_result = _parse_and_apply_srp(root, raw_response)
+
+        if srp_result.valid and srp_result.patch_content:
+            # The SRP applier produced a clean unified diff — validate it
+            # through the same pipeline as the legacy path.
+            patch_content, _ = realign_patch_hunk_headers(root, srp_result.patch_content)
+            valid, errors, affected_files = validate_patch_content(patch_content)
+            apply_ok, apply_error = _apply_check_if_structurally_valid(root, patch_content, valid)
+            if valid and apply_ok:
+                patch = _save_valid_patch(
+                    root, patch_content, output_path=output_path, task=task
+                )
+                return ImplementationResult(
+                    task=task,
+                    workset=workset,
+                    model=current_model,
+                    status="accepted",
+                    patch_path=patch.path,
+                    valid=patch.valid,
+                    affected_files=patch.affected_files,
+                    validation_errors=patch.validation_errors,
+                    patch_name=patch.name,
+                    show_target=_show_target(root, patch.path),
+                    test_warning=test_warning,
+                    repair_attempts_made=attempts_made,
+                )
+            # SRP applied OK but the resulting diff is still invalid (edge case).
+            # Fall through to rejected result below.
+            if apply_error and apply_error not in errors:
+                errors = [*errors, apply_error]
+            invalid_path = save_invalid_response(
+                root, patch_content, prefix=_artifact_slug(task)
+            )
+            return ImplementationResult(
+                task=task,
+                workset=workset,
+                model=current_model,
+                status="rejected",
+                patch_path=None,
+                valid=False,
+                affected_files=affected_files,
+                validation_errors=errors,
+                patch_name=None,
+                show_target=None,
+                raw_response_path=invalid_path,
+                test_warning=test_warning,
+                repair_attempts_made=attempts_made,
+            )
+
+        # SRP itself failed (parse error or block not found).
+        invalid_path = save_invalid_response(root, raw_response, prefix=_artifact_slug(task))
+        return ImplementationResult(
+            task=task,
+            workset=workset,
+            model=current_model,
+            status="rejected",
+            patch_path=None,
+            valid=False,
+            affected_files=[],
+            validation_errors=srp_result.errors,
+            patch_name=None,
+            show_target=None,
+            raw_response_path=invalid_path,
+            test_warning=test_warning,
+            repair_attempts_made=attempts_made,
+        )
+
+    # ------------------------------------------------------------------
+    # Unified-diff path (legacy)
+    # ------------------------------------------------------------------
+
+    def _implement_unified_diff(
+        self,
+        root: Path,
+        task: str,
+        workset: str,
+        request: Any,
+        selected_model: str,
+        model: str | None,
+        timeout_seconds: int | None,
+        output_path: Path | None,
+        repair_attempts: int,
+    ) -> ImplementationResult:
+        """Legacy unified-diff pipeline kept for fallback and comparison."""
         prompt, test_warning = build_implementation_prompt(
             task,
             request.context_bundle,
@@ -148,6 +321,7 @@ class ImplementationService:
         file_details = _bundle_file_details(request.context_bundle)
         while not is_valid and attempts_made < repair_attempts:
             attempts_made += 1
+            targeted_excerpts = _targeted_disk_excerpts(root, context_mismatches)
             repair_prompt = build_repair_prompt(
                 task=task,
                 original_patch=current_content,
@@ -155,6 +329,7 @@ class ImplementationService:
                 apply_check_error=apply_error,
                 file_details=file_details,
                 context_mismatches=context_mismatches,
+                targeted_file_excerpts=targeted_excerpts,
             )
             repair_response = self._model_manager.ask(
                 prompt=repair_prompt,
@@ -216,6 +391,68 @@ class ImplementationService:
             test_warning=test_warning,
             repair_attempts_made=attempts_made,
         )
+
+
+def _parse_and_apply_srp(root: Path, raw_response: str) -> SearchReplaceResult:
+    """Parse SEARCH/REPLACE blocks from ``raw_response`` and apply them to ``root``."""
+    blocks = parse_search_replace_blocks(raw_response)
+    result = apply_blocks(root, blocks)
+    # Preserve the raw response so callers can save it as an artifact on failure.
+    return SearchReplaceResult(
+        blocks=result.blocks,
+        applications=result.applications,
+        patch_content=result.patch_content,
+        valid=result.valid,
+        errors=result.errors,
+        raw_response=raw_response,
+    )
+
+
+def _srp_authoritative_excerpts(root: Path, srp_result: SearchReplaceResult) -> str:
+    """Produce disk-fresh excerpts for each file that had a failed SRP block.
+
+    Works analogously to ``_targeted_disk_excerpts`` for the unified-diff path.
+    For each failed application we extract a window of file content around the
+    region the SEARCH block was targeting (approximated by searching for the
+    first line of the SEARCH string in the file, or falling back to lines 1-40).
+    """
+    parts: list[str] = []
+    context_lines = 20
+    for app in srp_result.applications:
+        if app.applied:
+            continue
+        file_path = app.block.file_path
+        abs_path = root / file_path
+        try:
+            file_text = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        file_lines = file_text.splitlines()
+        n = len(file_lines)
+
+        # Try to locate roughly where the SEARCH content should be by finding
+        # the first non-blank line of the search string in the file.
+        approx_line = 0
+        first_search_line = next(
+            (ln.strip() for ln in app.block.search.splitlines() if ln.strip()), ""
+        )
+        if first_search_line:
+            for idx, fl in enumerate(file_lines):
+                if fl.strip() == first_search_line:
+                    approx_line = idx
+                    break
+
+        start = max(0, approx_line - context_lines)
+        end = min(n, approx_line + context_lines + 1)
+        snippet = []
+        for idx in range(start, end):
+            marker = ">>>" if idx == approx_line else "   "
+            snippet.append(f"{idx + 1:>5}{marker}| {file_lines[idx]}")
+
+        header = f"### {file_path} (lines {start + 1}–{end})"
+        parts.append(header + "\n```\n" + "\n".join(snippet) + "\n```")
+
+    return "\n\n".join(parts)
 
 
 def _strip_markdown_fence(content: str) -> str:
@@ -288,6 +525,57 @@ def _bundle_file_details(bundle: Any) -> str:
     miscounted hunk header it produced the first time.
     """
     return build_numbered_file_details(bundle)
+
+
+def _targeted_disk_excerpts(root: Path, context_mismatches: list[str], context_lines: int = 20) -> str:
+    """Extract actual file lines around each mismatch location, read fresh from disk.
+
+    The context bundle used for ``file_details`` may be budget-truncated (e.g. only
+    lines 1-60 visible) when the workset is large.  A model that cannot see line 165
+    in ``file_details`` will hallucinate what the file looks like there and repeat the
+    same wrong context across all repair attempts.
+
+    This reads the source file directly from disk for each mismatch and returns a
+    ``context_lines``-wide window centred on the mismatched line, numbered with the
+    same "N| " gutter the model already uses to produce correct ``@@ -L,N @@`` headers.
+    It is safe to call when ``context_mismatches`` is empty (returns an empty string).
+    """
+    import re as _re
+
+    _MISMATCH_RE = _re.compile(r"^(.+?):(\d+): patch context does not match", _re.MULTILINE)
+
+    # Collect unique (file, line) pairs from the mismatch report.
+    seen: set[tuple[str, int]] = set()
+    locations: list[tuple[str, int]] = []
+    for mismatch in context_mismatches:
+        for m in _MISMATCH_RE.finditer(mismatch):
+            key = (m.group(1), int(m.group(2)))
+            if key not in seen:
+                seen.add(key)
+                locations.append(key)
+
+    if not locations:
+        return ""
+
+    parts: list[str] = []
+    for rel_path, line_no in locations:
+        abs_path = root / rel_path
+        try:
+            file_lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+
+        start = max(0, line_no - context_lines - 1)
+        end = min(len(file_lines), line_no + context_lines)
+        snippet_lines = []
+        for idx in range(start, end):
+            marker = ">>>" if idx + 1 == line_no else "   "
+            snippet_lines.append(f"{idx + 1:>5}{marker}| {file_lines[idx]}")
+
+        header = f"### {rel_path} (lines {start + 1}–{end}, >>> marks the mismatched line)"
+        parts.append(header + "\n```\n" + "\n".join(snippet_lines) + "\n```")
+
+    return "\n\n".join(parts)
 
 
 def _artifact_slug(task: str) -> str:

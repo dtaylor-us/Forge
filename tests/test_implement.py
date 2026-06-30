@@ -468,3 +468,162 @@ def test_repair_prompt_contains_original_patch_and_errors() -> None:
     assert "Patch must begin with raw diff content" in prompt
     assert "corrupt hunk at line 3" in prompt
     assert "add subtract" in prompt
+
+
+def test_repair_prompt_includes_targeted_excerpts_when_provided() -> None:
+    from forge.execution.execution_prompt import build_repair_prompt
+
+    targeted = "### src/Foo.java (lines 160–180)\n```\n  165>>>| // Act & Assert\n```"
+    prompt = build_repair_prompt(
+        task="fix test",
+        original_patch="--- a/Foo.java\n+++ b/Foo.java\n@@ -165 +165 @@\n-old\n+new\n",
+        structural_errors=[],
+        apply_check_error="patch failed",
+        file_details="file content here",
+        targeted_file_excerpts=targeted,
+    )
+
+    assert "AUTHORITATIVE FILE CONTENT AT MISMATCH LOCATIONS" in prompt
+    assert targeted in prompt
+    assert "ground truth" in prompt
+
+
+def test_repair_prompt_omits_targeted_section_when_not_provided() -> None:
+    from forge.execution.execution_prompt import build_repair_prompt
+
+    prompt = build_repair_prompt(
+        task="fix test",
+        original_patch="not a diff",
+        structural_errors=[],
+        apply_check_error="",
+        file_details="file content here",
+    )
+
+    assert "AUTHORITATIVE FILE CONTENT" not in prompt
+
+
+def test_targeted_disk_excerpts_returns_empty_for_no_mismatches() -> None:
+    from forge.services.implementation_service import _targeted_disk_excerpts
+
+    result = _targeted_disk_excerpts(Path("/tmp"), [])
+    assert result == ""
+
+
+def test_targeted_disk_excerpts_reads_correct_lines(tmp_path: Path) -> None:
+    from forge.services.implementation_service import _targeted_disk_excerpts
+
+    # Create a fake source file with 50 numbered lines
+    src = tmp_path / "src" / "Foo.java"
+    src.parent.mkdir()
+    lines = [f"line {i}" for i in range(1, 51)]
+    src.write_text("\n".join(lines), encoding="utf-8")
+
+    mismatch = (
+        "src/Foo.java:25: patch context does not match the real file.\n"
+        "    patch expected:    'old line'\n"
+        "    file actually has: 'line 25'"
+    )
+
+    result = _targeted_disk_excerpts(tmp_path, [mismatch], context_lines=5)
+
+    # Should contain the file path header
+    assert "src/Foo.java" in result
+    # Should contain line 25 marked with >>>
+    assert ">>>" in result
+    assert "line 25" in result
+    # Should contain surrounding lines (20-30 range with 5 context)
+    assert "line 20" in result or "line 21" in result  # start of window
+    assert "line 30" in result or "line 29" in result  # end of window
+
+
+def test_targeted_disk_excerpts_marks_mismatch_line_with_arrow(tmp_path: Path) -> None:
+    from forge.services.implementation_service import _targeted_disk_excerpts
+
+    src = tmp_path / "Foo.java"
+    src.write_text("\n".join(f"line {i}" for i in range(1, 30)), encoding="utf-8")
+
+    mismatch = "Foo.java:10: patch context does not match the real file.\n    patch expected: 'x'"
+    result = _targeted_disk_excerpts(tmp_path, [mismatch], context_lines=3)
+
+    # Line 10 must be marked with >>> and other lines with spaces
+    assert ">>>| line 10" in result
+    assert "   | line 9" in result or "   | line 11" in result
+
+
+def test_targeted_disk_excerpts_deduplicates_locations(tmp_path: Path) -> None:
+    from forge.services.implementation_service import _targeted_disk_excerpts
+
+    src = tmp_path / "Foo.java"
+    src.write_text("\n".join(f"line {i}" for i in range(1, 30)), encoding="utf-8")
+
+    mismatch_a = "Foo.java:10: patch context does not match the real file."
+    mismatch_b = "Foo.java:10: patch context does not match the real file."
+    result = _targeted_disk_excerpts(tmp_path, [mismatch_a, mismatch_b], context_lines=2)
+
+    # Only one excerpt block for the deduplicated location
+    assert result.count("### Foo.java") == 1
+
+
+def test_repair_loop_uses_targeted_excerpts(tmp_path: Path) -> None:
+    """Repair prompt sent to the model must include targeted disk excerpts when context mismatches exist."""
+    from forge.services.implementation_service import ImplementationService
+
+    # Create a real source file with 40 lines of known content
+    target_file = tmp_path / "src" / "Foo.java"
+    target_file.parent.mkdir(parents=True)
+    target_file.write_text(
+        "\n".join(f"    // real line {i}" for i in range(1, 41)),
+        encoding="utf-8",
+    )
+
+    # Register it in a workset
+    save(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "name": "repair-ws",
+            "query": "fix Foo",
+            "root": str(tmp_path),
+            "created_at": "2026-06-28T00:00:00+00:00",
+            "updated_at": "2026-06-28T00:00:00+00:00",
+            "include_tests": False,
+            "max_results": 10,
+            "files": [
+                {
+                    "path": "src/Foo.java",
+                    "score": 80,
+                    "category": "source",
+                    "reasons": [],
+                    "manual": False,
+                }
+            ],
+        },
+    )
+
+    # Patch whose context lines don't exist in the real file
+    bad_patch = (
+        "diff --git a/src/Foo.java b/src/Foo.java\n"
+        "--- a/src/Foo.java\n"
+        "+++ b/src/Foo.java\n"
+        "@@ -5,3 +5,3 @@\n"
+        " // stale line that does not exist\n"
+        "-// old\n"
+        "+// new\n"
+        " // another stale line\n"
+    )
+
+    prompts_seen: list[str] = []
+
+    def _fake_ask(prompt: str, **kwargs: object) -> object:
+        prompts_seen.append(prompt)
+        return ModelResponse(content=bad_patch, model="test-model", provider="test")
+
+    svc = ImplementationService()
+    svc._model_manager.ask = _fake_ask  # type: ignore[method-assign]
+
+    svc.implement(tmp_path, "fix Foo", "repair-ws", repair_attempts=1)
+
+    # The repair prompt (second call) must contain the targeted excerpt section
+    assert len(prompts_seen) >= 2, "Expected at least one repair attempt"
+    repair_prompt = prompts_seen[1]
+    assert "AUTHORITATIVE FILE CONTENT AT MISMATCH LOCATIONS" in repair_prompt

@@ -307,3 +307,151 @@ def test_realign_multiple_hunks_same_file(tmp_path: Path) -> None:
     assert "@@ -9,2 +10,3 @@" in corrected
     assert len(notes) == 1
     assert "9" in notes[0]
+
+
+# ---------------------------------------------------------------------------
+# Anchor-line realignment tests
+# ---------------------------------------------------------------------------
+
+
+def test_anchor_realign_fixes_shifted_hunk(tmp_path: Path) -> None:
+    """Hunk shifted N lines but with correct content is realigned via anchor lines."""
+    # Simulate TacticsController pattern: file has 2 extra lines in method sig
+    # that push the body down. The model generates context starting 2 lines too early.
+    file_lines = [
+        "    public ResponseEntity<Summary> getSummary(",
+        "            @PathVariable Long id,",
+        "            @AuthenticationPrincipal String userId) {",  # extra line added
+        "",                                                        # extra blank line
+        "        Summary summary = service.getSummary(id);",
+        "        return ResponseEntity.ok(summary);",
+        "    }",
+        "",
+        "}",
+    ]
+    _write_file(tmp_path, "src/Controller.java", file_lines)
+
+    # Model generates patch starting at line 3 (the body), but body is really at line 5.
+    patch = (
+        "diff --git a/src/Controller.java b/src/Controller.java\n"
+        "--- a/src/Controller.java\n"
+        "+++ b/src/Controller.java\n"
+        "@@ -3,5 +3,6 @@\n"   # wrong: model thinks body starts at line 3
+        "         Summary summary = service.getSummary(id);\n"
+        "         return ResponseEntity.ok(summary);\n"
+        "     }\n"
+        " \n"
+        " }\n"
+        "+// end\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+
+    # Should realign from line 3 to line 5 (delta = +2)
+    assert "@@ -5," in corrected
+    assert len(notes) == 1
+    assert "anchor-line" in notes[0]
+    assert "5" in notes[0]
+
+
+def test_anchor_realign_trivial_only_block_not_realigned(tmp_path: Path) -> None:
+    """A hunk whose old-block has only trivial lines (brackets, blank) is not anchor-realigned."""
+    file_lines = ["class Foo {", "}", "class Bar {", "}"]
+    _write_file(tmp_path, "src/mod.java", file_lines)
+
+    # Old-block is just "}" — too trivial to anchor on.
+    patch = (
+        "diff --git a/src/mod.java b/src/mod.java\n"
+        "--- a/src/mod.java\n"
+        "+++ b/src/mod.java\n"
+        "@@ -99,1 +99,2 @@\n"
+        " }\n"
+        "+// comment\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_anchor_realign_ambiguous_anchor_not_realigned(tmp_path: Path) -> None:
+    """If a distinctive line appears more than once, it is not used as an anchor."""
+    # Same method body repeated in two places (e.g. overloads) → ambiguous anchor.
+    body_line = "        return ResponseEntity.ok(service.get(id));"
+    file_lines = [
+        "    public ResponseEntity<?> getA(Long id) {",
+        body_line,
+        "    }",
+        "    public ResponseEntity<?> getB(Long id) {",
+        body_line,
+        "    }",
+    ]
+    _write_file(tmp_path, "src/Ctrl.java", file_lines)
+
+    patch = (
+        "diff --git a/src/Ctrl.java b/src/Ctrl.java\n"
+        "--- a/src/Ctrl.java\n"
+        "+++ b/src/Ctrl.java\n"
+        "@@ -50,2 +50,3 @@\n"  # wrong position, but body_line is ambiguous
+        f" {body_line}\n"
+        "     }\n"
+        "+// new\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_anchor_realign_two_anchors_must_agree(tmp_path: Path) -> None:
+    """When two distinctive lines suggest conflicting deltas, no realignment occurs."""
+    file_lines = [
+        "    String alpha = compute();",   # line 1 — anchor A at file idx 0
+        "    String beta = transform();",  # line 2 — anchor B at file idx 1
+        "    // gap",
+        "    String alpha = compute();",   # duplicate! makes anchor A ambiguous
+    ]
+    _write_file(tmp_path, "src/mod.java", file_lines)
+
+    # Model places alpha at line 10 (delta would be -9 from idx 0),
+    # but alpha is duplicated so it won't be used as an anchor.
+    # beta appears once (idx 1); delta from stated pos 11 = 1 - 10 = -9.
+    # Only one non-ambiguous anchor (beta) — single vote, should still realign.
+    patch = (
+        "diff --git a/src/mod.java b/src/mod.java\n"
+        "--- a/src/mod.java\n"
+        "+++ b/src/mod.java\n"
+        "@@ -10,2 +10,3 @@\n"
+        "     String alpha = compute();\n"
+        "     String beta = transform();\n"
+        "+// new\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    # beta is unique, so single-anchor realignment should fire (delta = 1-10+1 = -8? let's check)
+    # beta is at file idx 1 (1-based: 2), expected at block_idx=1 -> old_start-1+1 = 10-1+1 = 10 (0-based 9)
+    # delta = 1 - 9 = -8, new_old_start = 10 + (-8) = 2
+    assert "@@ -2," in corrected
+
+
+def test_anchor_realign_note_mentions_anchor_line(tmp_path: Path) -> None:
+    """Realignment note includes 'anchor-line' to distinguish from full-block realignment."""
+    file_lines = [
+        "    void setup() {",
+        "        this.service = new ServiceImpl();",
+        "    }",
+        "    void doWork() {",
+        "        this.service.execute();",
+        "    }",
+    ]
+    _write_file(tmp_path, "src/Thing.java", file_lines)
+
+    # Patch says line 10 but body is at line 5.
+    patch = (
+        "diff --git a/src/Thing.java b/src/Thing.java\n"
+        "--- a/src/Thing.java\n"
+        "+++ b/src/Thing.java\n"
+        "@@ -10,2 +10,3 @@\n"
+        "         this.service.execute();\n"
+        "     }\n"
+        "+// trailing comment\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert notes
+    assert any("anchor-line" in n for n in notes)

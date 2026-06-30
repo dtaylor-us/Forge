@@ -159,11 +159,39 @@ def _exact_identifier_match(stem_normalized: str, identifiers: list[str]) -> str
 # genuine reference, so short terms must match a whole identifier/path segment or a
 # camelCase/snake_case-aware part instead of an arbitrary substring.
 _MIN_SUBSTRING_TERM_LENGTH = 6
+_GENERIC_IDENTIFIER_PARTS = frozenset(
+    {
+        "api",
+        "client",
+        "controller",
+        "facade",
+        "fixture",
+        "fixtures",
+        "gateway",
+        "handler",
+        "integration",
+        "mapper",
+        "provider",
+        "repository",
+        "request",
+        "response",
+        "service",
+        "spec",
+        "specs",
+        "test",
+        "tests",
+    }
+)
 
 
 def _term_points(base: int, term: SearchTerm) -> int:
     """Scale a base score by how distinctive the matched term is."""
     return max(1, round(base * term.weight / MAX_TERM_WEIGHT))
+
+
+def _is_generic_identifier_part(term: SearchTerm) -> bool:
+    """Return whether a decomposed identifier part is too generic to score alone."""
+    return term.kind == "identifier_part" and term.value.lower() in _GENERIC_IDENTIFIER_PARTS
 
 
 def _content_tokens(line: str) -> set[str]:
@@ -196,14 +224,23 @@ def _matched_terms(
         if value_lower in seen or len(value_lower) < 2:
             continue
         value_normalized = normalize_identifier(term.value)
+        generic_identifier_part = _is_generic_identifier_part(term)
         matched = (
             (value_normalized and value_normalized == stem_normalized)
-            or value_lower in stem_parts
             or (
-                len(value_normalized) >= _MIN_SUBSTRING_TERM_LENGTH
-                and value_normalized in stem_normalized
+                not generic_identifier_part
+                and (
+                    value_lower in stem_parts
+                    or (
+                        len(value_normalized) >= _MIN_SUBSTRING_TERM_LENGTH
+                        and value_normalized in stem_normalized
+                    )
+                    or (
+                        len(value_lower) >= _MIN_SUBSTRING_TERM_LENGTH
+                        and value_lower in name_lower
+                    )
+                )
             )
-            or (len(value_lower) >= _MIN_SUBSTRING_TERM_LENGTH and value_lower in name_lower)
         )
         if matched:
             matches.append(term)
@@ -222,9 +259,12 @@ def _matched_path_terms(
         value_lower = term.value.lower()
         if value_lower in seen or len(value_lower) < 2:
             continue
-        matched = value_lower in path_parts_tokens or (
-            len(value_lower) >= _MIN_SUBSTRING_TERM_LENGTH
-            and any(value_lower in part for part in path_parts_lower)
+        matched = not _is_generic_identifier_part(term) and (
+            value_lower in path_parts_tokens
+            or (
+                len(value_lower) >= _MIN_SUBSTRING_TERM_LENGTH
+                and any(value_lower in part for part in path_parts_lower)
+            )
         )
         if matched:
             matches.append(term)
@@ -247,7 +287,9 @@ def _score_content(
         line_tokens: set[str] | None = None
         for value, term in list(pending.items()):
             is_match = False
-            if len(value) >= _MIN_SUBSTRING_TERM_LENGTH and value in line_lower:
+            if _is_generic_identifier_part(term):
+                is_match = False
+            elif len(value) >= _MIN_SUBSTRING_TERM_LENGTH and value in line_lower:
                 is_match = True
             else:
                 if line_tokens is None:

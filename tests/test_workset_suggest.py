@@ -445,6 +445,20 @@ def test_suggest_does_not_rank_generic_substring_decoys_above_real_target(tmp_pa
     assert "other/Contest.py" not in paths
 
 
+def test_suggest_ignores_generic_identifier_part_controller_decoys(tmp_path):
+    decoys_dir = tmp_path / "lens-api" / "src" / "main" / "java" / "com" / "lens" / "api"
+    decoys_dir.mkdir(parents=True)
+    for name in ["EvidenceController", "GapController", "GovernanceController"]:
+        (decoys_dir / f"{name}.java").write_text(f"public class {name} {{}}\n")
+
+    result = suggest_candidates(
+        "fix SessionControllerIntegrationTest", tmp_path, include_tests=True
+    )
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert not paths
+
+
 def test_score_full_identifier_outweighs_decomposed_part():
     full_identifier_query = parse_query("fix SessionControllerIntegrationTest")
     candidate = score_candidate(
@@ -472,6 +486,21 @@ def test_filename_term_weight_scales_with_term_specificity():
     assert _term_points(SCORE_FILENAME_TERM, matched_full[0]) > _term_points(
         SCORE_FILENAME_TERM, matched_part[0]
     )
+
+
+def test_generic_identifier_part_does_not_match_filename_boundary():
+    from forge.worksets.query import SearchTerm
+
+    controller_part = SearchTerm(value="Controller", weight=1, kind="identifier_part")
+
+    matched = _matched_terms(
+        "evidencecontroller.java",
+        "evidencecontroller",
+        {"evidence", "controller"},
+        [controller_part],
+    )
+
+    assert matched == []
 
 
 def test_list_relevant_files_unbounded_includes_deeply_nested_file(tmp_path):

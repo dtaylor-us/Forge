@@ -1,5 +1,75 @@
 # Dev Log
 
+## 2026-06-30 — SEARCH/REPLACE patch generation (new default)
+
+### Summary
+
+Implemented a SEARCH/REPLACE patch-generation strategy as the new default for
+`forge implement` and `forge workflow`. The unified-diff path asked the model to
+produce `@@ -L,N +L,N @@` headers with correct line numbers, counts, **and**
+verbatim context simultaneously — three correlated constraints that local models
+routinely fail on even with line-numbered gutter context and `--recount`. The
+root cause of the recurrence is that no amount of in-prompt or post-hoc repair
+can reliably fix wrong context lines because the model must reconstruct the file
+from memory when the context bundle is truncated.
+
+The SEARCH/REPLACE format (used by Aider, Codex CLI, and Cursor-style tools)
+eliminates this class entirely: the model outputs `<<<<<<< SEARCH / ======= /
+>>>>>>> REPLACE` blocks containing only the text to find and the replacement;
+forge searches the file for the SEARCH content, applies it in memory, and
+generates the unified diff deterministically via `difflib`. The model only needs
+to copy content verbatim — no line numbers, no counts.
+
+### New package: `forge/srp/`
+
+| File | Purpose |
+|------|---------|
+| `forge/srp/__init__.py` | Package with re-exports: `parse_search_replace_blocks`, `apply_blocks`, `SearchReplaceBlock`, `SearchReplaceResult`, `BlockApplication`, `ParseError` |
+| `forge/srp/models.py` | Frozen dataclasses: `SearchReplaceBlock(file_path, search, replace)`, `BlockApplication(block, applied, error)`, `SearchReplaceResult(blocks, applications, patch_content, valid, errors, raw_response)` |
+| `forge/srp/parser.py` | `parse_search_replace_blocks(content)` — walks model output, locates `<<<<<<< SEARCH` markers, walks backwards for file path, collects SEARCH/REPLACE content. Handles multi-block, multi-file, prose around blocks, empty SEARCH (file creation), and leading/trailing blank-line trimming inside fences. |
+| `forge/srp/applier.py` | `apply_blocks(root, blocks) -> SearchReplaceResult` — groups blocks by file, reads each file, applies in declaration order (sequential composition), uses exact-match then CRLF-normalised fallback, detects ambiguity (>1 matches) and not-found as structured errors, generates `diff --git` unified diff via `difflib.unified_diff`, handles new-file creation (empty SEARCH). No disk writes. |
+
+### Changes to existing files
+
+- **`forge/execution/execution_prompt.py`**: Added `build_search_replace_prompt()`
+  (full SRP prompt with line-numbered file details, SRP delimiter instructions,
+  test-file detection) and `build_search_replace_repair_prompt()` (analogous to
+  `build_repair_prompt` but describes SEARCH block failures and includes
+  authoritative file excerpts at failure locations).
+- **`forge/services/implementation_service.py`**: Added `output_format:
+  Literal["search_replace", "unified_diff"] = "search_replace"` to
+  `implement()`. Routes to `_implement_search_replace()` (new, default) or
+  `_implement_unified_diff()` (legacy, unchanged). The SRP path: prompts for
+  blocks → `parse_search_replace_blocks` → `apply_blocks` → validates the
+  resulting diff via the existing `validate_patch_content` / `apply_check`
+  pipeline → repair loop calls `build_search_replace_repair_prompt` with
+  `_srp_authoritative_excerpts()`. Added helper `_parse_and_apply_srp()` and
+  `_srp_authoritative_excerpts()`.
+- **`forge/workflows/engine.py`**: `_stage_patch` now passes
+  `output_format="search_replace"` to `implement()`.
+- **`forge/cli/app.py`**: `forge implement` gains `--output-format
+  search_replace|unified_diff` option (default `search_replace`) with input
+  validation and forwarding to `ImplementationService.implement()`.
+- **`tests/test_srp.py`**: 29 tests (25 run on Python 3.10, 4 prompt tests
+  skipped due to `datetime.UTC` requiring 3.11+). Covers: parser (single block,
+  multi-block, multi-file, empty SEARCH, blank-line trimming, no blocks, missing
+  path, prose around blocks), applier (exact match, multiline, not-found,
+  ambiguous, missing file, sequential composition, CRLF, empty blocks, no
+  change, new-file creation, multi-file success, multi-file partial failure,
+  git-header format, JSON serialisability), prompt builders (format markers
+  present, task present, repair failures, authoritative excerpts), end-to-end
+  parse→apply→diff.
+
+### Why this matters
+
+The SRP format decouples "what to change" (content only, which the model is
+accurate at) from "where in the file" (line numbers, which the model often
+miscounts). `difflib` computes exact positions from the content match. The
+unified-diff path remains available via `--output-format unified_diff` for
+comparison and fallback.
+
+---
+
 ## 2026-06-30 — Hunk starting-position realignment
 
 ### Summary

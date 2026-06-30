@@ -349,6 +349,7 @@ def build_repair_prompt(
     apply_check_error: str,
     file_details: str,
     context_mismatches: list[str] | None = None,
+    targeted_file_excerpts: str | None = None,
 ) -> str:
     """Build a prompt asking the model to repair an invalid patch."""
     error_lines = (
@@ -365,6 +366,18 @@ Your previous patch's context or removed lines do NOT match the actual file cont
 This is almost certainly why it failed to apply. Copy lines verbatim from the
 "Relevant File Context" section instead of reconstructing them from memory.
 {mismatch_lines}
+"""
+    targeted_section = ""
+    if targeted_file_excerpts:
+        targeted_section = f"""
+## AUTHORITATIVE FILE CONTENT AT MISMATCH LOCATIONS (read fresh from disk)
+The excerpts below show the EXACT current content of the file at and around
+each mismatched line (marked >>>). These lines were read directly from disk
+right now and are ground truth. Your patch context lines MUST match them
+character-for-character. Do NOT reconstruct these lines from memory or
+from any prior version of the file — use only what is shown here.
+
+{targeted_file_excerpts}
 """
     return f"""\
 {_IMPLEMENTATION_SYSTEM_INSTRUCTIONS}
@@ -383,7 +396,7 @@ The patch you previously generated failed validation. You must return a correcte
 
 ## git apply --check Error
 {apply_check_error or "(none)"}
-{mismatch_section}
+{mismatch_section}{targeted_section}
 ## Original Invalid Patch
 {original_patch}
 
@@ -405,6 +418,251 @@ itself into the diff.
 Existing files listed in the original context must use standard unified diff hunks.
 Never use /dev/null for existing files.
 The corrected patch must pass: git apply --check
+"""
+
+
+_SRP_SYSTEM_INSTRUCTIONS = """\
+You are a senior software engineer generating targeted file edits.
+
+STRICT OUTPUT CONTRACT:
+- Return only SEARCH/REPLACE blocks — no explanations, no Markdown fences, no prose.
+- Each block must be preceded by the file path (relative to the repository root) on
+  its own line immediately before <<<<<<< SEARCH.
+- Use the exact format shown below — delimiter lines must be verbatim:
+
+  path/to/File.java
+  <<<<<<< SEARCH
+  <exact lines to find, verbatim from the file>
+  =======
+  <replacement lines>
+  >>>>>>> REPLACE
+
+SEARCH CONTENT RULES:
+- The SEARCH section must copy lines VERBATIM from the file — character for character,
+  including all indentation, whitespace, and punctuation.
+- Include 3-5 lines of surrounding context on each side of every change so the block
+  is unique in the file.
+- NEVER reconstruct SEARCH lines from memory; read them from the "Detailed File
+  Context" section provided below.
+- If you need to change multiple non-adjacent regions of the same file, emit a
+  separate block for each region.
+
+REPLACE CONTENT RULES:
+- The REPLACE section is the new content that replaces the SEARCH content exactly.
+- Do not include files or symbols not in the workset unless genuinely necessary.
+- Preserve existing architecture, style, and indentation.
+
+WHAT NOT TO DO:
+- Do not wrap blocks in Markdown code fences.
+- Do not add explanatory text before, between, or after blocks.
+- Do not modify files that are not listed in the workset unless unavoidable.
+"""
+
+_SRP_TEMPLATE = """\
+{system_instructions}
+
+---
+
+# Task
+{task}
+
+# Selected Model
+{model}
+
+# Workset
+Name: {workset_name}
+Query: {query}
+Root: {root}
+Generated: {generated_at}
+
+# Workset Files (ALL EXISTING in repository)
+
+| File | Category | Score | Lines | Symbols |
+| --- | --- | ---: | ---: | --- |
+{file_table_rows}
+
+# Detailed File Context
+
+{file_details}
+
+# Implementation Plan Or Notes
+
+{implementation_plan}
+
+---
+
+# Final Response Requirements
+
+Return ONLY SEARCH/REPLACE blocks using the exact format below — one block per
+region changed, each preceded by the file path on its own line:
+
+  path/to/File.java
+  <<<<<<< SEARCH
+  <verbatim lines to find>
+  =======
+  <replacement lines>
+  >>>>>>> REPLACE
+
+No Markdown fences. No prose. No explanations.
+SEARCH content must match the file exactly, character for character.
+"""
+
+_SRP_TEST_GUIDANCE = """\
+
+## Test File Requirement
+
+The task explicitly requests tests. The Workset Files table above includes test files.
+You MUST include SEARCH/REPLACE blocks for those test files.
+Do not return blocks that only modify source files when the task requests tests.
+"""
+
+_SRP_TEST_MISSING_NOTE = """\
+
+## Test File Warning
+
+The task requests tests, but no test files are present in this workset.
+The output will not include test changes unless test files are added to the workset.
+"""
+
+_SRP_REPAIR_SYSTEM = """\
+You are a senior software engineer repairing failed SEARCH/REPLACE blocks.
+
+The SEARCH/REPLACE blocks you previously generated could not be applied because the
+SEARCH content did not match the file.  You must produce corrected blocks.
+
+STRICT OUTPUT CONTRACT — same as the original request:
+- Return only SEARCH/REPLACE blocks using the exact delimiter format.
+- No Markdown fences. No prose. No explanations.
+- SEARCH content must be verbatim from the "Authoritative File Content" section below.
+"""
+
+
+def build_search_replace_prompt(
+    task: str,
+    bundle: ContextBundle,
+    implementation_plan: ImplementationPlan,
+    model: str,
+    memory_context: list[MemorySearchResult] | None = None,
+) -> tuple[str, str | None]:
+    """Construct a provider prompt that asks for SEARCH/REPLACE blocks.
+
+    Returns ``(prompt, test_warning)`` where ``test_warning`` is ``None`` when
+    the workset contains test files (or the task does not mention tests) and a
+    human-readable warning string when tests are missing from the workset.
+    """
+    file_table_rows, _ = build_context_sections(bundle)
+    # Use the line-numbered renderer so the model can read SEARCH content
+    # directly from the gutter rather than reconstructing it from memory.
+    file_details = build_numbered_file_details(bundle)
+    result = _SRP_TEMPLATE.format(
+        system_instructions=_SRP_SYSTEM_INSTRUCTIONS,
+        task=task,
+        model=model,
+        workset_name=bundle.workset_name,
+        query=bundle.query,
+        root=bundle.root,
+        generated_at=bundle.generated_at,
+        file_table_rows=file_table_rows,
+        file_details=file_details,
+        implementation_plan=implementation_plan.content,
+    )
+    test_warning: str | None = None
+    task_mentions_tests = any(
+        keyword in task.lower() for keyword in ("test", "tests", "spec", "specs")
+    )
+    if task_mentions_tests:
+        has_test_files = any(_is_test_file(file.path) for file in bundle.files)
+        if has_test_files:
+            result += _SRP_TEST_GUIDANCE
+        else:
+            result += _SRP_TEST_MISSING_NOTE
+            test_warning = (
+                "Task mentions tests, but no test files were present in the workset. "
+                "Consider refreshing the workset with a test-focused query."
+            )
+    if memory_context:
+        result = (
+            result
+            + "\n\n"
+            + build_memory_section(
+                memory_context,
+                guidance=(
+                    "Use these entries to preserve continuity while still returning only "
+                    "SEARCH/REPLACE blocks."
+                ),
+            )
+        )
+        result += (
+            "\n\nReturn only SEARCH/REPLACE blocks using the exact delimiter format. "
+            "No Markdown fences. No explanations.\n"
+        )
+    return result, test_warning
+
+
+def build_search_replace_repair_prompt(
+    task: str,
+    original_response: str,
+    failures: list[str],
+    file_details: str,
+    authoritative_excerpts: str | None = None,
+) -> str:
+    """Build a prompt asking the model to repair failed SEARCH/REPLACE blocks.
+
+    ``failures`` is a list of human-readable error strings from the applier
+    (e.g. "SEARCH content not found", "ambiguous match").
+    ``authoritative_excerpts`` is a formatted string of disk-fresh file excerpts
+    at the failed locations, produced by ``_targeted_disk_excerpts``.
+    """
+    failure_lines = (
+        "\n".join(f"- {f}" for f in failures) if failures else "(none)"
+    )
+    auth_section = ""
+    if authoritative_excerpts:
+        auth_section = f"""
+## Authoritative File Content At Failure Locations (read fresh from disk)
+
+The excerpts below show the EXACT current file content around each failed SEARCH
+block (>>> marks the approximate target region). Copy SEARCH lines verbatim from
+these excerpts — do NOT reconstruct them from memory or from the original response.
+
+{authoritative_excerpts}
+"""
+    return f"""\
+{_SRP_REPAIR_SYSTEM}
+
+---
+
+# Patch Repair Request
+
+The SEARCH/REPLACE blocks you previously generated could not be applied.
+
+## Original Task
+{task}
+
+## Application Failures
+{failure_lines}
+{auth_section}
+## Original (Failed) Response
+{original_response}
+
+## Relevant File Context
+{file_details}
+
+---
+
+# Requirements
+
+Return ONLY corrected SEARCH/REPLACE blocks using the exact delimiter format:
+
+  path/to/File.java
+  <<<<<<< SEARCH
+  <verbatim lines from the Authoritative File Content or Relevant File Context above>
+  =======
+  <replacement lines>
+  >>>>>>> REPLACE
+
+No Markdown fences. No prose. No explanations.
+Each SEARCH block must match the file exactly, character for character.
 """
 
 

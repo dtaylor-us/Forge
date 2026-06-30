@@ -15,6 +15,10 @@ from forge.project.paths import ForgePaths
 _HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _MAX_CONTEXT_MISMATCHES_PER_HUNK = 5
 _MAX_CONTEXT_MISMATCHES_TOTAL = 12
+# Anchor-line realignment: lines whose content is too short or structurally trivial
+# (single brackets, closing braces, blank lines) to serve as unique position anchors.
+_ANCHOR_MIN_LEN = 8  # minimum stripped length
+_ANCHOR_TRIVIAL_RE = re.compile(r"^\s*[\{\}\(\)\[\];,]?\s*$")
 
 
 class PatchError(Exception):
@@ -235,6 +239,28 @@ def realign_patch_hunk_headers(root: Path, content: str) -> tuple[str, list[str]
                                 f"{old_start} to {new_old_start} "
                                 "(content matched uniquely at a different position)."
                             )
+                else:
+                    # Full-block match failed (0 or ambiguous matches). Fall back to
+                    # anchor-line realignment: find distinctive lines from the old-block
+                    # that each appear exactly once in the file and agree on the same
+                    # offset. This catches the common case where the model's context is
+                    # correct but the hunk starts a few lines too early or too late
+                    # (e.g. because a recently-added parameter shifted the method body).
+                    delta = _anchor_line_delta(actual_lines, old_block, old_start)
+                    if delta is not None and delta != 0:
+                        new_old_start = old_start + delta
+                        corrected_new_start = new_start + delta
+                        if new_old_start >= 1:
+                            candidate = _rewrite_hunk_header(line, new_old_start, corrected_new_start)
+                            if candidate != line:
+                                corrected_header = candidate
+                                if current_file:
+                                    notes.append(
+                                        f"{current_file}: realigned hunk header from line "
+                                        f"{old_start} to {new_old_start} "
+                                        "(anchor-line match: distinctive lines agreed on "
+                                        f"offset {delta:+d})."
+                                    )
 
             out.append(corrected_header)
             out.extend(hunk_body)
@@ -276,6 +302,51 @@ def _find_block_matches(actual_lines: list[str], block: list[str]) -> list[int]:
             if len(matches) > 1:
                 break  # ambiguous — no further scanning needed
     return matches
+
+
+def _anchor_line_delta(
+    actual_lines: list[str], old_block: list[str], old_start: int
+) -> int | None:
+    """Infer a hunk-start correction delta from distinctive lines in the old-block.
+
+    When the full old-block cannot be found in the file (zero or ambiguous matches),
+    the model may still have the *content* right but the *position* wrong — for example
+    because a recently-added method parameter pushed the body down by two lines.
+
+    This function identifies "anchor lines" — non-trivial lines that appear exactly once
+    in the file — and computes each one's implied offset (file_position − expected_position).
+    If two or more anchors agree on the same delta it is returned; if exactly one
+    anchor exists and no other delta is observed, that single vote is returned.
+    Returns ``None`` when no reliable delta can be established.
+    """
+    votes: dict[int, int] = {}  # delta -> number of anchors that agree
+
+    for block_idx, block_line in enumerate(old_block):
+        stripped = block_line.strip()
+        if len(stripped) < _ANCHOR_MIN_LEN or _ANCHOR_TRIVIAL_RE.match(block_line):
+            continue
+
+        # Find all positions in the file where this line occurs exactly.
+        file_positions = [i for i, fl in enumerate(actual_lines) if fl == block_line]
+        if len(file_positions) != 1:
+            # Line missing from file or appears multiple times — not a reliable anchor.
+            continue
+
+        actual_idx = file_positions[0]  # 0-based
+        expected_idx = old_start - 1 + block_idx  # 0-based position the patch declares
+        delta = actual_idx - expected_idx
+        votes[delta] = votes.get(delta, 0) + 1
+
+    if not votes:
+        return None
+
+    # Return the delta with the most votes.  Require a strict majority when multiple
+    # deltas were observed (conflicting anchors → unreliable), but accept a single
+    # unanimous delta unconditionally.
+    best_delta, best_votes = max(votes.items(), key=lambda kv: kv[1])
+    if len(votes) == 1 or best_votes >= 2:
+        return best_delta
+    return None
 
 
 def _rewrite_hunk_header(original: str, new_old_start: int, new_new_start: int) -> str:
