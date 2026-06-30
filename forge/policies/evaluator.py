@@ -215,9 +215,19 @@ class PolicyEvaluator:
         staged = git_status.get("staged_files", [])
         untracked = git_status.get("untracked_files", [])
         details = f"modified={len(modified)}, staged={len(staged)}, untracked={len(untracked)}"
+
+        if not modified and not staged and untracked:
+            message = (
+                f"Working tree has untracked files only ({details}). "
+                "Add them to .gitignore if they should be excluded, or run "
+                "'git add' to track them, then re-run this check."
+            )
+        else:
+            message = f"Working tree is dirty ({details}). Commit or stash changes first."
+
         return PolicyCheck(
             "git_clean",
             CheckStatus.fail,
-            f"Working tree is dirty ({details}). Commit or stash changes first.",
+            message,
             CheckSeverity.error,
         )

@@ -426,6 +426,26 @@ def test_cli_workset_show(tmp_path):
     assert "show-ws" in result.output
 
 
+def test_cli_workset_show_reasons_omit_generic_match_prefix(tmp_path):
+    """Regression for I-10.
+
+    `_candidate_to_file_entry` stores a generic "match" signal for reasons
+    whose label has no natural "signal:detail" split (the common case for
+    filename/content-match reasons). `forge workset show` used to render
+    that as a literal "match:<detail>" prefix, which `forge workset suggest`
+    (rendering the same underlying label directly) never showed. The CLI
+    display should now omit the redundant "match:" prefix.
+    """
+    _make_file(tmp_path, "src/calculator.py", "")
+    runner.invoke(
+        app,
+        ["workset", "create", "calc-ws", "--query", "calculator", "--root", str(tmp_path)],
+    )
+    result = runner.invoke(app, ["workset", "show", "calc-ws", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "match:" not in result.output.lower()
+
+
 def test_cli_workset_show_json(tmp_path):
     _make_file(tmp_path, "src/foo.py", "")
     runner.invoke(app, ["workset", "create", "show-ws", "--query", "foo", "--root", str(tmp_path)])
@@ -433,6 +453,72 @@ def test_cli_workset_show_json(tmp_path):
     assert result.exit_code == 0, result.output
     parsed = json.loads(result.output)
     assert parsed["name"] == "show-ws"
+
+
+def test_cli_workset_show_surfaces_linked_decision(tmp_path):
+    """Dogfood report recommendation: surface linked decisions/investigations
+    inline in `forge workset show`, instead of leaving them discoverable only
+    via `forge memory timeline`/`forge memory search`.
+    """
+    _make_file(tmp_path, "src/foo.py", "")
+    runner.invoke(app, ["workset", "create", "memo-ws", "--query", "foo", "--root", str(tmp_path)])
+    runner.invoke(
+        app,
+        [
+            "decision",
+            "create",
+            "Use dependency injection",
+            "--workset",
+            "memo-ws",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(app, ["workset", "show", "memo-ws", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "Linked Memory" in result.output
+    assert "Use dependency injection" in result.output
+
+
+def test_cli_workset_show_json_includes_linked_memory(tmp_path):
+    _make_file(tmp_path, "src/foo.py", "")
+    runner.invoke(app, ["workset", "create", "memo-ws", "--query", "foo", "--root", str(tmp_path)])
+    runner.invoke(
+        app,
+        [
+            "investigation",
+            "create",
+            "Why search is slow",
+            "--workset",
+            "memo-ws",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(
+        app, ["workset", "show", "memo-ws", "--root", str(tmp_path), "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert len(parsed["memory"]) == 1
+    assert parsed["memory"][0]["title"] == "Why search is slow"
+    assert parsed["memory"][0]["type"] == "investigation"
+
+
+def test_cli_workset_show_no_memory_section_when_none_linked(tmp_path):
+    _make_file(tmp_path, "src/foo.py", "")
+    runner.invoke(
+        app, ["workset", "create", "no-memo-ws", "--query", "foo", "--root", str(tmp_path)]
+    )
+
+    result = runner.invoke(app, ["workset", "show", "no-memo-ws", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "Linked Memory" not in result.output
 
 
 def test_cli_workset_add(tmp_path):

@@ -72,6 +72,18 @@ def _mock_model_manager(default_model: str = "qwen2.5"):
     return manager
 
 
+def test_execution_request_missing_workset_message_not_duplicated(tmp_path):
+    """Regression for I-06: error must not say "not found: ... not found."."""
+    import pytest
+
+    from forge.execution import ExecutionServiceError
+
+    service = ExecutionService(model_manager=_mock_model_manager())
+    with pytest.raises(ExecutionServiceError) as exc_info:
+        service.create_request(tmp_path, TASK, "nonexistent-workset")
+    assert str(exc_info.value).lower().count("not found") == 1
+
+
 def test_execution_request_creation(tmp_path):
     _make_workset(tmp_path)
     plan = _make_plan()

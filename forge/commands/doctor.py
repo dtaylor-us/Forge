@@ -31,6 +31,12 @@ def run_doctor(config: ForgeConfig) -> list[CheckResult]:
         _command_check("Docker", "docker", ["docker", "--version"]),
         _java_check(),
         _ollama_check(config),
+        CheckResult(
+            name="Model timeout",
+            ok=_model_timeout_ok(config),
+            detail=_model_timeout_detail(config),
+            required=False,
+        ),
     ]
 
 
@@ -67,6 +73,32 @@ def _java_check() -> CheckResult:
     output = (completed.stderr or completed.stdout).strip().splitlines()
     detail = output[0] if output else path
     return CheckResult("Java", completed.returncode == 0, detail, required=False)
+
+
+def _model_timeout_ok(cfg: ForgeConfig) -> bool:
+    model = getattr(cfg, "default_model", "") or ""
+    from forge.models.manager import _model_timeout_heuristic
+
+    ollama_cfg = (cfg.providers or {}).get("ollama")
+    configured_timeout = getattr(ollama_cfg, "timeout_seconds", None) or 300
+    recommended = _model_timeout_heuristic(model, fallback=300)
+    return configured_timeout >= recommended
+
+
+def _model_timeout_detail(cfg: ForgeConfig) -> str:
+    model = getattr(cfg, "default_model", "") or ""
+    from forge.models.manager import _model_timeout_heuristic
+
+    ollama_cfg = (cfg.providers or {}).get("ollama")
+    configured_timeout = getattr(ollama_cfg, "timeout_seconds", None) or 300
+    recommended = _model_timeout_heuristic(model, fallback=300)
+    if configured_timeout < recommended:
+        return (
+            f"Model {model!r} may need ~{recommended}s; "
+            f"configured timeout is {configured_timeout}s. "
+            f"Increase providers.ollama.timeout_seconds in ~/.forge/config.yaml."
+        )
+    return f"Timeout {configured_timeout}s is sufficient for {model!r}."
 
 
 def _ollama_check(config: ForgeConfig) -> CheckResult:

@@ -24,7 +24,11 @@ SCHEMA_VERSION = 1
 def _candidate_to_file_entry(candidate: Any, root: Path) -> dict[str, Any]:
     reasons = []
     for r in candidate.reasons:
-        if ":" in r.label:
+        prefix = r.label.split(":", 1)[0]
+        if prefix.endswith("Match"):
+            signal = "match"
+            detail = r.label.replace("Match:", "Match")
+        elif ":" in r.label:
             signal, detail = r.label.split(":", 1)
         else:
             signal = "match"
@@ -33,6 +37,9 @@ def _candidate_to_file_entry(candidate: Any, root: Path) -> dict[str, Any]:
     return {
         "path": candidate.path.as_posix(),
         "score": candidate.score,
+        "confidence": getattr(candidate, "confidence", 0),
+        "importance": getattr(candidate, "importance", 0),
+        "rank_group": getattr(candidate, "rank_group", "other"),
         "category": candidate.file_category,
         "reasons": reasons,
         "manual": False,
@@ -58,6 +65,7 @@ def create_workset(
     max_results: int = 20,
     include_tests: bool = False,
     force: bool = False,
+    workflow: str | None = None,
 ) -> dict[str, Any]:
     """Create and persist a workset. Returns the saved data dict."""
     validate_name(name)
@@ -71,6 +79,7 @@ def create_workset(
         root_path,
         max_results=max_results,
         include_tests=include_tests,
+        workflow=workflow,
     )
 
     ts = now_iso()
@@ -83,6 +92,7 @@ def create_workset(
         "updated_at": ts,
         "include_tests": include_tests,
         "max_results": max_results,
+        "workflow": workflow,
         "files": [_candidate_to_file_entry(c, root_path) for c in suggestion.candidates],
     }
     save(root_path, data)
@@ -146,6 +156,7 @@ def refresh_workset(root: Path | str | None, name: str) -> dict[str, Any]:
         root_path,
         max_results=data.get("max_results", 20),
         include_tests=data.get("include_tests", False),
+        workflow=data.get("workflow"),
     )
 
     suggested_paths = {c.path.as_posix() for c in suggestion.candidates}

@@ -63,7 +63,7 @@ class ExecutionRequest:
     selected_model: str | None = None
     prompt: str = ""
     plan_path: Path | None = None
-    max_lines_per_file: int = 120
+    max_lines_per_file: int = 60
     include_full: bool = False
     max_memory_results: int = 5
     status: ExecutionStatus = ExecutionStatus.prepared

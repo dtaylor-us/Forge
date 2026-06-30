@@ -60,3 +60,40 @@ def list_runs(
 def show_run(root: Path, run_id: str) -> dict[str, Any] | None:
     """Return a single workflow run record by ID."""
     return WorkflowRegistry.from_root(root).load(run_id)
+
+
+def clean_run(root: Path, run_id: str) -> dict[str, Any]:
+    """Delete ephemeral artifacts for a failed workflow run.
+
+    Returns a dict with keys: run_id, workset_deleted (bool), context_deleted (bool).
+    """
+    from contextlib import suppress
+
+    registry = WorkflowRegistry.from_root(root)
+    run_data = registry.load(run_id)
+    if run_data is None:
+        raise WorkflowServiceError(f"Workflow run {run_id!r} not found.")
+
+    workset_name = run_data.get("workset_name")
+    workset_deleted = False
+    if workset_name:
+        from forge.services import workset_service
+
+        with suppress(Exception):
+            workset_service.delete(root, workset_name)
+            workset_deleted = True
+
+    ctx_path = (run_data.get("artifacts") or {}).get("context", {}).get("path")
+    context_deleted = False
+    if ctx_path:
+        from pathlib import Path as _Path
+
+        with suppress(Exception):
+            _Path(ctx_path).unlink(missing_ok=True)
+            context_deleted = True
+
+    return {
+        "run_id": run_id,
+        "workset_deleted": workset_deleted,
+        "context_deleted": context_deleted,
+    }

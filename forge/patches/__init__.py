@@ -10,11 +10,13 @@ from forge.patches.service import (
     list_patches,
     patch_dir,
     read_patch,
+    realign_patch_hunk_headers,
     resolve_patch_path,
     save_invalid_response,
     save_patch_content,
     validate_patch_content,
     validate_patch_file,
+    verify_patch_context,
 )
 
 __all__ = [
@@ -27,9 +29,11 @@ __all__ = [
     "list_patches",
     "patch_dir",
     "read_patch",
+    "realign_patch_hunk_headers",
     "resolve_patch_path",
     "save_invalid_response",
     "save_patch_content",
     "validate_patch_content",
     "validate_patch_file",
+    "verify_patch_context",
 ]

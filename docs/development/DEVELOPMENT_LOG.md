@@ -1,5 +1,252 @@
 # Dev Log
 
+## 2026-06-30 — Hunk starting-position realignment
+
+### Summary
+
+Investigated the recurrence of `forge workflow bugfix` failing at the `patch`
+stage with a context-mismatch error despite today's earlier fixes (numbered
+file details, `--recount`, 3 repair attempts). The earlier entry addressed
+wrong hunk line *counts* via `--recount`, but the same "blind counting"
+problem applies equally to wrong starting *positions* (the *L* in
+`@@ -L,N +L,N @@`): `git apply --recount` only recomputes *N* from the hunk
+body, not *L*. A wrong *L* still produces a context mismatch that `--recount`
+cannot recover, and `verify_patch_context` then reports a misleading diagnostic
+("file actually has X at line 165") that sends the repair loop into fabricating
+content rather than simply correcting the header offset.
+
+This entry adds a deterministic, content-anchored hunk-position realignment
+pass that is strictly analogous to what `--recount` does for counts: before
+each validation attempt, for every hunk whose context/removed lines do *not*
+match the file at the stated position, search the real file for the unique
+contiguous location where that exact block appears, and if exactly one match is
+found, rewrite the header's old and new start lines by the same delta. Hunks
+with no old-file lines (pure insertions) and ambiguous matches (content appears
+more than once) are left unchanged; both fall through to the existing
+apply-check / verify_patch_context / repair-loop path unmodified.
+
+### Changes
+
+- **`forge/patches/service.py`**: Added `realign_patch_hunk_headers(root,
+  content) -> tuple[str, list[str]]` and three private helpers:
+  `_matches_at`, `_find_block_matches`, `_rewrite_hunk_header`.
+  `realign_patch_hunk_headers` parses the patch line by line (same structural
+  approach as `verify_patch_context`), reads the target file from disk for each
+  `+++` header, and for each hunk attempts a unique-match search of the
+  old-file block. A corrected header preserves the original line counts (N
+  values) and any trailing suffix (e.g. Java method names). Returns the
+  corrected patch text and a list of human-readable notes describing every
+  correction made.
+- **`forge/patches/__init__.py`**: Added `realign_patch_hunk_headers` to the
+  package export list.
+- **`forge/services/implementation_service.py`**: Added
+  `realign_patch_hunk_headers` to the import block and called it immediately
+  after `_strip_markdown_fence` for both the initial model response and each
+  repair attempt. The corrected content is what gets passed to
+  `validate_patch_content` / `apply_check_patch_content` / the next repair
+  prompt, so positional errors are silently resolved before the validation
+  gate rather than driving misleading repair diagnostics.
+- **`tests/test_patches.py`**: Added 8 new test functions (14 assertions total)
+  covering: correct position left unchanged, wrong start corrected to unique
+  match, Java-style hunk suffix preserved, content absent → no change, ambiguous
+  content → no change, pure-insertion hunk → no change, missing file → no
+  change, multiple hunks in one file (first correct, second wrong).
+
+### Verification
+
+- 14-assertion standalone logic suite run against Python 3.10 (sandbox
+  constraint; project requires 3.12) — all passed.
+- `python3 -m ruff check forge/patches/service.py forge/patches/__init__.py
+  forge/services/implementation_service.py tests/test_patches.py` — all
+  checks passed.
+- Existing test suite (`python -m pytest tests/ -q`, excluding `integration`
+  marker) to be confirmed on next Python 3.12 run per project convention.
+
+### Relationship to prior entry
+
+The earlier 2026-06-30 entry addressed hunk line *count* errors via
+`--recount`. This entry addresses hunk starting *position* errors via content
+search. Together they cover both dimensions of the blind-counting failure class
+without requiring the larger search/replace format refactor (still tracked as
+follow-up).
+
+---
+
+## 2026-06-30 — Recurring "corrupt patch" workflow failures: root cause and fix
+
+### Summary
+
+Investigated a recurring `forge workflow bugfix` failure at the `patch` stage
+(`error: corrupt patch at /tmp/....patch:15`, surfaced verbatim from `git
+apply --check`). Root cause was not workset selection — the worksets
+machinery picks the right files — but how those files' content is rendered
+into the implementation/repair prompts: file content was shown as a plain
+fenced block with no line numbers, so the model had no ground truth and had
+to count lines by eye to produce `@@ -L,N +L,N @@` hunk headers. That class
+of mistake is also exactly what `git apply` reports as "corrupt patch" once
+a miscounted header desyncs the parser. It recurred despite earlier
+hardening (structural validation, `apply --check`, the repair loop, and
+context-mismatch diagnostics in 6.3/6.4) because none of those addressed the
+underlying blind-counting problem, and the unattended workflow path only
+got one repair attempt before failing the whole run with the raw git
+message. Confirmed the model in use for these runs (local `qwen2.5-coder:32b`
+via Ollama) is also more prone to this arithmetic class of error than a
+frontier model would be.
+
+The bigger structural fix — stop asking the model to author line-positioned
+diff syntax at all, in favor of a context-anchored or search/replace edit
+format with the diff constructed deterministically in code (the approach
+Aider, Codex CLI, and Cursor-style tools converged on for this same
+problem) — is **not** done here; it's a larger format change tracked as
+follow-up. This entry covers the three targeted, low-risk fixes applied now.
+
+### Changes
+
+- **`forge/git/service.py`**: `GitService.apply_check()` and `.apply()` now
+  pass `--recount`, so git recomputes each hunk's line counts from the
+  actual hunk body instead of trusting the model-written `@@ -L,N +L,N @@`
+  header. Verified directly: a hand-built patch with a deliberately wrong
+  hunk count (correct content, `@@ -2,2 +2,2 @@` covering a 3-line change)
+  fails plain `git apply --check` and succeeds with `--recount`.
+- **`forge/execution/execution_prompt.py`**: Added
+  `build_numbered_file_details()` / `_render_numbered_excerpt_blocks()`,
+  which render workset file content with a `"N| "` 1-based line-number
+  gutter. Used by `build_implementation_prompt()` for the initial diff
+  request. `_IMPLEMENTATION_SYSTEM_INSTRUCTIONS`, the implementation
+  template's final requirements, and `build_repair_prompt()`'s footer now
+  all explicitly document the gutter as reference-only and forbid copying
+  it into diff output. Numbering assumes the contiguous, no-mid-file-gap
+  layout that `include_full=True` bundles always have (true for every
+  diff-generation call path); it is intentionally not used for the
+  excerpted/sampled rendering in `forge/planning/prompts.py`, where a
+  mid-file `OMIT_MARKER` would make a running line count wrong.
+- **`forge/services/implementation_service.py`**: `_bundle_file_details()`
+  (the file-context block fed into every repair attempt) now calls
+  `build_numbered_file_details()` instead of the plain
+  `build_context_sections()` rendering, so repair attempts get the same
+  line-number ground truth as the first attempt. On final rejection
+  (repair attempts exhausted), `verify_patch_context()`'s line-level
+  mismatch diagnosis is now appended to `validation_errors` instead of
+  being discarded — callers previously saw only the raw, often-cryptic git
+  error (e.g. "corrupt patch at line 15") with no indication of which line
+  or file was actually wrong.
+- **`forge/workflows/engine.py`**: `_stage_patch` now calls
+  `ImplementationService.implement(..., repair_attempts=3)` instead of
+  relying on the service default of 1. Unattended workflow runs have no
+  human in the loop to retry `forge implement` by hand the way a CLI user
+  would, so the automated path gets more chances to converge before the
+  run is marked failed. The CLI's own `--repair-attempts` default (1,
+  user-adjustable) is unchanged.
+
+### Verification
+
+- `git apply --check` vs `git apply --check --recount` against a
+  hand-built mis-counted-header patch: fails without `--recount`, succeeds
+  with it.
+- Manually rendered `build_numbered_file_details()` against a sample
+  bundle and confirmed the `N| ` gutter output format.
+- `python -m pytest tests/ -q` (excluding the `integration` marker) — 523
+  passed, 0 failed.
+- `python -m ruff check forge/git/service.py
+  forge/execution/execution_prompt.py
+  forge/services/implementation_service.py forge/workflows/engine.py` —
+  all checks passed.
+
+### Follow-up (not done in this change)
+
+Replace line-positioned unified-diff generation with a context-anchored
+or search/replace edit contract, with Forge computing the actual diff
+deterministically (via exact-match-and-replace + `difflib`) rather than
+asking the model to hand-write `@@` headers. This removes the failure
+class entirely instead of reducing its odds, at the cost of a larger
+change to `implementation_service.py`, `execution_prompt.py`, and the
+patch-validation gate in `workflows/engine.py`.
+
+---
+
+## 2026-06-29 — Phase 6.4: Intelligent Deterministic Workset Selection
+
+### Summary
+
+Redesigned workset suggestion from flat token scoring into an explainable
+deterministic pipeline for engineering tasks. The selector now analyzes intent,
+extracts identifiers, expands CamelCase terms, discovers naming relationships,
+separates confidence from file importance, and assembles worksets in
+implementation-first order without LLMs, embeddings, vector databases, or
+semantic search.
+
+### Changes
+
+- **`forge/worksets/query.py`**: Added `WorksetQuery` parsing with intent,
+  subject, weighted search terms, ignored action verbs, and deterministic
+  inclusion flags for tests, docs, configs, and build files.
+- **`forge/worksets/identifiers.py`**: Added CamelCase and test identifier
+  recognition, including implementation base derivation for names such as
+  `PaymentControllerIntegrationTest`.
+- **`forge/worksets/relationships.py`**: Added deterministic relationship
+  expansion for implementation candidates such as controller, service,
+  repository, facade, API, mapper, client, and provider files.
+- **`forge/worksets/scoring.py`**: Reworked scoring around primary matches,
+  relationships, identifier/path/content/test signals, and separate importance
+  bonuses. Generic source/config/doc bonuses no longer create workset results by
+  themselves.
+- **`forge/worksets/ranking.py`**: Added intentional assembly ordering and an
+  infrastructure quota so READMEs, Dockerfiles, and build manifests cannot
+  displace source files when high-confidence implementation matches exist.
+- **`forge/repository/ignore.py`**: Expanded generated cache ignores for `.vite`,
+  `.next`, `.nuxt`, `.svelte-kit`, `.cache`, `.parcel-cache`, `coverage`, and
+  `out`.
+- **Docs**: Updated README and architecture documentation with the deterministic
+  workset pipeline, identifier expansion, relationship discovery, infrastructure
+  quota, and explainable ranking model.
+
+### Verification
+
+- `python -m pytest tests/test_workset_query.py tests/test_workset_suggest.py -q`
+- `python -m ruff check forge/worksets forge/repository/ignore.py tests/test_workset_query.py tests/test_workset_suggest.py`
+- `python -m pytest tests/ -q` — 516 passed.
+- `python -m ruff check .` — all checks passed.
+
+---
+
+## 2026-06-29 — QA Dogfood Remediation (I-01 through I-07)
+
+### Summary
+
+Fixed all 8 issues identified in the QA dogfood run. Critical issues first: default Ollama timeout raised and made model-aware, orphan artifact cleanup added on workflow failure. Then high/medium/low: false-positive workset scoring fixed, missing `list` subcommands added to `models`, `policy`, `decision`, and `investigation` noun groups, and stale `Updated` field removed from `forge project info`.
+
+### Changes
+
+- **`forge/models/ollama.py`**: Default `timeout_seconds` raised 120→300. Added `_list_models_quick()` and `_smaller_models()` helpers. `TimeoutError` handler now appends suggested smaller installed models to the error message (I-01, I-08).
+- **`forge/models/manager.py`**: Added `_model_timeout_heuristic()` module-level function mapping model size suffixes (`3b`→120s … `70b`→600s) to recommended timeouts. `_provider()` calls it instead of hardcoding 120 when no timeout is configured (I-01).
+- **`forge/commands/doctor.py`**: Added `_model_timeout_ok()` / `_model_timeout_detail()` helpers and a new optional "Model timeout" check in `run_doctor()` (I-01).
+- **`forge/workflows/engine.py`**: Added `_cleanup_ephemeral_artifacts()` method; called on workflow stage failure before saving the failed run record, removing the ephemeral workset and context bundle (I-02).
+- **`forge/services/workflow_service.py`**: Added `clean_run()` public function that deletes ephemeral workset and context bundle for a given run ID (I-02).
+- **`forge/worksets/scoring.py`**: Added `_is_cli_surface()` predicate and `_CLI_SURFACE_PARTS`/`_CLI_SURFACE_NAMES` constants. Content-match scoring applies a 0.25× multiplier for CLI surface files and a 0.3× discount for string-literal lines, eliminating the false-positive ranking of `forge/cli/app.py` (I-03).
+- **`forge/cli/app.py`**: Extracted `_render_models_table()`; added `models_list`, `policy_list`, `decision_list`, `decision_show`, `investigation_list`, `investigation_show`, `workflow_clean` commands; `_render_workflow_run` now prints run ID and recovery hints (`forge workflow show`, `forge workflow clean`) after every invocation; removed stale "Updated" row from `project_info` human output while keeping it in JSON (I-02, I-04, I-05, I-06, I-07).
+
+### CLI Surface Added
+
+```bash
+forge models list
+forge policy list
+forge policy list --json
+forge decision list
+forge decision show <id>
+forge investigation list
+forge investigation show <id>
+forge workflow clean <run-id>
+forge workflow clean --all
+```
+
+### Verification
+
+- `python -m pytest tests/ -x -q` — 494 passed, 0 failed.
+- `python -m ruff check forge/` — all checks passed.
+- `python -m black forge/` — all touched files reformatted.
+
+---
+
 ## Phase 6.3 — Engineering Knowledgebase CLI Completion
 
 ### Summary
@@ -1447,4 +1694,3 @@ be a read-only scaffold (not applied automatically) and should build on the `for
 package already in place. Key additions: `forge scaffold "<task>" --plan <path>`,
 a `forge/scaffold/` package, and a unified diff or file-edit representation that can
 later feed `forge apply`.
-

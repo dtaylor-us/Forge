@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from forge.context.bundle import ContextBundle
+from forge.context.excerpt import OMIT_MARKER
 from forge.memory.search import MemorySearchResult
 
 _PLANNING_SYSTEM_INSTRUCTIONS = """\
@@ -176,10 +177,40 @@ def _build_file_details(bundle: ContextBundle) -> str:
         if f.dependency_hints:
             section.append("**Dependencies:** " + "; ".join(f.dependency_hints[:8]))
         if f.excerpts:
-            section.append("**Relevant Excerpts:**")
-            for excerpt in f.excerpts[:3]:
-                trimmed = excerpt.strip()
-                if trimmed:
-                    section.append(f"```\n{trimmed}\n```")
+            section.append(
+                "**File Content (verbatim — copied exactly from the real file on disk; "
+                "preserve indentation and whitespace exactly, do not paraphrase or "
+                "reconstruct from memory):**"
+            )
+            section.append(_render_excerpt_blocks(f.excerpts))
         parts.append("\n".join(section))
     return "\n\n".join(parts)
+
+
+def _render_excerpt_blocks(excerpts: list[str]) -> str:
+    """Render excerpt lines as contiguous, indentation-preserving code blocks.
+
+    `excerpts` is a flat per-line sequence (one list entry per source line),
+    with `OMIT_MARKER` entries standing in for skipped regions. Earlier code
+    fenced only the first few entries individually, which (a) discarded
+    nearly all real file content beyond the first couple of lines and
+    (b) stripped each line's leading whitespace, destroying indentation.
+    This renders every contiguous run of real lines as a single fenced
+    block, splitting only at omitted regions, so the model sees the actual
+    file content rather than a near-empty fragment.
+    """
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in excerpts:
+        if line == OMIT_MARKER:
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+            blocks.append(OMIT_MARKER)
+            continue
+        current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+
+    rendered = [block if block == OMIT_MARKER else f"```\n{block}\n```" for block in blocks]
+    return "\n".join(rendered)

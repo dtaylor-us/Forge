@@ -17,7 +17,7 @@ class OllamaProvider:
 
     name = "ollama"
 
-    def __init__(self, host: str, timeout_seconds: int = 120) -> None:
+    def __init__(self, host: str, timeout_seconds: int = 300) -> None:
         self.host = host.rstrip("/")
         self.endpoint = self.host
         self.timeout_seconds = timeout_seconds
@@ -88,12 +88,17 @@ class OllamaProvider:
         except TimeoutError as exc:
             model = body.get("model") if body else None
             model_detail = f" for model {model}" if isinstance(model, str) else ""
-            raise ModelProviderError(
+            msg = (
                 "Ollama request timed out"
                 f"{model_detail} at {self.host} after {configured_timeout} seconds. "
                 "Try a smaller model or increase providers.ollama.timeout_seconds "
                 "in ~/.forge/config.yaml."
-            ) from exc
+            )
+            if isinstance(model, str):
+                smaller = self._smaller_models(model)
+                if smaller:
+                    msg += f" Smaller installed models you could try: {', '.join(smaller)}"
+            raise ModelProviderError(msg) from exc
         except OSError as exc:
             raise ModelProviderError(f"Unable to reach Ollama at {self.host}: {exc}") from exc
         finally:
@@ -109,6 +114,28 @@ class OllamaProvider:
         if not isinstance(loaded, dict):
             raise ModelProviderError("Ollama returned an unexpected JSON payload.")
         return loaded
+
+    def _list_models_quick(self, timeout: int = 5) -> list[str]:
+        """Return installed model names; empty list on any error."""
+        with suppress(Exception):
+            payload = self._request("GET", "/api/tags", timeout_seconds=timeout)
+            return [m.get("name", "") for m in payload.get("models", []) if m.get("name")]
+        return []
+
+    def _smaller_models(self, model: str) -> list[str]:
+        """Return installed models with a smaller parameter count than the given model."""
+
+        def _param_count(name: str) -> int | None:
+            import re
+
+            m = re.search(r"(\d+)b", name.lower())
+            return int(m.group(1)) if m else None
+
+        current = _param_count(model)
+        if current is None:
+            return []
+        installed = self._list_models_quick()
+        return [m for m in installed if (p := _param_count(m)) is not None and p < current]
 
     @staticmethod
     def _format_details(model: dict[str, Any]) -> str | None:

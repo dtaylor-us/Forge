@@ -168,8 +168,10 @@ def test_planner_uses_model_override(tmp_path):
 
 def test_planner_missing_workset_raises(tmp_path):
     mock_manager = MagicMock()
-    with pytest.raises(PlannerError, match="not found"):
+    with pytest.raises(PlannerError, match="not found") as exc_info:
         generate_plan(tmp_path, TASK, "nonexistent", model_manager=mock_manager)
+    # Regression for I-06: the message must not duplicate "not found".
+    assert str(exc_info.value).lower().count("not found") == 1
 
 
 def test_planner_model_error_raises(tmp_path):
@@ -262,6 +264,8 @@ def test_cli_plan_missing_workset(tmp_path):
     )
     assert result.exit_code != 0
     assert "Planning error" in result.output or "not found" in result.output
+    # Regression for I-06: "not found: ... not found." duplication.
+    assert result.output.lower().count("not found") == 1
 
 
 def _cli_mock_manager():
@@ -337,3 +341,64 @@ def test_cli_plan_model_override(tmp_path):
     call_kwargs = mock_manager.ask.call_args
     assert call_kwargs is not None
     assert call_kwargs.kwargs.get("model") == "qwen2.5-coder:14b"
+
+
+# ---------------------------------------------------------------------------
+# `forge plan-list` CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_cli_plan_list_empty(tmp_path):
+    result = runner.invoke(app, ["plan-list", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No saved plans found" in result.output
+
+
+def test_cli_plan_list_shows_saved_plans(tmp_path):
+    _make_workset(tmp_path)
+    mock_manager = _cli_mock_manager()
+    with patch("forge.cli.app._model_manager", return_value=mock_manager):
+        save_result = runner.invoke(
+            app,
+            ["plan", TASK, "--workset", WORKSET_NAME, "--root", str(tmp_path), "--save"],
+        )
+    assert save_result.exit_code == 0
+
+    result = runner.invoke(app, ["plan-list", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert WORKSET_NAME in result.output
+    assert "Forge Implementation Plan" in result.output
+
+
+def test_cli_plan_list_json_output(tmp_path):
+    _make_workset(tmp_path)
+    mock_manager = _cli_mock_manager()
+    with patch("forge.cli.app._model_manager", return_value=mock_manager):
+        runner.invoke(
+            app,
+            ["plan", TASK, "--workset", WORKSET_NAME, "--root", str(tmp_path), "--save"],
+        )
+
+    result = runner.invoke(app, ["plan-list", "--root", str(tmp_path), "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert len(data) == 1
+    assert data[0]["workset"] == WORKSET_NAME
+    assert data[0]["generated_at"] != "-"
+    assert "name" in data[0] and "path" in data[0] and "preview" in data[0]
+
+
+def test_cli_plan_list_does_not_break_plan_command(tmp_path):
+    """`forge plan` (positional task arg) and `forge plan-list` must coexist."""
+    _make_workset(tmp_path)
+    mock_manager = _cli_mock_manager()
+    with patch("forge.cli.app._model_manager", return_value=mock_manager):
+        plan_result = runner.invoke(
+            app,
+            ["plan", TASK, "--workset", WORKSET_NAME, "--root", str(tmp_path)],
+        )
+    assert plan_result.exit_code == 0
+    assert "Forge Implementation Plan" in plan_result.output
+
+    list_result = runner.invoke(app, ["plan-list", "--root", str(tmp_path)])
+    assert list_result.exit_code == 0

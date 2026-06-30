@@ -6,7 +6,10 @@ application service and records the outcome into the WorkflowRun.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -80,6 +83,7 @@ class WorkflowEngine:
             self._registry.save(run)
             if stage.status == WorkflowStageStatus.failed:
                 run.status = WorkflowStatus.failed
+                self._cleanup_ephemeral_artifacts(run)
                 run.completed_at = datetime.now(tz=UTC)
                 self._registry.save(run)
                 return run
@@ -104,12 +108,15 @@ class WorkflowEngine:
         from forge.services import workset_service
 
         workset_name = _workset_name(run.id, run.template)
+        include_tests = run.template == WorkflowTemplate.bugfix
         result = workset_service.create(
             self._root,
             workset_name,
             run.task,
             max_results=20,
+            include_tests=include_tests,
             force=True,
+            workflow=str(run.template),
         )
         run.workset_name = workset_name
         run.artifacts["workset"] = result
@@ -159,6 +166,12 @@ class WorkflowEngine:
             run.task,
             run.workset_name,
             model=self._model,
+            # Unattended workflow runs have no human in the loop to retry
+            # `forge implement` by hand, unlike the CLI (which defaults to 1
+            # and lets the user re-run). Give the repair loop more chances to
+            # converge on a hunk a smaller/local model miscounted before the
+            # whole run is marked failed.
+            repair_attempts=3,
         )
         result = impl.to_dict()
         run.artifacts["patch"] = result
@@ -193,7 +206,7 @@ class WorkflowEngine:
                 f"Patch validation failed: {errors}\n\n"
                 f"Next steps:\n"
                 f"  inspect:    forge patch show {patch_name}\n"
-                f"  regenerate: forge implement \"<task>\" --workset <workset>\n"
+                f'  regenerate: forge implement "<task>" --workset <workset>\n'
                 f"  validate:   forge patch validate {patch_name}"
             )
 
@@ -206,28 +219,98 @@ class WorkflowEngine:
                 f"Patch does not apply cleanly to the working tree: {exc}\n\n"
                 f"Next steps:\n"
                 f"  inspect:    forge patch show {patch_name}\n"
-                f"  regenerate: forge implement \"<task>\" --workset <workset>\n"
+                f'  regenerate: forge implement "<task>" --workset <workset>\n'
                 f"  validate:   forge patch validate {patch_name}"
             ) from exc
 
     def _stage_verify(self, run: WorkflowRun, stage: WorkflowStage) -> None:
-        from forge.services import verification_service
+        """Run verification against the *patched* working tree.
 
-        patch_name = (run.artifacts.get("patch") or {}).get("patch_name")
+        The patch is applied in a temporary git worktree so that:
+        - Tests execute against the fixed code, not the pre-fix baseline.
+        - The main working tree stays clean (no test artefacts left behind).
+
+        If the worktree cannot be created the stage falls back to verifying
+        the main working tree and notes the fallback in stage output.
+        """
+        from forge.git.service import GitService, GitServiceError
+        from forge.patches.service import resolve_patch_path
+        from forge.patches import PatchError
+        from forge.project.paths import ForgePaths
+        from forge.services import verification_service
+        from forge.verification.executor import timestamp_slug
+
+        patch_info = run.artifacts.get("patch") or {}
+        patch_name = patch_info.get("patch_name")
+
+        # Resolve patch path so we can apply it in the worktree.
+        patch_path: Path | None = None
+        if patch_name:
+            with suppress(PatchError, Exception):
+                patch_path = resolve_patch_path(self._root, patch_name)
+
+        # Always write the report into the main project's verifications dir
+        # so that forge apply / forge policy can find it via _latest_report().
+        paths = ForgePaths.from_root(self._root)
+        paths.verifications_dir.mkdir(parents=True, exist_ok=True)
+        output_path = paths.verifications_dir / f"verification-{timestamp_slug()}.json"
+
+        verify_root = self._root
+        worktree_path: Path | None = None
+        used_worktree = False
+
+        if patch_path and patch_path.exists():
+            git_svc = GitService(cwd=self._root)
+            tmp = Path(tempfile.mkdtemp(prefix="forge-verify-"))
+            try:
+                git_svc.worktree_add(tmp)
+                GitService(cwd=tmp).apply(patch_path)
+                verify_root = tmp
+                worktree_path = tmp
+                used_worktree = True
+            except (GitServiceError, Exception):
+                # Worktree setup failed — fall back to main working tree.
+                with suppress(Exception):
+                    git_svc.worktree_remove(tmp)
+                shutil.rmtree(tmp, ignore_errors=True)
+                worktree_path = None
+                verify_root = self._root
+
         try:
             result = verification_service.run(
-                self._root,
+                verify_root,
+                output_path=output_path,
                 patch=patch_name,
                 workset=run.workset_name,
             )
         except verification_service.VerificationServiceError as exc:
             raise WorkflowEngineError(f"Verification infrastructure error: {exc}") from exc
+        finally:
+            if worktree_path:
+                git_svc = GitService(cwd=self._root)
+                with suppress(Exception):
+                    git_svc.worktree_remove(worktree_path)
+                shutil.rmtree(worktree_path, ignore_errors=True)
+
         run.artifacts["verification"] = result
         run.verification_status = str(result.get("overall_status", "unknown"))
         stage.output = {
             "overall_status": result.get("overall_status"),
             "summary": result.get("summary"),
+            "verified_in_worktree": used_worktree,
         }
+
+    def _cleanup_ephemeral_artifacts(self, run: WorkflowRun) -> None:
+        """Delete the ephemeral workset and context bundle created for this run."""
+        from forge.services import workset_service
+
+        if run.workset_name:
+            with suppress(Exception):
+                workset_service.delete(self._root, run.workset_name)
+        ctx_path = (run.artifacts.get("context") or {}).get("path")
+        if ctx_path:
+            with suppress(Exception):
+                Path(ctx_path).unlink(missing_ok=True)
 
     def _stage_policy(self, run: WorkflowRun, stage: WorkflowStage) -> None:
         from forge.services import policy_service
@@ -244,6 +327,20 @@ class WorkflowEngine:
             "status": evaluation.get("status"),
             "checks": evaluation.get("checks"),
         }
+        # Fail the workflow stage when policy would block `forge apply`.
+        # Without this, the workflow shows ✓ policy even though apply will refuse
+        # the patch — leaving the user with a false "Patch ready" message.
+        if evaluation.get("status") == "fail":
+            failed = [
+                c for c in (evaluation.get("checks") or [])
+                if c.get("status") == "fail"
+            ]
+            details = "; ".join(c.get("message", c.get("name", "")) for c in failed)
+            raise WorkflowEngineError(
+                f"Policy evaluation failed — 'forge apply' will be blocked.\n"
+                f"{details}\n\n"
+                f"Run 'forge policy check {patch_name}' for the full report."
+            )
 
     # ------------------------------------------------------------------
     # Helpers

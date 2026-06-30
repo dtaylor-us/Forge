@@ -19,6 +19,25 @@ from forge.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _model_timeout_heuristic(model: str, fallback: int = 300) -> int:
+    """Return a recommended timeout in seconds based on model name size hints."""
+    name = model.lower()
+    for suffix, seconds in [
+        ("70b", 600),
+        ("34b", 480),
+        ("32b", 480),
+        ("30b", 480),
+        ("22b", 360),
+        ("14b", 300),
+        ("13b", 270),
+        ("7b", 180),
+        ("3b", 120),
+    ]:
+        if suffix in name:
+            return seconds
+    return fallback
+
+
 class ModelNotFoundError(ModelProviderError):
     """Raised when the configured provider does not expose a requested model."""
 
@@ -113,10 +132,10 @@ class ModelManager:
         provider_config = config.providers.get(config.provider.value, ProviderConfig())
         endpoint = provider_config.endpoint
         if config.provider == ProviderName.OLLAMA:
-            return OllamaProvider(
-                endpoint or "http://localhost:11434",
-                timeout_seconds=timeout_seconds or provider_config.timeout_seconds or 120,
-            )
+            configured = timeout_seconds or provider_config.timeout_seconds
+            if configured is None:
+                configured = _model_timeout_heuristic(config.default_model, fallback=300)
+            return OllamaProvider(endpoint or "http://localhost:11434", timeout_seconds=configured)
         if config.provider == ProviderName.OPENAI:
             return OpenAIProvider(
                 os.getenv("OPENAI_API_KEY"),

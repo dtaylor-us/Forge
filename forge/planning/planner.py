@@ -32,7 +32,7 @@ def generate_plan(
     *,
     model: str | None = None,
     timeout_seconds: int | None = None,
-    max_lines_per_file: int = 120,
+    max_lines_per_file: int = 60,
     include_full: bool = False,
     model_manager: ModelManager | None = None,
     save_to_memory: bool = True,

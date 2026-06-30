@@ -561,7 +561,22 @@ Discover
 forge workset suggest "authentication"
 ```
 
-Forge ranks relevant files using deterministic scoring.
+Forge builds task-scoped worksets through an offline deterministic pipeline:
+
+```text
+Task → Intent → Identifiers → Relationships → Scoring → Assembly → Context
+```
+
+The selector ignores action verbs such as `fix`, `add`, and `refactor` as
+search terms while still using them to infer intent. CamelCase identifiers are
+expanded into searchable parts, test-like identifiers pull in their related
+implementation files, and bugfix workflows include tests by default.
+
+Infrastructure files such as `README.md`, `Dockerfile`, and build manifests are
+eligible when relevant, but they use a small quota once high-confidence source
+matches exist so they cannot crowd out implementation files. Every selected file
+keeps explainable reasons such as primary match, relationship, identifier match,
+content match, test match, documentation, or infrastructure.
 
 ---
 

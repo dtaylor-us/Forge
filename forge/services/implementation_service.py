@@ -2,24 +2,30 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from forge.execution import ExecutionService, ExecutionServiceError
-from forge.execution.execution_prompt import build_implementation_prompt, build_repair_prompt
+from forge.execution.execution_prompt import (
+    build_implementation_prompt,
+    build_numbered_file_details,
+    build_repair_prompt,
+)
 from forge.models.manager import ModelManager
 from forge.patches import (
     Patch,
     apply_check_patch_content,
+    realign_patch_hunk_headers,
     save_invalid_response,
     save_patch_content,
     validate_patch_content,
+    verify_patch_context,
 )
 from forge.patches.service import inspect_patch
 from forge.planning.planner import ImplementationPlan
-from forge.planning.prompts import build_context_sections
 
 
 @dataclass(frozen=True)
@@ -82,12 +88,19 @@ class ImplementationService:
         *,
         model: str | None = None,
         timeout_seconds: int | None = None,
-        max_lines_per_file: int = 120,
-        include_full: bool = False,
+        max_lines_per_file: int = 60,
+        include_full: bool = True,
         output_path: Path | None = None,
         repair_attempts: int = 1,
     ) -> ImplementationResult:
-        """Generate and store a model-produced unified diff, with optional repair."""
+        """Generate and store a model-produced unified diff, with optional repair.
+
+        ``include_full`` defaults to True: patch generation requires the model to
+        reproduce exact context lines from the real file, so excerpted/truncated
+        content (the default for browsing-oriented commands) is not appropriate
+        here. The context-verification step below independently catches any
+        remaining mismatches between the model's diff and the file on disk.
+        """
         selected_model = model or self._model_manager.config().default_model
         request = self._execution_service.create_request(
             root,
@@ -115,13 +128,22 @@ class ImplementationService:
             model=model,
             timeout_seconds=timeout_seconds,
         )
-        current_content = response.content
+        current_content = _strip_markdown_fence(response.content)
+        # Deterministically correct miscounted hunk starting positions before
+        # validation. git apply --recount (applied by GitService) fixes hunk
+        # line *counts*, but it cannot fix a wrong starting *position* (L in
+        # @@ -L,N @@). This pass searches the real file for the unique location
+        # where each hunk's context/removed block appears and rewrites the header
+        # when exactly one match is found, eliminating that failure class without
+        # touching content the model got right.
+        current_content, _ = realign_patch_hunk_headers(root, current_content)
         current_model = response.model
         attempts_made = 0
 
         valid, errors, affected_files = validate_patch_content(current_content)
         apply_ok, apply_error = _apply_check_if_structurally_valid(root, current_content, valid)
         is_valid = valid and apply_ok
+        context_mismatches = [] if is_valid else verify_patch_context(root, current_content)
 
         file_details = _bundle_file_details(request.context_bundle)
         while not is_valid and attempts_made < repair_attempts:
@@ -132,13 +154,15 @@ class ImplementationService:
                 structural_errors=errors,
                 apply_check_error=apply_error,
                 file_details=file_details,
+                context_mismatches=context_mismatches,
             )
             repair_response = self._model_manager.ask(
                 prompt=repair_prompt,
                 model=model,
                 timeout_seconds=timeout_seconds,
             )
-            current_content = repair_response.content
+            current_content = _strip_markdown_fence(repair_response.content)
+            current_content, _ = realign_patch_hunk_headers(root, current_content)
             current_model = repair_response.model
             valid, errors, affected_files = validate_patch_content(current_content)
             apply_ok, apply_error = _apply_check_if_structurally_valid(
@@ -147,6 +171,7 @@ class ImplementationService:
                 valid,
             )
             is_valid = valid and apply_ok
+            context_mismatches = [] if is_valid else verify_patch_context(root, current_content)
 
         if is_valid:
             patch = _save_valid_patch(root, current_content, output_path=output_path, task=task)
@@ -167,6 +192,14 @@ class ImplementationService:
 
         if apply_error and apply_error not in errors:
             errors = [*errors, apply_error]
+        if context_mismatches:
+            # Surface the specific line-level diagnosis (patch expected X, file
+            # actually has Y) on final failure, not just the raw, often-cryptic
+            # `git apply` message (e.g. "corrupt patch at line 15"). This was
+            # already computed to drive the repair prompt; previously it was
+            # discarded once repair attempts ran out, leaving callers with
+            # only the opaque git error.
+            errors = [*errors, *[m for m in context_mismatches if m not in errors]]
         invalid_path = save_invalid_response(root, current_content, prefix=_artifact_slug(task))
         return ImplementationResult(
             task=task,
@@ -183,6 +216,16 @@ class ImplementationService:
             test_warning=test_warning,
             repair_attempts_made=attempts_made,
         )
+
+
+def _strip_markdown_fence(content: str) -> str:
+    """Extract raw diff from a markdown code fence if the model wrapped it."""
+    stripped = content.strip()
+    # Match ```diff, ```patch, or plain ``` opening fence
+    match = re.match(r"^```(?:diff|patch)?\s*\n(.*?)```\s*$", stripped, re.DOTALL)
+    if match:
+        return match.group(1)
+    return content
 
 
 def _save_valid_patch(
@@ -237,9 +280,14 @@ def _apply_check_if_structurally_valid(
 
 
 def _bundle_file_details(bundle: Any) -> str:
-    """Extract detailed file context from a context bundle for repair prompts."""
-    _, file_details = build_context_sections(bundle)
-    return file_details
+    """Extract detailed, line-numbered file context from a bundle for repair prompts.
+
+    Uses the same "N| " gutter rendering as the initial implementation
+    prompt (see ``build_numbered_file_details``) so the model has line-number
+    ground truth on repair attempts too, instead of repeating the same
+    miscounted hunk header it produced the first time.
+    """
+    return build_numbered_file_details(bundle)
 
 
 def _artifact_slug(task: str) -> str:

@@ -229,11 +229,30 @@ def test_successful_execution(tmp_path: Path) -> None:
 
 
 def test_formatter_failure_continues_to_linter_and_tests(tmp_path: Path) -> None:
+    """Regression for the I-11 dogfood finding: black is a soft/non-required gate.
+
+    A black --check failure (often caused by tool-version/target-version
+    drift rather than an actual formatting problem) must not fail overall
+    verification on its own, as long as the required gates (linter, tests)
+    pass.
+    """
     report, fake = _execute_with_fake_runner(tmp_path, {"black --check .": 1})
+
+    assert report["overall_status"] == "pass"
+    assert report["summary"]["by_kind"]["formatter"] == "fail"
+    assert report["steps"][0]["required"] is False
+    assert fake.commands == ["black --check .", "ruff check .", "pytest"]
+
+
+def test_formatter_failure_combined_with_linter_failure_still_fails(tmp_path: Path) -> None:
+    """A required gate failing alongside the soft formatter gate still fails overall."""
+    report, _fake = _execute_with_fake_runner(
+        tmp_path, {"black --check .": 1, "ruff check .": 1}
+    )
 
     assert report["overall_status"] == "fail"
     assert report["summary"]["by_kind"]["formatter"] == "fail"
-    assert fake.commands == ["black --check .", "ruff check .", "pytest"]
+    assert report["summary"]["by_kind"]["linter"] == "fail"
 
 
 def test_linter_failure(tmp_path: Path) -> None:

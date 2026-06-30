@@ -49,9 +49,16 @@ def list_relevant_files(
     root: Path | str | None = None,
     *,
     ext: str | None = None,
-    max_results: int = 200,
+    max_results: int | None = 200,
 ) -> list[Path]:
-    """List source, test, config, and documentation files in a repository."""
+    """List source, test, config, and documentation files in a repository.
+
+    `max_results=None` returns every relevant file with no truncation. Callers that need
+    a full, unbiased candidate pool (e.g. workset scoring) must pass `None` rather than a
+    large fixed number: any fixed cap, applied via the global priority+path sort below
+    *before* relevance is actually evaluated, can silently drop the very file a caller is
+    looking for in a large repository, no matter how relevant it turns out to be.
+    """
     root_path = normalize_root(root)
     extension = _normalize_extension(ext)
     results: list[Path] = []
@@ -64,7 +71,10 @@ def list_relevant_files(
                 continue
             if extension or _is_relevant(path, root_path):
                 results.append(path.relative_to(root_path))
-    return sorted(results, key=_file_priority)[:max_results]
+    ordered = sorted(results, key=_file_priority)
+    if max_results is None:
+        return ordered
+    return ordered[:max_results]
 
 
 def _normalize_extension(ext: str | None) -> str | None:

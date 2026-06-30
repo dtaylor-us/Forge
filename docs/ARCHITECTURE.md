@@ -61,8 +61,9 @@ Domain packages hold deterministic business logic:
 
 - `forge/repository/`: repository detection, tree generation, ignore rules, and
   deterministic text search.
-- `forge/worksets/`: candidate scoring, persisted workset semantics, and manual
-  file membership rules.
+- `forge/worksets/`: deterministic query analysis, identifier expansion,
+  relationship discovery, candidate scoring, ranked assembly, persisted workset
+  semantics, and manual file membership rules.
 - `forge/context/`: context bundle construction, summaries, symbols, excerpts,
   and rendering.
 - `forge/memory/`: memory models, storage, search, and similarity scoring.
@@ -80,6 +81,48 @@ Domain packages hold deterministic business logic:
 
 Domain code should stay provider independent and should not know whether a
 workflow was invoked by CLI, web, or a future agent.
+
+### Workset Selection Pipeline
+
+Workset selection is deterministic, offline, explainable, and provider
+independent. It does not use LLMs, embeddings, vector databases, or semantic
+search.
+
+```text
+Task
+        |
+Intent Analysis
+        |
+Entity Extraction
+        |
+Repository Search
+        |
+Relationship Expansion
+        |
+Candidate Scoring
+        |
+Workset Assembly
+        |
+Context
+```
+
+The package boundary keeps each stage testable:
+
+- `query.py` parses intent, subject, ignored action verbs, and inclusion flags.
+- `identifiers.py` recognizes CamelCase and test-like engineering identifiers.
+- `relationships.py` derives related implementation candidates from naming
+  conventions such as `PaymentControllerTest` → `PaymentController`.
+- `scoring.py` separates candidate confidence from file importance so direct
+  engineering relevance dominates generic project-file value.
+- `ranking.py` assembles primary implementation targets, related source files,
+  tests, documentation, configuration, and infrastructure in that order.
+- `suggest.py` orchestrates the pipeline for application services.
+
+Infrastructure files participate only when appropriate. When high-confidence
+implementation candidates exist, files such as `README.md`, `Dockerfile`, and
+build manifests are capped by a small quota. Selected candidates retain
+human-readable reasons for primary matches, relationships, identifier matches,
+content matches, test inclusion, documentation, and infrastructure signals.
 
 ### Provider Abstractions
 

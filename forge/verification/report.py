@@ -37,6 +37,7 @@ class VerificationStepResult:
     exception: str | None = None
     kind: str | None = None
     name: str | None = None
+    required: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -55,6 +56,7 @@ class VerificationStepResult:
             "exception": self.exception,
             "kind": self.kind,
             "name": self.name,
+            "required": self.required,
         }
 
 

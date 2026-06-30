@@ -110,7 +110,16 @@ def _detect_python(root: Path, file_names: set[str]) -> VerificationStrategy:
         steps.append(VerificationStep("linter", "ruff check .", "linter", VerificationTool.ruff))
     if "black" in dependency_names or _pyproject_has_tool(pyproject, "black"):
         steps.append(
-            VerificationStep("formatter", "black --check .", "formatter", VerificationTool.black)
+            VerificationStep(
+                "formatter",
+                "black --check .",
+                "formatter",
+                VerificationTool.black,
+                # Soft gate: black --check is prone to false FAILs from
+                # tool-version/target-version drift between environments, so
+                # a failure here should not block the rest of verification.
+                required=False,
+            )
         )
     return _strategy(
         VerificationEcosystem.python,

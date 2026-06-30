@@ -348,18 +348,14 @@ def config_set_default_model(
     console.print(f"Default model set to {config.default_model}")
 
 
-@models_app.callback(invoke_without_command=True)
-def models_command(ctx: typer.Context) -> None:
-    """Enumerate installed models for the configured provider."""
-    if ctx.invoked_subcommand is not None:
-        return
+def _render_models_table() -> None:
     try:
         manager = _model_manager()
         config = manager.config()
         models = manager.list_models()
     except ModelProviderError as exc:
         _handle_provider_error(exc)
-
+        return
     table = _table(f"Forge Models ({config.provider.value})")
     table.add_column("Provider")
     table.add_column("Model")
@@ -369,6 +365,20 @@ def models_command(ctx: typer.Context) -> None:
         active = "*" if model.name == config.default_model else ""
         table.add_row(model.provider, model.name, active, model.details or "")
     console.print(table)
+
+
+@models_app.callback(invoke_without_command=True)
+def models_command(ctx: typer.Context) -> None:
+    """Enumerate installed models for the configured provider."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _render_models_table()
+
+
+@models_app.command("list")
+def models_list() -> None:
+    """List installed models for the configured provider."""
+    _render_models_table()
 
 
 @models_app.command("use")
@@ -724,8 +734,16 @@ def workset_show(
     table.add_column("Manual")
     table.add_column("Reasons")
     for f in data.get("files", []):
+        # "match" is a generic fallback signal for reasons whose underlying
+        # label had no natural "signal:detail" split (see
+        # _candidate_to_file_entry). Showing "match:<detail>" duplicated
+        # information already in the detail text and was inconsistent with
+        # `forge workset suggest`, which renders the same reasons unprefixed.
         reasons = "; ".join(
-            f"{r['signal']}:{r['detail']} (+{r['points']})" for r in f.get("reasons", [])
+            f"{r['detail']} (+{r['points']})"
+            if r["signal"] == "match"
+            else f"{r['signal']}:{r['detail']} (+{r['points']})"
+            for r in f.get("reasons", [])
         )
         table.add_row(
             f["path"],
@@ -735,6 +753,23 @@ def workset_show(
             reasons,
         )
     console.print(table)
+
+    memory_items = data.get("memory", [])
+    if memory_items:
+        console.print()
+        memory_table = _table(f"Linked Memory ({len(memory_items)})")
+        memory_table.add_column("ID", no_wrap=True)
+        memory_table.add_column("Type", no_wrap=True)
+        memory_table.add_column("Title")
+        memory_table.add_column("Created", no_wrap=True)
+        for item in memory_items:
+            memory_table.add_row(
+                item["id"][:12],
+                item["type"],
+                item["title"],
+                item["created_at"][:10],
+            )
+        console.print(memory_table)
 
 
 @workset_app.command("add")
@@ -901,6 +936,9 @@ def init(
     )
     console.print(f"  Repository root: {result['paths']['repo_root']}")
     console.print(f"  Git detected:    {resolved.git_detected}")
+    if result.get("gitignore_updated"):
+        entries = ", ".join(result.get("gitignore_entries_added", []))
+        console.print(f"  Updated .gitignore: added {entries}")
 
 
 @app.command("web")
@@ -989,8 +1027,8 @@ def project_info(
     console.print(f"  Initialized:           {initialized}")
     if meta:
         console.print(f"  Forge version:         {meta.get('forge_version', '-')}")
+        # updated_at is not actively maintained; omit from human output to avoid staleness.
         console.print(f"  Created:               {meta.get('created_at', '-')}")
-        console.print(f"  Updated:               {meta.get('updated_at', '-')}")
     console.print()
     console.print(f"  Languages:        {_join_values(detected.get('languages', []))}")
     console.print(f"  Frameworks:       {_join_values(detected.get('frameworks', []))}")
@@ -1086,6 +1124,15 @@ def _render_verification_report(report: dict[str, object]) -> None:
     repo_name = repository.get("name", "unknown") if isinstance(repository, dict) else "unknown"
     overall = str(report.get("overall_status", "fail")).upper()
 
+    # Non-required ("soft") steps, like the black formatter check, are
+    # rendered distinctly so a non-blocking failure isn't mistaken for one
+    # that failed the overall result.
+    required_by_kind: dict[str, bool] = {}
+    if isinstance(steps, list):
+        for step in steps:
+            if isinstance(step, dict) and step.get("kind"):
+                required_by_kind[str(step["kind"])] = bool(step.get("required", True))
+
     console.print("[bold]Verification[/bold]")
     console.print(f"Repository: {repo_name}")
     console.print(f"Overall: {_status_label(overall)}")
@@ -1100,7 +1147,13 @@ def _render_verification_report(report: dict[str, object]) -> None:
         ("Build", "build"),
         ("Tests", "tests"),
     ):
-        table.add_row(label, _status_label(str(by_kind.get(kind, "skipped")).upper()))
+        table.add_row(
+            label,
+            _status_label(
+                str(by_kind.get(kind, "skipped")).upper(),
+                required=required_by_kind.get(kind, True),
+            ),
+        )
     console.print(table)
     console.print(f"Duration: {_format_duration(float(report.get('duration') or 0))}")
     if isinstance(artifact, dict) and artifact.get("path"):
@@ -1118,17 +1171,24 @@ def _render_verification_report(report: dict[str, object]) -> None:
             )
 
 
-def _status_label(status: str) -> str:
+def _status_label(status: str, *, required: bool = True) -> str:
     if status == "PASS":
         return "[green]PASS[/green]"
     if status == "SKIPPED":
         return "[yellow]SKIPPED[/yellow]"
+    if not required and status in {"FAIL", "ERROR"}:
+        return f"[yellow]{status} (non-blocking)[/yellow]"
     if status == "ERROR":
         return "[red]ERROR[/red]"
     return "[red]FAIL[/red]"
 
 
 def _format_duration(seconds: float) -> str:
+    if seconds < 60:
+        # Sub-minute runs are common for fast verification gates (lint, single
+        # test file, etc.). Truncating to whole seconds made every sub-second
+        # run misleadingly display as "00:00". Show one decimal instead.
+        return f"{seconds:.1f}s"
     minutes, remainder = divmod(int(seconds), 60)
     return f"{minutes:02d}:{remainder:02d}"
 
@@ -1209,6 +1269,51 @@ def plan_command(
     console.print(render_plan_text(result))
 
 
+@app.command("plan-list")
+def plan_list(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, help="Maximum number of plans to show."),
+    ] = 20,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+) -> None:
+    """List implementation plans saved under .forge/plans/.
+
+    Named `plan-list` rather than a `forge plan list` subcommand because
+    `forge plan` takes a positional task argument, which is incompatible
+    with also dispatching to subcommands.
+    """
+    resolved = project_service.resolve_project_root(root)
+    plans = project_service.list_plans(resolved.root, limit=limit)
+
+    if output_json:
+        console.print_json(json.dumps(plans))
+        return
+
+    if not plans:
+        console.print("[yellow]No saved plans found. Use `forge plan --save` to save one.[/yellow]")
+        return
+
+    table = _table("Saved Plans")
+    table.add_column("Generated", no_wrap=True)
+    table.add_column("Workset", no_wrap=True)
+    table.add_column("Preview")
+    for plan in plans:
+        table.add_row(
+            plan["generated_at"],
+            plan["workset"],
+            plan["preview"],
+        )
+    console.print(table)
+
+
 @app.command("implement")
 def implement_command(
     task: Annotated[str, typer.Argument(help="Implementation task to generate a patch for.")],
@@ -1231,8 +1336,15 @@ def implement_command(
     ] = 120,
     include_full: Annotated[
         bool,
-        typer.Option("--include-full", help="Include full file contents in context."),
-    ] = False,
+        typer.Option(
+            "--include-full/--no-include-full",
+            help=(
+                "Include full, verbatim file contents in context (default: on). "
+                "Patch generation needs exact file content to produce diffs that "
+                "apply cleanly; disable only to save tokens on very large files."
+            ),
+        ),
+    ] = True,
     output_path: Annotated[
         Path | None,
         typer.Option("--output", help="Write a valid patch to this explicit path."),
@@ -1304,8 +1416,7 @@ def implement_command(
     if data.get("repair_attempts_made", 0) > 0:
         if data["valid"]:
             console.print(
-                "Patch repaired and validated after "
-                f"{data['repair_attempts_made']} attempt(s)."
+                "Patch repaired and validated after " f"{data['repair_attempts_made']} attempt(s)."
             )
         else:
             console.print(
@@ -1500,19 +1611,28 @@ def memory_timeline(
         console.print('  forge decision create "Use JWT"')
         console.print('  forge investigation create "Planning timeout"')
         return
-    console.print("[bold cyan]Engineering Memory Timeline[/bold cyan]")
-    console.print()
+    table = _table("Engineering Memory Timeline")
+    table.add_column("Date", no_wrap=True)
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Title")
+    table.add_column("Workset", no_wrap=True)
+    table.add_column("ID", no_wrap=True)
     for item in items:
-        date = item["created_at"][:10]
-        item_type = item["type"]
-        title = item["title"]
-        workset = f"  [{item['workset']}]" if item["workset"] else ""
-        tags = f"  {', '.join(item['tags'])}" if item["tags"] else ""
-        short_id = item["id"][:12]
-        console.print(
-            f"[dim]{date}[/dim]  [magenta]{item_type:<15}[/magenta]  {title}"
-            f"[dim]{workset}{tags}[/dim]  [dim]{short_id}[/dim]"
+        table.add_row(
+            item["created_at"][:10],
+            item["type"],
+            item["title"],
+            item["workset"] or "-",
+            item["id"][:12],
         )
+    console.print(table)
+    if any(item["tags"] for item in items):
+        console.print()
+        for item in items:
+            if item["tags"]:
+                console.print(
+                    f"  [dim]{item['id'][:12]}[/dim] tags: {', '.join(item['tags'])}"
+                )
 
 
 @decision_app.command("create")
@@ -1555,6 +1675,56 @@ def decision_create(
     console.print(f"  forge memory show {item['id']}")
 
 
+@decision_app.command("list")
+def decision_list(
+    root: Annotated[Path | None, typer.Option("--root")] = None,
+    output_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List captured engineering decisions."""
+    resolved = project_service.resolve_project_root(root)
+    items = [i for i in memory_service.list_timeline(resolved.root) if i.get("type") == "decision"]
+    if output_json:
+        console.print_json(json.dumps(items))
+        return
+    if not items:
+        console.print("[yellow]No decisions found.[/yellow]")
+        return
+    table = _table("Engineering Decisions")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("Workset")
+    table.add_column("Created")
+    for item in items:
+        table.add_row(item["id"], item["title"], item.get("workset") or "—", item["created_at"])
+    console.print(table)
+
+
+@decision_app.command("show")
+def decision_show(
+    item_id: Annotated[str, typer.Argument(help="Decision ID.")],
+    root: Annotated[Path | None, typer.Option("--root")] = None,
+    output_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show a single engineering decision by ID."""
+    resolved = project_service.resolve_project_root(root)
+    try:
+        item = memory_service.get(resolved.root, item_id)
+    except MemoryStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    if output_json:
+        console.print_json(json.dumps(item))
+        return
+    console.print(f"[bold]{item['title']}[/bold]")
+    console.print(f"  ID:      {item['id']}")
+    console.print(f"  Workset: {item.get('workset') or '—'}")
+    console.print(f"  Created: {item['created_at']}")
+    if item.get("tags"):
+        console.print(f"  Tags:    {', '.join(item['tags'])}")
+    if item.get("summary"):
+        console.print(f"  Summary: {item['summary']}")
+
+
 @investigation_app.command("create")
 def investigation_create(
     title: Annotated[str, typer.Argument(help="Investigation title.")],
@@ -1593,6 +1763,58 @@ def investigation_create(
     console.print()
     console.print("View:")
     console.print(f"  forge memory show {item['id']}")
+
+
+@investigation_app.command("list")
+def investigation_list(
+    root: Annotated[Path | None, typer.Option("--root")] = None,
+    output_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List captured engineering investigations."""
+    resolved = project_service.resolve_project_root(root)
+    items = [
+        i for i in memory_service.list_timeline(resolved.root) if i.get("type") == "investigation"
+    ]
+    if output_json:
+        console.print_json(json.dumps(items))
+        return
+    if not items:
+        console.print("[yellow]No investigations found.[/yellow]")
+        return
+    table = _table("Engineering Investigations")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("Workset")
+    table.add_column("Created")
+    for item in items:
+        table.add_row(item["id"], item["title"], item.get("workset") or "—", item["created_at"])
+    console.print(table)
+
+
+@investigation_app.command("show")
+def investigation_show(
+    item_id: Annotated[str, typer.Argument(help="Investigation ID.")],
+    root: Annotated[Path | None, typer.Option("--root")] = None,
+    output_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show a single engineering investigation by ID."""
+    resolved = project_service.resolve_project_root(root)
+    try:
+        item = memory_service.get(resolved.root, item_id)
+    except MemoryStoreError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    if output_json:
+        console.print_json(json.dumps(item))
+        return
+    console.print(f"[bold]{item['title']}[/bold]")
+    console.print(f"  ID:      {item['id']}")
+    console.print(f"  Workset: {item.get('workset') or '—'}")
+    console.print(f"  Created: {item['created_at']}")
+    if item.get("tags"):
+        console.print(f"  Tags:    {', '.join(item['tags'])}")
+    if item.get("summary"):
+        console.print(f"  Summary: {item['summary']}")
 
 
 @patch_app.command("list")
@@ -1750,6 +1972,30 @@ def git_branch(
     console.print(f"Current branch: {result['branch']}")
 
 
+@policy_app.command("list")
+def policy_list(
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    output_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON."),
+    ] = False,
+) -> None:
+    """List the active engineering policy rules (alias for 'forge policy show')."""
+    resolved = project_service.resolve_project_root(root)
+    policy = policy_service.show(resolved.root)
+    if output_json:
+        console.print_json(json.dumps(policy))
+        raise typer.Exit(code=0)
+    for section, fields in policy.items():
+        console.print(f"\n[bold]{section}:[/bold]")
+        for key, value in fields.items():
+            console.print(f"  {key}: {value}")
+    raise typer.Exit(code=0)
+
+
 @policy_app.command("show")
 def policy_show(
     root: Annotated[
@@ -1795,10 +2041,10 @@ def policy_check(
     try:
         result = policy_service.check(resolved.root, patch_path_or_name, verification)
     except PatchError as exc:
-        console.print(f"[red]Patch not found:[/red] {exc}")
+        console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]Policy check error:[/red] {exc}")
+        console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
     if output_json:
@@ -1855,7 +2101,7 @@ def apply_command(
         if output_json:
             console.print_json(json.dumps({"error": str(exc)}))
         else:
-            console.print(f"[red]Patch not found:[/red] {exc}")
+            console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
     if not pre_check.get("valid"):
@@ -1992,6 +2238,12 @@ def _render_workflow_run(run: dict) -> None:
                 console.print(f"  Failed stage: {stage['name']}")
                 if stage.get("error"):
                     console.print(f"  Error: {stage['error']}")
+
+    run_id = run.get("id", "")
+    console.print(f"\n[dim]Run ID: {run_id}[/dim]")
+    if run.get("status") != "completed":
+        console.print(f"[dim]  forge workflow show {run_id}   — inspect stage details[/dim]")
+        console.print(f"[dim]  forge workflow clean {run_id}  — remove leftover artifacts[/dim]")
 
 
 @workflow_app.command("feature")
@@ -2150,6 +2402,57 @@ def workflow_show(
     _render_workflow_run(run)
 
 
+@workflow_app.command("clean")
+def workflow_clean(
+    run_id: Annotated[
+        str | None,
+        typer.Argument(help="Workflow run ID to clean up. Omit with --all."),
+    ] = None,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Repository root (default: auto-detected)."),
+    ] = None,
+    all_runs: Annotated[
+        bool,
+        typer.Option("--all", help="Clean all failed workflow runs."),
+    ] = False,
+) -> None:
+    """Delete orphan worksets and context bundles from failed workflow runs."""
+    from forge.services.workflow_service import WorkflowServiceError
+
+    resolved = project_service.resolve_project_root(root)
+    if all_runs:
+        runs = workflow_service.list_runs(resolved.root)
+        failed = [r for r in runs if r.get("status") == "failed"]
+        if not failed:
+            console.print("[yellow]No failed workflow runs found.[/yellow]")
+            return
+        for run in failed:
+            try:
+                result = workflow_service.clean_run(resolved.root, run["id"])
+                console.print(
+                    f"[green]Cleaned[/green] {run['id'][:12]}: "
+                    f"workset={'yes' if result['workset_deleted'] else 'no'}, "
+                    f"context={'yes' if result['context_deleted'] else 'no'}"
+                )
+            except WorkflowServiceError as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+        return
+    if run_id is None:
+        console.print("[red]Provide a run ID or use --all.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        result = workflow_service.clean_run(resolved.root, run_id)
+    except WorkflowServiceError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(
+        f"[green]Cleaned run {run_id[:12]}:[/green] "
+        f"workset={'yes' if result['workset_deleted'] else 'no'}, "
+        f"context={'yes' if result['context_deleted'] else 'no'}"
+    )
+
+
 def _add_command_examples(callback: object, *examples: str) -> None:
     if not callable(callback):
         return
@@ -2172,6 +2475,7 @@ def _install_command_examples() -> None:
         "forge config set-default-model llama3.1:8b",
     )
     _add_command_examples(models_command, "forge models")
+    _add_command_examples(models_list, "forge models list")
     _add_command_examples(models_use, "forge models use qwen2.5-coder:32b")
     _add_command_examples(
         ask,
@@ -2269,6 +2573,12 @@ def _install_command_examples() -> None:
         'forge implement "add CSV export" --workset export-flow',
         'forge implement "fix login redirect" -w auth-flow --repair-attempts 2',
     )
+    _add_command_examples(decision_list, "forge decision list", "forge decision list --json")
+    _add_command_examples(decision_show, "forge decision show decision-20260101-abc")
+    _add_command_examples(
+        investigation_list, "forge investigation list", "forge investigation list --json"
+    )
+    _add_command_examples(investigation_show, "forge investigation show investigation-20260101-xyz")
     _add_command_examples(memory_list, "forge memory list", "forge memory list --json")
     _add_command_examples(
         memory_show,
@@ -2299,6 +2609,7 @@ def _install_command_examples() -> None:
     )
     _add_command_examples(git_status, "forge git status", "forge git status --json")
     _add_command_examples(git_branch, "forge git branch", "forge git branch --json")
+    _add_command_examples(policy_list, "forge policy list", "forge policy list --json")
     _add_command_examples(policy_show, "forge policy show", "forge policy show --json")
     _add_command_examples(
         policy_check,
@@ -2343,6 +2654,11 @@ def _install_command_examples() -> None:
         workflow_show,
         "forge workflow show 01HZY7M6K2Q3",
         "forge workflow show 01HZY7M6K2Q3 --json",
+    )
+    _add_command_examples(
+        workflow_clean,
+        "forge workflow clean 2722db0d",
+        "forge workflow clean --all",
     )
 
 

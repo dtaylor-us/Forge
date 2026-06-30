@@ -48,12 +48,21 @@ class VerificationTool(StrEnum):
 
 @dataclass(frozen=True)
 class VerificationStep:
-    """A verification step that may be executed by a future phase."""
+    """A verification step that may be executed by a future phase.
+
+    ``required`` controls whether a failing step fails the overall
+    verification result. Formatter checks like ``black --check`` are
+    notoriously sensitive to local tool-version/target-version mismatches and
+    can produce false FAILs unrelated to the actual change being verified, so
+    they default to non-required ("soft") in ``_detect_python``. All other
+    steps default to required, preserving prior behavior.
+    """
 
     name: str
     command: str
     kind: str
     tool: VerificationTool | str
+    required: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -62,6 +71,7 @@ class VerificationStep:
             "command": self.command,
             "kind": self.kind,
             "tool": self.tool.value if isinstance(self.tool, VerificationTool) else self.tool,
+            "required": self.required,
         }
 
 

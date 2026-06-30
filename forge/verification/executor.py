@@ -49,9 +49,14 @@ class VerificationExecutor:
         ]
         duration = perf_counter() - started
         summary = _summary(steps)
+        # Only required ("hard gate") steps determine overall pass/fail.
+        # Non-required steps (e.g. the black formatter check, which is prone
+        # to false FAILs from tool-version drift) still run and are reported,
+        # but a failure there alone does not fail verification.
+        required_steps = [step for step in steps if step.required]
         overall_status = (
             VerificationStatus.pass_
-            if steps and all(step.status == VerificationStatus.pass_ for step in steps)
+            if steps and all(step.status == VerificationStatus.pass_ for step in required_steps)
             else VerificationStatus.fail
         )
         if not steps:
@@ -96,6 +101,7 @@ class VerificationExecutor:
             exception=result.exception,
             kind=step.kind,
             name=step.name,
+            required=step.required,
         )
 
 
@@ -122,7 +128,8 @@ def _build_recommendations(steps: list[VerificationStepResult]) -> list[str]:
             tool = step.tool.lower() if step.tool else ""
             kind = step.kind or ""
             if tool == "black" or (kind == "formatter" and "black" in (step.command or "")):
-                recommendations.append("Run black . to auto-format source files.")
+                note = "" if step.required else " (non-blocking; does not fail verification)"
+                recommendations.append(f"Run black . to auto-format source files.{note}")
             elif tool == "ruff" or (kind == "linter" and "ruff" in (step.command or "")):
                 recommendations.append(
                     "Run ruff check . to see lint errors, or ruff check --fix . to auto-fix."

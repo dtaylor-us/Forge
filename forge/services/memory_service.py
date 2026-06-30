@@ -74,6 +74,24 @@ def related(
     }
 
 
+def linked_to_workset(root: Path, workset: str) -> list[dict[str, Any]]:
+    """Return memory items linked to a workset, newest first.
+
+    A memory item is considered linked if it was created with this workset
+    as its primary `workset`, or if the workset appears in its
+    `related_worksets` list.
+    """
+    if not workset:
+        return []
+    items = MemoryManager.from_root(root).list()
+    linked = [
+        item
+        for item in items
+        if item.workset == workset or workset in item.related_worksets
+    ]
+    return [item.to_dict() for item in linked]
+
+
 def rebuild(root: Path) -> dict[str, int]:
     """Rebuild the memory index."""
     return {"count": MemoryManager.from_root(root).rebuild()}

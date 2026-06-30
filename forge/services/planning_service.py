@@ -48,7 +48,7 @@ class PlanningService:
         use_memory: bool = True,
         save_to_memory: bool | None = None,
         timeout_seconds: int | None = None,
-        max_lines_per_file: int = 120,
+        max_lines_per_file: int = 60,
         include_full: bool = False,
     ) -> ImplementationPlan:
         """Generate an implementation plan and optionally persist it."""
@@ -62,7 +62,10 @@ class PlanningService:
                 include_full=include_full,
             )
         except WorksetStoreError as exc:
-            raise PlannerError(f"Workset {workset!r} not found: {exc}") from exc
+            # WorksetStoreError messages already include "Workset '<name>' not
+            # found." — re-wrapping with another "not found" prefix produced a
+            # duplicated "not found: ... not found." message.
+            raise PlannerError(str(exc)) from exc
         except Exception as exc:
             raise PlannerError(f"Failed to generate context bundle: {exc}") from exc
 
@@ -113,7 +116,7 @@ class PlanningService:
         use_memory: bool = True,
         save_to_memory: bool | None = None,
         timeout_seconds: int | None = None,
-        max_lines_per_file: int = 120,
+        max_lines_per_file: int = 60,
         include_full: bool = False,
     ) -> dict[str, Any]:
         """Generate a serializable plan payload for adapters."""
@@ -184,7 +187,7 @@ def generate(
     save: bool = False,
     use_memory: bool = True,
     timeout_seconds: int | None = None,
-    max_lines_per_file: int = 120,
+    max_lines_per_file: int = 60,
     include_full: bool = False,
     model_manager: ModelManager | None = None,
 ) -> dict[str, Any]:

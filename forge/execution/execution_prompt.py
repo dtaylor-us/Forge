@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from forge.context.bundle import ContextBundle
+from forge.context.excerpt import OMIT_MARKER
 from forge.memory.search import MemorySearchResult
 from forge.planning.planner import ImplementationPlan
 from forge.planning.prompts import build_context_sections, build_memory_section
@@ -113,6 +114,13 @@ CRITICAL DIFF RULES:
   from /dev/null. Use standard unified diff hunks showing the exact lines changed.
 - Only use /dev/null in --- header when creating a file that does NOT currently exist.
 - Hunk line counts in @@ -L,N +L,N @@ markers MUST be accurate. Count carefully.
+- The "Detailed File Context" section below prefixes each file line with a
+  "N| " line-number gutter (e.g. "142| def foo():"). This gutter exists so
+  you can read off the correct starting line number and line count for each
+  hunk instead of counting lines by eye. The gutter is NOT part of the file.
+  Never copy "N| " into a diff line — every context/added/removed line in
+  your output must start with exactly one of ' ', '+', '-' followed by the
+  real source text, with no line-number prefix.
 - The output must pass: git apply --check
 """
 
@@ -157,7 +165,9 @@ No explanations.
 Use diff headers and valid hunk markers.
 All files in the Workset Files table ALREADY EXIST — use normal unified diff hunks,
 never /dev/null for them.
-Hunk counts in @@ markers must be exact.
+Hunk counts in @@ markers must be exact. Use the "N| " line-number gutter in the
+Detailed File Context section to compute them — do not include the gutter itself
+in the diff.
 """
 
 _TEST_GUIDANCE = """\
@@ -212,6 +222,73 @@ def build_execution_prompt(
     return result
 
 
+def build_numbered_file_details(bundle: ContextBundle) -> str:
+    """Render file details with a "N| " line-number gutter for diff-generation prompts.
+
+    Diff generation requires the model to produce accurate
+    `@@ -L,N +L,N @@` hunk headers. The plain rendering used by planning
+    prompts (`build_context_sections`) shows file content as a bare fenced
+    block with no line numbers, which forces the model to count lines by
+    eye — a reliable source of unparseable ("corrupt patch") hunks on
+    anything past a trivial file. This renders the same verbatim content
+    with a line-number gutter so the model has ground truth to read hunk
+    positions from, instead of guessing.
+
+    Numbering assumes contiguous coverage starting at line 1, which holds
+    for the include_full bundles used by patch generation: `extract_excerpts`
+    returns the whole file with at most one trailing OMIT_MARKER (for files
+    over the line cap), never a mid-file gap. It is not used for excerpted/
+    sampled bundles, where a mid-file OMIT_MARKER would make the running
+    count wrong.
+    """
+    parts: list[str] = []
+    for f in bundle.files:
+        section: list[str] = [f"### {f.path}"]
+        if f.error:
+            section.append(f"**Error:** {f.error}")
+            parts.append("\n".join(section))
+            continue
+
+        if f.summary:
+            section.append("**Summary:** " + " | ".join(f.summary[:5]))
+        if f.symbols:
+            section.append("**Symbols:** " + ", ".join(f.symbols[:10]))
+        if f.dependency_hints:
+            section.append("**Dependencies:** " + "; ".join(f.dependency_hints[:8]))
+        if f.excerpts:
+            section.append(
+                "**File Content (verbatim from disk, with a 'N| ' line-number gutter "
+                "for your reference only — the gutter is NOT part of the file and must "
+                "NEVER appear in your diff output; use it solely to compute correct "
+                "'@@ -L,N +L,N @@' hunk headers; preserve indentation and whitespace "
+                "after the gutter exactly):**"
+            )
+            section.append(_render_numbered_excerpt_blocks(f.excerpts))
+        parts.append("\n".join(section))
+    return "\n\n".join(parts)
+
+
+def _render_numbered_excerpt_blocks(excerpts: list[str]) -> str:
+    """Render excerpt lines with a 1-based line-number gutter, preserving omit markers."""
+    blocks: list[str] = []
+    current: list[str] = []
+    line_no = 1
+    for line in excerpts:
+        if line == OMIT_MARKER:
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+            blocks.append(OMIT_MARKER)
+            continue
+        current.append(f"{line_no:>5}| {line}")
+        line_no += 1
+    if current:
+        blocks.append("\n".join(current))
+
+    rendered = [block if block == OMIT_MARKER else f"```\n{block}\n```" for block in blocks]
+    return "\n".join(rendered)
+
+
 def build_implementation_prompt(
     task: str,
     bundle: ContextBundle,
@@ -220,7 +297,8 @@ def build_implementation_prompt(
     memory_context: list[MemorySearchResult] | None = None,
 ) -> tuple[str, str | None]:
     """Construct a provider prompt that asks only for a raw unified diff."""
-    file_table_rows, file_details = build_context_sections(bundle)
+    file_table_rows, _ = build_context_sections(bundle)
+    file_details = build_numbered_file_details(bundle)
     result = _IMPLEMENTATION_TEMPLATE.format(
         system_instructions=_IMPLEMENTATION_SYSTEM_INSTRUCTIONS,
         task=task,
@@ -270,6 +348,7 @@ def build_repair_prompt(
     structural_errors: list[str],
     apply_check_error: str,
     file_details: str,
+    context_mismatches: list[str] | None = None,
 ) -> str:
     """Build a prompt asking the model to repair an invalid patch."""
     error_lines = (
@@ -277,6 +356,16 @@ def build_repair_prompt(
         if structural_errors
         else "(none)"
     )
+    mismatch_section = ""
+    if context_mismatches:
+        mismatch_lines = "\n".join(f"- {m}" for m in context_mismatches)
+        mismatch_section = f"""
+## Exact Context Mismatches (your patch vs. the real file on disk)
+Your previous patch's context or removed lines do NOT match the actual file content below.
+This is almost certainly why it failed to apply. Copy lines verbatim from the
+"Relevant File Context" section instead of reconstructing them from memory.
+{mismatch_lines}
+"""
     return f"""\
 {_IMPLEMENTATION_SYSTEM_INSTRUCTIONS}
 
@@ -294,7 +383,7 @@ The patch you previously generated failed validation. You must return a correcte
 
 ## git apply --check Error
 {apply_check_error or "(none)"}
-
+{mismatch_section}
 ## Original Invalid Patch
 {original_patch}
 
@@ -309,7 +398,10 @@ Return ONLY a corrected raw unified diff.
 No Markdown fences.
 No prose.
 No explanations.
-Hunk line counts in @@ markers must be exact.
+Hunk line counts in @@ markers must be exact. The file context above is
+line-numbered with a "N| " gutter for exactly this purpose — read the
+correct starting line and count off the gutter; never copy the gutter
+itself into the diff.
 Existing files listed in the original context must use standard unified diff hunks.
 Never use /dev/null for existing files.
 The corrected patch must pass: git apply --check

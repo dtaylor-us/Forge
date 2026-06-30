@@ -13,6 +13,7 @@ from forge.patches.service import (
     extract_affected_files,
     list_patches,
     read_patch,
+    realign_patch_hunk_headers,
     validate_patch_content,
 )
 
@@ -142,3 +143,167 @@ def test_cli_patch_show_prints_content(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "diff --git a/forge/example.py b/forge/example.py" in result.output
+
+
+# ---------------------------------------------------------------------------
+# realign_patch_hunk_headers
+# ---------------------------------------------------------------------------
+
+
+def _write_file(root: Path, rel: str, lines: list[str]) -> Path:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_realign_correct_position_unchanged(tmp_path: Path) -> None:
+    """A patch with a correct starting position is passed through untouched."""
+    _write_file(tmp_path, "src/mod.py", ["a", "b", "c", "d", "e"])
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -2,2 +2,3 @@\n"
+        " b\n"
+        " c\n"
+        "+x\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_realign_fixes_wrong_start_position(tmp_path: Path) -> None:
+    """A hunk with wrong old_start but correct context content gets repositioned."""
+    _write_file(tmp_path, "src/mod.py", ["a", "b", "c", "d", "e", "f"])
+    # Content "c" and "d" are at lines 3–4, but the hunk header claims line 1.
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -1,2 +1,3 @@\n"  # wrong: should be -3,2 +3,3
+        " c\n"
+        " d\n"
+        "+NEW\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert "@@ -3,2 +3,3 @@" in corrected
+    assert len(notes) == 1
+    assert "src/mod.py" in notes[0]
+    assert "1" in notes[0]  # original wrong position
+    assert "3" in notes[0]  # corrected position
+
+
+def test_realign_preserves_hunk_suffix(tmp_path: Path) -> None:
+    """Method-name suffix after '@@' is preserved during realignment."""
+    _write_file(tmp_path, "src/Foo.java", ["public class Foo {", "void bar() {", "}", "}"])
+    patch = (
+        "diff --git a/src/Foo.java b/src/Foo.java\n"
+        "--- a/src/Foo.java\n"
+        "+++ b/src/Foo.java\n"
+        "@@ -99,2 +99,3 @@ public class Foo {\n"  # wrong position
+        " void bar() {\n"
+        " }\n"
+        "+// added\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert "@@ -2,2 +2,3 @@ public class Foo {" in corrected
+    assert notes
+
+
+def test_realign_no_change_when_content_not_in_file(tmp_path: Path) -> None:
+    """If the hunk's context lines appear nowhere in the file, leave it unchanged."""
+    _write_file(tmp_path, "src/mod.py", ["x", "y", "z"])
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -5,2 +5,3 @@\n"
+        " totally\n"
+        " nonexistent\n"
+        "+addition\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_realign_no_change_when_content_ambiguous(tmp_path: Path) -> None:
+    """If the context lines appear more than once, leave the hunk unchanged."""
+    _write_file(tmp_path, "src/mod.py", ["a", "b", "a", "b", "c"])
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -10,2 +10,3 @@\n"  # wrong, but ambiguous: "a","b" at lines 1 AND 3
+        " a\n"
+        " b\n"
+        "+new\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_realign_pure_insertion_hunk_unchanged(tmp_path: Path) -> None:
+    """A hunk with no old-file lines (pure insertion) is left untouched."""
+    _write_file(tmp_path, "src/mod.py", ["a", "b", "c"])
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -99,0 +99,2 @@\n"
+        "+line1\n"
+        "+line2\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_realign_missing_file_unchanged(tmp_path: Path) -> None:
+    """If the target file does not exist on disk, the patch passes through unchanged."""
+    patch = (
+        "diff --git a/missing.py b/missing.py\n"
+        "--- a/missing.py\n"
+        "+++ b/missing.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " a\n"
+        " b\n"
+        "+c\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    assert corrected == patch
+    assert notes == []
+
+
+def test_realign_multiple_hunks_same_file(tmp_path: Path) -> None:
+    """Multiple hunks in one file are each corrected independently."""
+    _write_file(
+        tmp_path,
+        "src/mod.py",
+        ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+    )
+    # Hunk 1: context "a","b" is at lines 1-2 — stated correctly.
+    # Hunk 2: context "i","j" is at lines 9-10 — stated wrong (says line 3).
+    patch = (
+        "diff --git a/src/mod.py b/src/mod.py\n"
+        "--- a/src/mod.py\n"
+        "+++ b/src/mod.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " a\n"
+        " b\n"
+        "+NEW1\n"
+        "@@ -3,2 +4,3 @@\n"  # wrong: "i","j" are actually at lines 9-10
+        " i\n"
+        " j\n"
+        "+NEW2\n"
+    )
+    corrected, notes = realign_patch_hunk_headers(tmp_path, patch)
+    # Hunk 1 was already correct — unchanged.
+    assert "@@ -1,2 +1,3 @@" in corrected
+    # Hunk 2 should be realigned to line 9.
+    assert "@@ -9,2 +10,3 @@" in corrected
+    assert len(notes) == 1
+    assert "9" in notes[0]

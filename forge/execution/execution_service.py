@@ -42,7 +42,7 @@ class ExecutionService:
         model: str | None = None,
         implementation_plan: ImplementationPlan | None = None,
         plan_path: Path | None = None,
-        max_lines_per_file: int = 120,
+        max_lines_per_file: int = 60,
         include_full: bool = False,
         max_memory_results: int = 5,
     ) -> ExecutionRequest:
@@ -55,7 +55,9 @@ class ExecutionService:
                 include_full=include_full,
             )
         except WorksetStoreError as exc:
-            raise ExecutionServiceError(f"Workset {workset!r} not found: {exc}") from exc
+            # WorksetStoreError already includes "Workset '<name>' not found.";
+            # avoid re-wrapping it into a duplicated "not found: ... not found." message.
+            raise ExecutionServiceError(str(exc)) from exc
         except Exception as exc:
             raise ExecutionServiceError(f"Failed to generate context bundle: {exc}") from exc
 

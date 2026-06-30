@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import re
 
-_OMIT_MARKER = "... (lines omitted) ..."
+OMIT_MARKER = "... (lines omitted) ..."
+# Backwards-compatible private alias.
+_OMIT_MARKER = OMIT_MARKER
+
+# Hard cap on lines included for a single file even in include_full mode,
+# so one oversized file (generated code, lockfiles, migrations) can't blow
+# the prompt past the model's context window.
+FULL_FILE_LINE_CAP = 800
 
 
 def extract_excerpts(
     content: str,
     query_tokens: list[str],
     *,
-    max_lines: int = 120,
+    max_lines: int = 60,
     include_full: bool = False,
 ) -> list[str]:
     """Return a list of excerpt lines from content.
@@ -23,6 +30,10 @@ def extract_excerpts(
     """
     lines = content.splitlines()
     if include_full:
+        if len(lines) > FULL_FILE_LINE_CAP:
+            head = lines[:FULL_FILE_LINE_CAP]
+            head.append(OMIT_MARKER)
+            return head
         return lines
 
     if not lines:

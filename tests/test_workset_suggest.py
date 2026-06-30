@@ -8,8 +8,13 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from forge.cli.app import app
+from forge.repository.files import list_relevant_files
 from forge.worksets.candidate import WorksetSuggestion
+from forge.worksets.query import parse_query
 from forge.worksets.scoring import (
+    SCORE_FILENAME_TERM,
+    _matched_terms,
+    _term_points,
     file_category,
     is_test_query,
     score_candidate,
@@ -118,8 +123,8 @@ def test_score_content_match():
 
 def test_score_no_match_returns_type_bonus_only():
     candidate = score_candidate(Path("forge/models/manager.py"), ["zzznomatch"])
-    # Only source file bonus remains
-    assert candidate.score == 3  # SCORE_SOURCE_FILE
+    assert candidate.confidence == 0
+    assert candidate.importance > 0
     assert any("source file" in r.label for r in candidate.reasons)
 
 
@@ -207,6 +212,90 @@ def test_suggest_max_results(tmp_path):
     assert len(result.candidates) <= 3
 
 
+def test_suggest_identifier_finds_related_implementation_from_test_name(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "PaymentController.py").write_text("class PaymentController: pass\n")
+    (tmp_path / "src" / "PaymentService.py").write_text("class PaymentService: pass\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "PaymentControllerTest.py").write_text(
+        "class PaymentControllerTest: pass\n"
+    )
+
+    result = suggest_candidates("fix PaymentControllerTest", tmp_path)
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert paths.index("src/PaymentController.py") < paths.index("tests/PaymentControllerTest.py")
+    assert "src/PaymentService.py" in paths
+    assert "tests/PaymentControllerTest.py" in paths
+
+
+def test_bugfix_query_includes_tests_by_default(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "SessionController.py").write_text("class SessionController: pass\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "SessionControllerTest.py").write_text(
+        "class SessionControllerTest: pass\n"
+    )
+
+    result = suggest_candidates("fix SessionController", tmp_path, include_tests=False)
+
+    assert any(c.path.as_posix() == "tests/SessionControllerTest.py" for c in result.candidates)
+
+
+def test_infrastructure_quota_keeps_source_files_from_being_displaced(tmp_path):
+    (tmp_path / "src").mkdir()
+    for name in ["PaymentController", "PaymentService", "PaymentRepository", "PaymentMapper"]:
+        (tmp_path / "src" / f"{name}.py").write_text(f"class {name}: pass\n")
+    for name in ["Dockerfile", "README.md", "pyproject.toml", "package.json"]:
+        (tmp_path / name).write_text("payment configuration\n")
+
+    result = suggest_candidates("fix PaymentController", tmp_path, max_results=7)
+    paths = [c.path.as_posix() for c in result.candidates]
+    infra = [p for p in paths if p in {"Dockerfile", "README.md", "pyproject.toml", "package.json"}]
+
+    assert paths[0] == "src/PaymentController.py"
+    assert "src/PaymentService.py" in paths
+    assert len(infra) <= 3
+
+
+def test_generated_frontend_caches_are_ignored(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("class App: pass\n")
+    for directory in [
+        ".vite",
+        ".next",
+        ".nuxt",
+        ".svelte-kit",
+        ".cache",
+        ".parcel-cache",
+        "coverage",
+        "out",
+    ]:
+        cache = tmp_path / directory
+        cache.mkdir()
+        (cache / "app.py").write_text("class CachedApp: pass\n")
+
+    paths = [path.as_posix() for path in list_relevant_files(tmp_path, max_results=50)]
+
+    assert "src/app.py" in paths
+    assert not any(path.startswith(".vite/") for path in paths)
+    assert not any(path.startswith(".next/") for path in paths)
+    assert not any(path.startswith("coverage/") for path in paths)
+
+
+def test_candidate_reasons_are_deterministic_and_not_duplicated(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "SessionController.py").write_text("class SessionController: pass\n")
+
+    result = suggest_candidates("fix SessionController", tmp_path)
+    candidate = result.candidates[0]
+    labels = [reason.label for reason in candidate.reasons]
+
+    assert labels == list(dict.fromkeys(labels))
+    assert any(label.startswith("Primary Match:") for label in labels)
+    assert any(label.startswith("Identifier Match:") for label in labels)
+
+
 def test_suggest_empty_query(tmp_path):
     (tmp_path / "model.py").write_text("class Model: pass\n")
 
@@ -220,10 +309,7 @@ def test_suggest_no_match(tmp_path):
 
     result = suggest_candidates("zzznomatch", tmp_path)
 
-    # manager.py will still score for source file bonus — candidates may be non-empty
-    # but score should be low (just the type bonus)
-    for c in result.candidates:
-        assert c.score <= 5
+    assert result.candidates == []
 
 
 # ---------------------------------------------------------------------------
@@ -295,3 +381,155 @@ def test_cli_workset_suggest_max_results(tmp_path):
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert len(data["candidates"]) <= 3
+
+
+# ---------------------------------------------------------------------------
+# Regression: large monorepo workset selection (the SessionControllerIntegrationTest bug)
+#
+# A deterministic-but-truncated file listing combined with unweighted generic
+# search terms ("session", "test", "api" decomposed from the identifier) used
+# to let an unrelated file in a large, mixed-language monorepo outrank the
+# real target. These tests pin both fixes: the file enumeration must not
+# truncate before scoring (Root Cause A), and decomposed generic identifier
+# parts must not score as strongly as the full, distinctive identifier
+# (Root Cause B).
+# ---------------------------------------------------------------------------
+
+
+def test_suggest_finds_target_file_among_many_decoys_across_directories(tmp_path):
+    # Simulate a large monorepo: hundreds of unrelated files spread across many
+    # directories in a different "service" than the real target, so the target
+    # would be enumerated past any naive fixed-size file listing cap.
+    decoys_dir = tmp_path / "axiom-ui" / "src"
+    for i in range(300):
+        sub = decoys_dir / f"module_{i}"
+        sub.mkdir(parents=True)
+        (sub / f"Unrelated{i}.ts").write_text(f"export function unrelated{i}() {{}}\n")
+
+    target_dir = tmp_path / "archon-api" / "src" / "test" / "java" / "com" / "archon" / "api"
+    target_dir.mkdir(parents=True)
+    (target_dir / "SessionControllerIntegrationTest.java").write_text(
+        "public class SessionControllerIntegrationTest {}\n"
+    )
+
+    result = suggest_candidates(
+        "fix SessionControllerIntegrationTest", tmp_path, include_tests=True
+    )
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert paths, "expected at least one candidate"
+    assert paths[0].endswith("SessionControllerIntegrationTest.java")
+    assert not any(p.startswith("axiom-ui/") for p in paths)
+
+
+def test_suggest_does_not_rank_generic_substring_decoys_above_real_target(tmp_path):
+    # Files whose names/content merely contain a generic decomposed-identifier
+    # part as a raw substring ("test" inside "Latest"/"Contest") must not be
+    # treated as a match: matching must be token/boundary-aware for short,
+    # generic terms rather than a coincidental substring hit.
+    decoys_dir = tmp_path / "other"
+    decoys_dir.mkdir()
+    (decoys_dir / "Latest.py").write_text("class Latest:\n    pass\n")
+    (decoys_dir / "Contest.py").write_text("class Contest:\n    pass\n")
+
+    target_dir = tmp_path / "src"
+    target_dir.mkdir()
+    (target_dir / "SessionController.py").write_text("class SessionController:\n    pass\n")
+
+    result = suggest_candidates("fix SessionControllerTest", tmp_path, include_tests=True)
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert paths
+    assert paths[0] == "src/SessionController.py"
+    assert "other/Latest.py" not in paths
+    assert "other/Contest.py" not in paths
+
+
+def test_score_full_identifier_outweighs_decomposed_part():
+    full_identifier_query = parse_query("fix SessionControllerIntegrationTest")
+    candidate = score_candidate(
+        Path("archon-api/src/test/java/com/archon/api/SessionControllerIntegrationTest.java"),
+        full_identifier_query,
+    )
+    decoy_query = parse_query("fix SessionControllerIntegrationTest")
+    decoy_candidate = score_candidate(Path("other/latest.ts"), decoy_query)
+
+    assert candidate.score > decoy_candidate.score
+
+
+def test_filename_term_weight_scales_with_term_specificity():
+    from forge.worksets.query import SearchTerm
+
+    full_term = SearchTerm(value="SessionControllerTest", weight=5, kind="identifier")
+    part_term = SearchTerm(value="session", weight=1, kind="identifier_part")
+
+    name_lower = "sessioncontrollertest.py"
+    stem_normalized = "sessioncontrollertest"
+    stem_parts = {"session", "controller", "test"}
+    matched_full = _matched_terms(name_lower, stem_normalized, stem_parts, [full_term])
+    matched_part = _matched_terms(name_lower, stem_normalized, stem_parts, [part_term])
+
+    assert _term_points(SCORE_FILENAME_TERM, matched_full[0]) > _term_points(
+        SCORE_FILENAME_TERM, matched_part[0]
+    )
+
+
+def test_list_relevant_files_unbounded_includes_deeply_nested_file(tmp_path):
+    # "aardvark-ui" deliberately sorts alphabetically before "archon-api" (both
+    # share file-priority 0 via the "src" path segment), so with a fixed cap
+    # these decoys would push the real target out of the truncated listing.
+    decoys_dir = tmp_path / "aardvark-ui" / "src"
+    for i in range(250):
+        sub = decoys_dir / f"module_{i}"
+        sub.mkdir(parents=True)
+        (sub / f"Unrelated{i}.ts").write_text("export function unrelated() {}\n")
+
+    target_dir = tmp_path / "archon-api" / "src" / "test" / "java"
+    target_dir.mkdir(parents=True)
+    (target_dir / "SessionControllerIntegrationTest.java").write_text("class X {}\n")
+
+    bounded = list_relevant_files(tmp_path, max_results=200)
+    unbounded = list_relevant_files(tmp_path, max_results=None)
+
+    target = Path("archon-api/src/test/java/SessionControllerIntegrationTest.java")
+    assert target not in bounded
+    assert target in unbounded
+
+
+# ---------------------------------------------------------------------------
+# Regression: workflow template threading into query parsing
+# ---------------------------------------------------------------------------
+
+
+def test_create_workset_threads_workflow_into_intent(tmp_path):
+    from forge.worksets.manager import create_workset
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "Widget.py").write_text("class Widget:\n    pass\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "WidgetTest.py").write_text("class WidgetTest:\n    pass\n")
+
+    # "update Widget" alone maps to the generic intent (not bugfix), so test
+    # files would normally be excluded. An explicit bugfix workflow (as set by
+    # the `forge workflow bugfix` engine stage) must still force test files in.
+    without_workflow = create_workset(tmp_path, "wf-test-a", "update Widget")
+    with_workflow = create_workset(tmp_path, "wf-test-b", "update Widget", workflow="bugfix")
+
+    without_paths = [f["path"] for f in without_workflow["files"]]
+    with_paths = [f["path"] for f in with_workflow["files"]]
+
+    assert with_workflow["workflow"] == "bugfix"
+    assert "tests/WidgetTest.py" not in without_paths
+    assert "tests/WidgetTest.py" in with_paths
+
+
+def test_refresh_workset_reuses_persisted_workflow(tmp_path):
+    from forge.worksets.manager import create_workset, refresh_workset
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "Widget.py").write_text("class Widget:\n    pass\n")
+
+    create_workset(tmp_path, "wf-test", "update Widget", workflow="bugfix")
+    refreshed = refresh_workset(tmp_path, "wf-test")
+
+    assert refreshed["workflow"] == "bugfix"

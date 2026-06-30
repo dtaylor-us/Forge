@@ -241,6 +241,43 @@ def test_workflow_show_unique_prefix(tmp_path: Path) -> None:
     assert result["id"] == "abcd1234efgh5678"
 
 
+def test_cli_workflow_list_then_show_with_truncated_id(tmp_path: Path) -> None:
+    """End-to-end regression for the reported "truncated ID doesn't resolve" issue.
+
+    `forge workflow list` displays only the first 12 characters of a run ID.
+    This reproduces that exact flow through the real CLI (not just the
+    registry) to confirm the displayed, truncated ID resolves via
+    `forge workflow show`.
+    """
+    from typer.testing import CliRunner
+
+    from forge.cli.app import app
+
+    runner = CliRunner()
+    (tmp_path / ".git").mkdir()
+    registry = WorkflowRegistry.from_root(tmp_path)
+    run = WorkflowRun(
+        id="c92605e4899c41b4",
+        template=WorkflowTemplate.feature,
+        task="add request tracing",
+        repository=str(tmp_path),
+        status=WorkflowStatus.completed,
+    )
+    registry.save(run)
+
+    listed = runner.invoke(app, ["workflow", "list", "--root", str(tmp_path), "--json"])
+    assert listed.exit_code == 0
+    runs = json.loads(listed.output)
+    assert runs[0]["id"] == "c92605e4899c41b4"
+    truncated_id = runs[0]["id"][:12]
+    assert truncated_id == "c92605e4899c"
+
+    shown = runner.invoke(app, ["workflow", "show", truncated_id, "--root", str(tmp_path)])
+    assert shown.exit_code == 0
+    assert "c92605e4899c41b4" in shown.output
+    assert "not found" not in shown.output.lower()
+
+
 def test_workflow_show_ambiguous_prefix_raises(tmp_path: Path) -> None:
     from forge.workflows.registry import AmbiguousWorkflowIdError
 

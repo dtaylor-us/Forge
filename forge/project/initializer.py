@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from forge.project.metadata import build_metadata, load_metadata, metadata_path, save_metadata
 from forge.project.paths import ForgePaths
@@ -22,12 +22,23 @@ _SUBDIRS = (
     "verifications",
 )
 
+_GITIGNORE_HEADER = (
+    "# Added by `forge init` — keep local Forge state and Python artifacts out of git.\n"
+)
+_GITIGNORE_ENTRIES = (
+    ".forge/",
+    "__pycache__/",
+    "*.py[cod]",
+)
+
 
 @dataclass(frozen=True)
 class InitResult:
     paths: ForgePaths
     already_existed: bool
     forced: bool
+    gitignore_updated: bool = False
+    gitignore_entries_added: list[str] = field(default_factory=list)
 
 
 def initialize_project(resolved: ResolvedRoot, *, force: bool = False) -> InitResult:
@@ -70,4 +81,48 @@ def initialize_project(resolved: ResolvedRoot, *, force: bool = False) -> InitRe
     data = build_metadata(resolved.root, project_name, detected, created_at=created_at)
     save_metadata(paths.project_forge_dir, data)
 
-    return InitResult(paths=paths, already_existed=already_existed, forced=force)
+    gitignore_updated, gitignore_entries_added = _ensure_gitignore(resolved)
+
+    return InitResult(
+        paths=paths,
+        already_existed=already_existed,
+        forced=force,
+        gitignore_updated=gitignore_updated,
+        gitignore_entries_added=gitignore_entries_added,
+    )
+
+
+def _ensure_gitignore(resolved: ResolvedRoot) -> tuple[bool, list[str]]:
+    """Ensure .forge/ and common Python artifacts are excluded from version control.
+
+    Only applies when the root is a detected git repository. Appends any
+    missing entries to an existing .gitignore, or creates a new one; never
+    removes or reorders existing content.
+    """
+    if not resolved.git_detected:
+        return False, []
+
+    gitignore_path = resolved.root / ".gitignore"
+    existing_lines: list[str] = []
+    if gitignore_path.exists():
+        try:
+            existing_lines = gitignore_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return False, []
+
+    existing_set = {line.strip() for line in existing_lines}
+    missing = [entry for entry in _GITIGNORE_ENTRIES if entry not in existing_set]
+    if not missing:
+        return False, []
+
+    try:
+        with gitignore_path.open("a", encoding="utf-8") as fh:
+            if existing_lines and existing_lines[-1].strip() != "":
+                fh.write("\n")
+            fh.write(_GITIGNORE_HEADER)
+            for entry in missing:
+                fh.write(f"{entry}\n")
+    except OSError:
+        return False, []
+
+    return True, missing

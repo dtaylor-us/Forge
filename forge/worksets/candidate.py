@@ -23,8 +23,13 @@ class WorksetCandidate:
     reasons: list[CandidateReason] = field(default_factory=list)
     content_matches: list[str] = field(default_factory=list)
     file_category: str = "source"
+    confidence: int = 0
+    importance: int = 0
+    rank_group: str = "other"
 
     def add_reason(self, label: str, points: int) -> None:
+        if any(reason.label == label for reason in self.reasons):
+            return
         self.reasons.append(CandidateReason(label=label, score=points))
         self.score += points
 

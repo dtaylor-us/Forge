@@ -103,6 +103,29 @@ def test_workset_context_service_can_render_json_without_saving(tmp_path: Path) 
     assert not list((tmp_path / ".forge" / "context").glob("*.json"))
 
 
+def test_workset_context_filename_timestamp_is_not_malformed(tmp_path: Path) -> None:
+    """Regression for I-09.
+
+    Saved context bundle filenames previously encoded the UTC "+00:00" offset
+    as a confusing "...-0000-00" suffix because "+" was stripped right before
+    the offset digits. The timestamp segment should now be a clean
+    "<date>T<time>Z" with no stray "+"/extra digit groups.
+    """
+    _make_workset(tmp_path)
+
+    result = workset_service.generate_context(tmp_path, "model", save=True)
+
+    saved_path = Path(result["path"])
+    assert saved_path.exists()
+    stem = saved_path.stem  # "model-20260629T142024Z"
+    assert "+" not in stem
+    ts_part = stem.split("model-", 1)[1]
+    assert ts_part.endswith("Z")
+    assert "-0000-00" not in stem
+    # "model" + "-" + "YYYYMMDDT HHMMSS" (15 chars) + "Z"
+    assert len(ts_part) == len("20260629T142024Z")
+
+
 def test_repository_service_preserves_glob_filtered_search(tmp_path: Path) -> None:
     _make_repo(tmp_path)
     (tmp_path / "README.md").write_text("ModelManager docs\n", encoding="utf-8")

@@ -102,9 +102,35 @@ class GitService:
         )
 
     def apply_check(self, patch_path: Path) -> None:
-        """Dry-run git apply to verify a patch can be applied. Raises GitServiceError on failure."""
-        self._run("apply", "--check", str(patch_path))
+        """Dry-run git apply to verify a patch can be applied. Raises GitServiceError on failure.
+
+        Uses ``--recount`` so git recomputes each hunk's line counts from the
+        actual hunk body instead of trusting the `@@ -L,N +L,N @@` header.
+        Model-generated diffs reliably get header arithmetic wrong on
+        anything past a trivial file (the model has to count lines by eye);
+        ``--recount`` absorbs that whole class of mismatch for free, since
+        it only recalculates counts and never weakens the context-line
+        check that catches genuinely wrong content.
+        """
+        self._run("apply", "--check", "--recount", str(patch_path))
 
     def apply(self, patch_path: Path) -> None:
         """Apply a patch file to the working tree. Never commits."""
-        self._run("apply", str(patch_path))
+        self._run("apply", "--recount", str(patch_path))
+
+    def worktree_add(self, path: Path) -> None:
+        """Create a linked worktree at *path* checked out at the current HEAD.
+
+        The worktree is detached so it does not move any branch pointer.
+        Raises GitServiceError if the worktree cannot be created.
+        """
+        self._run("worktree", "add", "--detach", str(path))
+
+    def worktree_remove(self, path: Path) -> None:
+        """Remove a linked worktree created with worktree_add.
+
+        Uses ``--force`` so the removal succeeds even if the worktree has
+        uncommitted changes (verification runs may leave test artefacts).
+        Raises GitServiceError if git cannot remove the worktree.
+        """
+        self._run("worktree", "remove", "--force", str(path))

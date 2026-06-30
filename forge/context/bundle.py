@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from forge.context.excerpt import extract_excerpts
+from forge.context.excerpt import OMIT_MARKER, extract_excerpts
 from forge.context.summarize import summarize_file
 from forge.context.symbols import extract_symbols
 from forge.worksets.store import load
@@ -199,7 +199,7 @@ def generate_bundle(
     root: Path,
     workset_name: str,
     *,
-    max_lines_per_file: int = 120,
+    max_lines_per_file: int = 60,
     include_full: bool = False,
 ) -> ContextBundle:
     """Load a persisted workset and produce a ContextBundle."""
@@ -227,7 +227,30 @@ def generate_bundle(
         bundle.total_chars += bf.char_count
         bundle.total_tokens += bf.token_estimate
 
+    if include_full:
+        _enforce_bundle_budget(bundle)
+
     return bundle
+
+
+# Total excerpt budget for a bundle in include_full mode. Keeps the prompt
+# within reach of small/local models even when the workset has many or large
+# files; lowest-scored files are demoted to excerpts first.
+_MAX_BUNDLE_EXCERPT_CHARS = 150_000
+
+
+def _enforce_bundle_budget(bundle: ContextBundle) -> None:
+    rendered_size = sum(sum(len(line) for line in f.excerpts) for f in bundle.files)
+    if rendered_size <= _MAX_BUNDLE_EXCERPT_CHARS:
+        return
+
+    for f in sorted(bundle.files, key=lambda f: f.score):
+        if rendered_size <= _MAX_BUNDLE_EXCERPT_CHARS:
+            break
+        before = sum(len(line) for line in f.excerpts)
+        if len(f.excerpts) > 60:
+            f.excerpts = f.excerpts[:60] + [OMIT_MARKER]
+        rendered_size -= before - sum(len(line) for line in f.excerpts)
 
 
 def save_bundle_markdown(bundle: ContextBundle, output_path: Path, markdown: str) -> None:
