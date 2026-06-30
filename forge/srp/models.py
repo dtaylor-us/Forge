@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+SearchReplaceErrorType = Literal[
+    "not_found",
+    "ambiguous",
+    "file_missing",
+    "read_error",
+    "no_change",
+]
 
 
 @dataclass(frozen=True)
@@ -28,6 +36,30 @@ class BlockApplication:
     block: SearchReplaceBlock
     applied: bool
     error: str | None = None
+    failure_detail: SearchReplaceFailureDetail | None = None
+
+
+@dataclass(frozen=True)
+class SearchReplaceFailureDetail:
+    """Structured diagnostic for a failed SEARCH/REPLACE block."""
+
+    file_path: str
+    error_type: SearchReplaceErrorType
+    search_preview: str
+    nearest_match_excerpt: str | None = None
+    match_count: int | None = None
+    message: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable representation."""
+        return {
+            "file_path": self.file_path,
+            "error_type": self.error_type,
+            "search_preview": self.search_preview,
+            "nearest_match_excerpt": self.nearest_match_excerpt,
+            "match_count": self.match_count,
+            "message": self.message,
+        }
 
 
 @dataclass(frozen=True)
@@ -45,6 +77,7 @@ class SearchReplaceResult:
     valid: bool
     errors: list[str]
     raw_response: str = ""
+    failure_details: list[SearchReplaceFailureDetail] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable representation."""
@@ -56,8 +89,16 @@ class SearchReplaceResult:
                 for b in self.blocks
             ],
             "applications": [
-                {"file_path": a.block.file_path, "applied": a.applied, "error": a.error}
+                {
+                    "file_path": a.block.file_path,
+                    "applied": a.applied,
+                    "error": a.error,
+                    "failure_detail": (
+                        a.failure_detail.to_dict() if a.failure_detail is not None else None
+                    ),
+                }
                 for a in self.applications
             ],
+            "failure_details": [detail.to_dict() for detail in self.failure_details],
             "patch_content": self.patch_content,
         }

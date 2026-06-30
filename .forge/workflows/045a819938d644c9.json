@@ -1,0 +1,589 @@
+{
+  "id": "045a819938d644c9",
+  "template": "bugfix",
+  "task": "fix SessionControllerIntegrationTest",
+  "repository": "/Users/derektaylor/projects/forge",
+  "status": "failed",
+  "started_at": "2026-06-30T22:10:39.976722+00:00",
+  "completed_at": "2026-06-30T22:12:51.990280+00:00",
+  "duration_seconds": 132.013558,
+  "workset_name": "workflow-bugfix-045a8199",
+  "patch_path": null,
+  "verification_status": null,
+  "policy_status": null,
+  "stages": [
+    {
+      "name": "repository",
+      "description": "Detect repository",
+      "service": "RepositoryService",
+      "status": "completed",
+      "started_at": "2026-06-30T22:10:39.977185+00:00",
+      "completed_at": "2026-06-30T22:10:40.014663+00:00",
+      "duration_seconds": 0.037478,
+      "artifact_refs": [],
+      "error": null
+    },
+    {
+      "name": "workset",
+      "description": "Create workset",
+      "service": "WorksetService",
+      "status": "completed",
+      "started_at": "2026-06-30T22:10:40.015089+00:00",
+      "completed_at": "2026-06-30T22:10:40.181148+00:00",
+      "duration_seconds": 0.166059,
+      "artifact_refs": [
+        "workset:workflow-bugfix-045a8199"
+      ],
+      "error": null
+    },
+    {
+      "name": "context",
+      "description": "Generate context",
+      "service": "WorksetService",
+      "status": "completed",
+      "started_at": "2026-06-30T22:10:40.181553+00:00",
+      "completed_at": "2026-06-30T22:10:40.201132+00:00",
+      "duration_seconds": 0.019579,
+      "artifact_refs": [
+        "context_bundle:/Users/derektaylor/projects/forge/.forge/context/workflow-bugfix-045a8199-20260630T221040Z.md"
+      ],
+      "error": null
+    },
+    {
+      "name": "plan",
+      "description": "Generate plan",
+      "service": "PlanningService",
+      "status": "completed",
+      "started_at": "2026-06-30T22:10:40.201694+00:00",
+      "completed_at": "2026-06-30T22:11:05.369832+00:00",
+      "duration_seconds": 25.168138,
+      "artifact_refs": [
+        "implementation_plan:/Users/derektaylor/projects/forge/.forge/plans/workflow-bugfix-045a8199-20260630T221105.md"
+      ],
+      "error": null
+    },
+    {
+      "name": "patch",
+      "description": "Generate patch",
+      "service": "ImplementationService",
+      "status": "failed",
+      "started_at": "2026-06-30T22:11:05.371822+00:00",
+      "completed_at": "2026-06-30T22:12:51.988451+00:00",
+      "duration_seconds": 106.616629,
+      "artifact_refs": [],
+      "error": "Patch generation produced an invalid patch: path/to/File.java: file not found.\nRaw model response saved at: /Users/derektaylor/projects/forge/.forge/patches/invalid/20260630T221251Z-fix-sessioncontrollerintegrationtest.txt"
+    }
+  ],
+  "artifacts": {
+    "repository": {
+      "root_path": "/Users/derektaylor/projects/forge",
+      "languages": [
+        "Python"
+      ],
+      "build_systems": [
+        "pyproject"
+      ],
+      "package_managers": [
+        "pip"
+      ],
+      "frameworks": [],
+      "source_roots": [
+        "forge"
+      ],
+      "test_roots": [
+        "tests"
+      ],
+      "important_files": [
+        "README.md",
+        "pyproject.toml"
+      ],
+      "current_branch": "main"
+    },
+    "workset": {
+      "schema_version": 1,
+      "name": "workflow-bugfix-045a8199",
+      "query": "fix SessionControllerIntegrationTest",
+      "root": "/Users/derektaylor/projects/forge",
+      "created_at": "2026-06-30T22:10:40+00:00",
+      "updated_at": "2026-06-30T22:10:40+00:00",
+      "include_tests": true,
+      "max_results": 20,
+      "workflow": "bugfix",
+      "files": [
+        {
+          "path": "forge/worksets/query.py",
+          "score": 118,
+          "confidence": 11,
+          "importance": 8,
+          "rank_group": "related",
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest'",
+              "points": 11
+            },
+            {
+              "signal": "Importance",
+              "detail": " source file",
+              "points": 8
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/worksets/scoring.py",
+          "score": 58,
+          "confidence": 5,
+          "importance": 8,
+          "rank_group": "related",
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session', 'sessioncontroller'",
+              "points": 5
+            },
+            {
+              "signal": "Importance",
+              "detail": " source file",
+              "points": 8
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/cli/app.py",
+          "score": 18,
+          "confidence": 1,
+          "importance": 8,
+          "rank_group": "related",
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session'",
+              "points": 1
+            },
+            {
+              "signal": "Importance",
+              "detail": " source file",
+              "points": 8
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/project/initializer.py",
+          "score": 18,
+          "confidence": 1,
+          "importance": 8,
+          "rank_group": "related",
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session'",
+              "points": 1
+            },
+            {
+              "signal": "Importance",
+              "detail": " source file",
+              "points": 8
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "forge/project/paths.py",
+          "score": 18,
+          "confidence": 1,
+          "importance": 8,
+          "rank_group": "related",
+          "category": "source",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session'",
+              "points": 1
+            },
+            {
+              "signal": "Importance",
+              "detail": " source file",
+              "points": 8
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_workset_query.py",
+          "score": 217,
+          "confidence": 21,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest'",
+              "points": 11
+            },
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_workset_suggest.py",
+          "score": 217,
+          "confidence": 21,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest'",
+              "points": 11
+            },
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_project_phase2d.py",
+          "score": 117,
+          "confidence": 11,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Content Match content matched 'session'",
+              "points": 1
+            },
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/__init__.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_application_services.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_artifacts.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_cli.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_config_manager.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_context_bundle.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_dogfood_hardening.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_execution.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_factory.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_git_service.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_implement.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        },
+        {
+          "path": "tests/test_memory.py",
+          "score": 107,
+          "confidence": 10,
+          "importance": 7,
+          "rank_group": "test",
+          "category": "test",
+          "reasons": [
+            {
+              "signal": "match",
+              "detail": "Test Match test file included for task",
+              "points": 10
+            },
+            {
+              "signal": "Importance",
+              "detail": " test file",
+              "points": 7
+            }
+          ],
+          "manual": false
+        }
+      ]
+    },
+    "context": {
+      "path": "/Users/derektaylor/projects/forge/.forge/context/workflow-bugfix-045a8199-20260630T221040Z.md",
+      "content": "# Forge Context Bundle: workflow-bugfix-045a8199\n\n## Metadata\n\n- Workset: workflow-bugfix-045a8199\n- Query: fix SessionControllerIntegrationTest\n- Root: /Users/derektaylor/projects/forge\n- Generated: 2026-06-30T22:10:40+00:00\n- Files: 20\n- Character estimate: 282,618\n- Token estimate: 70,647\n\n## Workset Files\n\n| Path | Category | Score | Lines | Chars |\n| --- | --- | ---: | ---: | ---: |\n| forge/worksets/query.py | source | 118 | 224 | 7,564 |\n| forge/worksets/scoring.py | source | 58 | 357 | 12,791 |\n| forge/cli/app.py | source | 18 | 2,690 | 96,241 |\n| forge/project/initializer.py | source | 18 | 128 | 4,042 |\n| forge/project/paths.py | source | 18 | 94 | 2,809 |\n| tests/test_workset_query.py | test | 217 | 46 | 1,737 |\n| tests/test_workset_suggest.py | test | 217 | 564 | 20,585 |\n| tests/test_project_phase2d.py | test | 117 | 299 | 10,573 |\n| tests/__init__.py | test | 107 | 1 | 20 |\n| tests/test_application_services.py | test | 107 | 139 | 4,118 |\n| tests/test_artifacts.py | test | 107 | 170 | 5,723 |\n| tests/test_cli.py | test | 107 | 360 | 11,656 |\n| tests/test_config_manager.py | test | 107 | 209 | 6,536 |\n| tests/test_context_bundle.py | test | 107 | 342 | 11,222 |\n| tests/test_dogfood_hardening.py | test | 107 | 678 | 23,097 |\n| tests/test_execution.py | test | 107 | 322 | 10,543 |\n| tests/test_factory.py | test | 107 | 29 | 891 |\n| tests/test_git_service.py | test | 107 | 156 | 4,882 |\n| tests/test_implement.py | test | 107 | 698 | 23,713 |\n| tests/test_memory.py | test | 107 | 723 | 23,875 |\n\n## File Context\n\n### forge/worksets/query.py\n\n**Reason selected**\n- match:Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest' (+11)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Deterministic query parsing for workset selection.\n- Defines classes: SearchTerm, WorksetQuery.\n- Public functions: tokens, parse_query.\n\n**Detected symbols**\n- class SearchTerm\n- class WorksetQuery\n- def tokens(self)\n- def _intent_from(workflow: str | None, lower_tokens: list...)\n- def _subject_from(identifiers: list[str], raw_tokens: list...)\n- def _looks_like_code_identifier(identifier: str)\n- def _dedupe_terms(terms: list[SearchTerm])\n\n**Dependency hints**\n- imports __future__\n- imports re\n- imports dataclasses\n- imports forge.worksets.identifiers\n\n**Relevant excerpt**\n```py\n\"\"\"Deterministic query parsing for workset selection.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom dataclasses import dataclass, field\n\nfrom forge.worksets.identifiers import (\n    expand_identifier,\n    extract_identifiers,\n    is_test_identifier,\n    split_identifier,\n)\n\nSUPPORTED_INTENTS = {\n    \"feature\",\n    \"bugfix\",\n    \"refactor\",\n    \"documentation\",\n    \"investigation\",\n    \"search\",\n    \"generic\",\n}\n\nACTION_INTENTS = {\n    \"fix\": \"bugfix\",\n    \"repair\": \"bugfix\",\n    \"debug\": \"bugfix\",\n    \"add\": \"feature\",\n    \"implement\": \"feature\",\n    \"create\": \"feature\",\n... (lines omitted) ...\n}\nACTION_VERBS = frozenset(ACTION_INTENTS)\nDOC_TERMS = frozenset({\"doc\", \"docs\", \"documentation\", \"readme\", \"guide\", \"adr\"})\nTEST_TERMS = frozenset({\"test\", \"tests\", \"spec\", \"specs\", \"fixture\", \"fixtures\", \"regression\"})\nCONFIG_TERMS = frozenset({\"config\", \"configuration\", \"settings\", \"yaml\", \"toml\", \"json\"})\nBUILD_TERMS = frozenset({\"build\", \"docker\", \"dockerfile\", \"makefile\", \"gradle\", \"maven\", \"pom\"})\nSTOP_TOKENS = frozenset({\"the\", \"a\", \"an\", \"of\", \"in\", \"to\", \"for\", \"and\", \"or\", \"is\"})\n... (lines omitted) ...\n_TOKEN_RE = re.compile(r\"[A-Za-z0-9]+\")\n\n# Term weights are scoring multipliers (relative to MAX_TERM_WEIGHT) applied in\n# forge.worksets.scoring. A full, distinctive identifier (\"SessionControllerIntegrationTest\")\n# is far more specific than one of its decomposed parts (\"Session\", \"Test\") and must not\n# contribute the same amount of score when it shows up as a content/filename/path match \u2014\n# decomposed parts are common English/engineering words that otherwise flood scoring with\n... (lines omitted) ...\n\n    include_tests = (\n        include_tests\n        or intent == \"bugfix\"\n        or any(token in TEST_TERMS for token in lower_tokens)\n        or any(is_test_identifier(identifier) for identifier in identifiers)\n    )\n... (lines omitted) ...\n```\n\n### forge/worksets/scoring.py\n\n**Reason selected**\n- match:Content Match content matched 'session', 'sessioncontroller' (+5)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Deterministic scoring for workset candidate files.\n- Public functions: tokenize_query, is_test_query, file_category, is_infrastructure_file, score_candidate.\n\n**Detected symbols**\n- def tokenize_query(query: str)\n- def is_test_query(tokens: list[str] | str)\n- def file_category(path: Path)\n- def is_infrastructure_file(path: Path)\n- def _coerce_query(query_or_tokens: WorksetQuery | Sequence...)\n- def _exact_identifier_match(stem_normalized: str, identifiers: list[...)\n- def _term_points(base: int, term: SearchTerm)\n- def _is_generic_identifier_part(term: SearchTerm)\n- def _content_tokens(line: str)\n- def _add_confidence(candidate: WorksetCandidate, label: str,...)\n- def _add_importance(candidate: WorksetCandidate, path: Path)\n- def _rank_group(candidate: WorksetCandidate)\n\n**Dependency hints**\n- imports __future__\n- imports re\n- imports collections.abc\n- imports pathlib\n- imports forge.repository.files\n- imports forge.worksets.candidate\n- imports forge.worksets.identifiers\n- imports forge.worksets.query\n\n**Relevant excerpt**\n```py\n\"\"\"Deterministic scoring for workset candidate files.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom collections.abc import Sequence\nfrom pathlib import Path\n\nfrom forge.repository.files import (\n    CONFIG_EXTENSIONS,\n    IMPORTANT_FILENAMES,\n    SOURCE_EXTENSIONS,\n    TEST_ROOT_PARTS,\n)\nfrom forge.worksets.candidate import WorksetCandidate\nfrom forge.worksets.identifiers import is_test_identifier, normalize_identifier, split_identifier\nfrom forge.worksets.query import MAX_TERM_WEIGHT, SearchTerm, WorksetQuery, parse_query\n\n# Confidence dominates ranking.\nSCORE_EXACT_IDENTIFIER = 80\nSCORE_EXACT_FILENAME = 65\nSCORE_RELATIONSHIP = 55\nSCORE_FILENAME_TERM = 14\nSCORE_PATH_TERM = 8\n... (lines omitted) ...\n        or is_test_identifier(stem)\n    ):\n        return \"test\"\n    if path.suffix in {\".md\", \".rst\", \".txt\"} or \"docs\" in path.parts:\n        return \"doc\"\n    if path.suffix in CONFIG_EXTENSIONS or path.name in IMPORTANT_FILENAMES:\n        return \"config\"\n    if path.suffix in SOURCE_EXTENSIONS:\n        return \"source\"\n    return \"other\"\n\n... (lines omitted) ...\n        \"client\",\n        \"controller\",\n        \"facade\",\n        \"fixture\",\n        \"fixtures\",\n        \"gateway\",\n        \"handler\",\n        \"integration\",\n... (lines omitted) ...\n```\n\n### forge/cli/app.py\n\n**Reason selected**\n- match:Content Match content matched 'session' (+1)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Forge command-line interface.\n- Public functions: configure, version, doctor, verify, config_show, config_edit, config_set_default_model, models_command.\n\n**Detected symbols**\n- def _help_with_examples(summary: str, *examples: str)\n- def _table(title: str, **kwargs: object)\n- def _running(message: str, *, enabled: bool = True)\n- def _config_manager()\n- def _model_manager()\n- def _handle_provider_error(exc: ModelProviderError)\n- def _handle_model_not_found(exc: ModelNotFoundError)\n- def version()\n- def doctor()\n- def config_show()\n- def config_edit()\n- def _render_models_table()\n- def models_command(ctx: typer.Context)\n- def models_list()\n- def _status(check: CheckResult)\n- def _join_values(values: list[str])\n- def _first_command(steps: object, kind: str)\n- def _render_detection(result: dict[str, object])\n- def _render_verification_report(report: dict[str, object])\n- def _status_label(status: str, *, required: bool = True)\n- def _format_duration(seconds: float)\n- def _human_ecosystem(ecosystem: str)\n- def _render_workflow_run(run: dict)\n- def _add_command_examples(callback: object, *examples: str)\n- def _install_command_examples()\n- def main()\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports os\n- imports collections.abc\n- imports contextlib\n- imports pathlib\n- imports typing\n- imports typer\n- imports rich.console\n- imports rich.table\n- imports forge.commands.doctor\n- imports forge.commands.project_context\n- imports forge.config.manager\n- imports forge.execution\n- imports forge.memory.store\n- imports forge.models.errors\n- imports forge.models.manager\n- imports forge.patches\n- imports forge.planning\n- imports forge.planning.render\n\n**Relevant excerpt**\n```py\n\"\"\"Forge command-line interface.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport os\nfrom collections.abc import Iterator\nfrom contextlib import contextmanager\nfrom pathlib import Path\nfrom typing import Annotated\n\nimport typer\nfrom rich.console import Console\nfrom rich.table import Table\n\nfrom forge.commands.doctor import CheckResult, run_doctor\nfrom forge.commands.project_context import (\n    build_guardrailed_ask_prompt,\n    build_project_explanation_prompt,\n)\nfrom forge.config.manager import ConfigManager\nfrom forge.execution import ExecutionServiceError\nfrom forge.memory.store import MemoryStoreError\nfrom forge.models.errors import ModelProviderError\n... (lines omitted) ...\nworkset_app = typer.Typer(\n    help=_help_with_examples(\n        \"Build and inspect worksets of relevant files.\",\n        'forge workset suggest \"fix login redirect\" --include-tests',\n        'forge workset create auth-flow --query \"fix login redirect\"',\n    ),\n    rich_markup_mode=\"rich\",\n)\n... (lines omitted) ...\n    help=_help_with_examples(\n        \"Inspect and validate saved patches.\",\n        \"forge patch list\",\n        \"forge patch validate fix-auth.patch\",\n    ),\n    rich_markup_mode=\"rich\",\n)\n... (lines omitted) ...\n    help=_help_with_examples(\n        \"Inspect and evaluate engineering policy.\",\n        \"forge policy show\",\n        \"forge policy check fix-auth.patch --verification verify-20260101.json\",\n    ),\n    rich_markup_mode=\"rich\",\n)\n... (lines omitted) ...\n    help=_help_with_examples(\n        \"Run guided engineering workflows.\",\n        'forge workflow feature \"add CSV export\"',\n        'forge workflow run bugfix \"fix failing login test\"',\n    ),\n    rich_markup_mode=\"rich\",\n)\n... (lines omitted) ...\n        # label had no natural \"signal:detail\" split (see\n        # _candidate_to_file_entry). Showing \"match:<detail>\" duplicated\n        # information already in the detail text and was inconsistent with\n        # `forge workset suggest`, which renders the same reasons unprefixed.\n        reasons = \"; \".join(\n            f\"{r['detail']} (+{r['points']})\"\n            if r[\"signal\"] == \"match\"\n... (lines omitted) ...\n```\n\n### forge/project/initializer.py\n\n**Reason selected**\n- match:Content Match content matched 'session' (+1)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Initialize .forge/ project directory structure.\n- Defines class: InitResult.\n- Public functions: initialize_project.\n\n**Detected symbols**\n- class InitResult\n- def initialize_project(resolved: ResolvedRoot, *, force: bool =...)\n- def _ensure_gitignore(resolved: ResolvedRoot)\n\n**Dependency hints**\n- imports __future__\n- imports dataclasses\n- imports forge.project.metadata\n- imports forge.project.paths\n- imports forge.project.resolver\n- imports forge.repository.detect\n\n**Relevant excerpt**\n```py\n\"\"\"Initialize .forge/ project directory structure.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom forge.project.metadata import build_metadata, load_metadata, metadata_path, save_metadata\nfrom forge.project.paths import ForgePaths\nfrom forge.project.resolver import ResolvedRoot\nfrom forge.repository.detect import detect_repository\n\n_SUBDIRS = (\n    \"worksets\",\n    \"summaries\",\n    \"context\",\n    \"architecture\",\n    \"sessions\",\n    \"cache\",\n    \"plans\",\n    \"memory\",\n    \"patches\",\n    \"verifications\",\n)\n\n_GITIGNORE_HEADER = (\n... (lines omitted) ...\n```\n\n### forge/project/paths.py\n\n**Reason selected**\n- match:Content Match content matched 'session' (+1)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Forge path computation \u2014 global and project-local.\n- Defines class: ForgePaths.\n- Public functions: global_forge_dir, from_root, to_dict.\n\n**Detected symbols**\n- def global_forge_dir()\n- class ForgePaths\n- def from_root(cls, root: Path)\n- def to_dict(self)\n\n**Dependency hints**\n- imports __future__\n- imports dataclasses\n- imports pathlib\n\n**Relevant excerpt**\n```py\n\"\"\"Forge path computation \u2014 global and project-local.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom pathlib import Path\n\n_GLOBAL_DIR_NAME = \".forge\"\n_PROJECT_DIR_NAME = \".forge\"\n\n_SUBDIRS = (\n    \"worksets\",\n    \"summaries\",\n    \"context\",\n    \"architecture\",\n    \"sessions\",\n    \"cache\",\n    \"plans\",\n    \"memory\",\n    \"patches\",\n    \"verifications\",\n    \"applications\",\n    \"workflows\",\n)\n... (lines omitted) ...\n```\n\n### tests/test_workset_query.py\n\n**Reason selected**\n- match:Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest' (+11)\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for deterministic workset query analysis.\n- Public functions: test_parse_fix_identifier_as_bugfix_without_scoring_fix, test_parse_common_engineering_intents, test_expand_camel_case_identifier_preserves_original_and_parts, test_relationship_targets_derive_implementation_from_test_identifier, test_implementation_bases_strip_test_suffixes.\n\n**Detected symbols**\n- def test_parse_fix_identifier_as_bugfix_without_scoring_fix()\n- def test_parse_common_engineering_intents()\n- def test_expand_camel_case_identifier_preserves_original_and_parts()\n- def test_relationship_targets_derive_implementation_from_test_identifier()\n- def test_implementation_bases_strip_test_suffixes()\n\n**Dependency hints**\n- imports __future__\n- imports forge.worksets.identifiers\n- imports forge.worksets.query\n- imports forge.worksets.relationships\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for deterministic workset query analysis.\"\"\"\n\nfrom __future__ import annotations\n\nfrom forge.worksets.identifiers import expand_identifier, implementation_bases\nfrom forge.worksets.query import parse_query\nfrom forge.worksets.relationships import relationship_targets\n\n\ndef test_parse_fix_identifier_as_bugfix_without_scoring_fix():\n    query = parse_query(\"fix SessionControllerIntegrationTest\")\n\n    assert query.intent == \"bugfix\"\n    assert query.subject == \"SessionControllerIntegrationTest\"\n    assert \"fix\" in query.ignored_terms\n    assert \"fix\" not in query.tokens\n    assert \"sessioncontrollerintegrationtest\" in query.tokens\n    assert query.include_tests\n\n\ndef test_parse_common_engineering_intents():\n    assert parse_query(\"add OAuth\").intent == \"feature\"\n    assert parse_query(\"update UserService\").intent == \"generic\"\n    assert parse_query(\"refactor PaymentController\").intent == \"refactor\"\n    assert parse_query(\"investigate timeout\").intent == \"investigation\"\n\n\ndef test_expand_camel_case_identifier_preserves_original_and_parts():\n    terms = expand_identifier(\"FooBarBazIntegrationTest\")\n... (lines omitted) ...\n\n\ndef test_relationship_targets_derive_implementation_from_test_identifier():\n    query = parse_query(\"fix PaymentControllerTest\")\n    targets = relationship_targets(query)\n\n    assert \"PaymentController\" in targets\n... (lines omitted) ...\n    assert \"PaymentRepository\" in targets\n\n\ndef test_implementation_bases_strip_test_suffixes():\n    assert implementation_bases(\"FooTest\")[1] == \"Foo\"\n    assert \"PaymentController\" in implementation_bases(\"PaymentControllerIntegrationTest\")\n```\n\n### tests/test_workset_suggest.py\n\n**Reason selected**\n- match:Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest' (+11)\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for workset candidate selection (Phase 2B).\n- Public functions: test_tokenize_basic, test_tokenize_removes_stop_words, test_tokenize_short_tokens_removed, test_tokenize_empty, test_tokenize_lowercases, test_is_test_query_positive, test_is_test_query_negative, test_file_category_source.\n\n**Detected symbols**\n- def test_tokenize_basic()\n- def test_tokenize_removes_stop_words()\n- def test_tokenize_short_tokens_removed()\n- def test_tokenize_empty()\n- def test_tokenize_lowercases()\n- def test_is_test_query_positive()\n- def test_is_test_query_negative()\n- def test_file_category_source()\n- def test_file_category_test()\n- def test_file_category_config()\n- def test_file_category_doc()\n- def test_score_filename_token_match()\n- def test_score_path_segment_match()\n- def test_score_content_match()\n- def test_score_no_match_returns_type_bonus_only()\n- def test_score_important_file_bonus()\n- def test_score_multiple_tokens()\n- def test_suggest_returns_suggestion(tmp_path)\n- def test_suggest_excludes_tests_by_default(tmp_path)\n- def test_suggest_includes_tests_when_flag_set(tmp_path)\n- def test_suggest_includes_tests_for_test_query(tmp_path)\n- def test_suggest_ranked_by_score(tmp_path)\n- def test_suggest_max_results(tmp_path)\n- def test_suggest_identifier_finds_related_implementation_from_test_name(tmp_path)\n- def test_bugfix_query_includes_tests_by_default(tmp_path)\n- def test_infrastructure_quota_keeps_source_files_from_being_displaced(tmp_path)\n- def test_generated_frontend_caches_are_ignored(tmp_path)\n- def test_candidate_reasons_are_deterministic_and_not_duplicated(tmp_path)\n- def test_suggest_empty_query(tmp_path)\n- def test_suggest_no_match(tmp_path)\n- def test_cli_workset_suggest(tmp_path)\n- def test_cli_workset_suggest_include_tests(tmp_path)\n- def test_cli_workset_suggest_json(tmp_path)\n- def test_cli_workset_suggest_no_results(tmp_path)\n- def test_cli_workset_suggest_max_results(tmp_path)\n- def test_suggest_finds_target_file_among_many_decoys_across_directories(tmp_path)\n- def test_suggest_does_not_rank_generic_substring_decoys_above_real_target(tmp_path)\n- def test_suggest_ignores_generic_identifier_part_controller_decoys(tmp_path)\n- def test_score_full_identifier_outweighs_decomposed_part()\n- def test_filename_term_weight_scales_with_term_specificity()\n- def test_generic_identifier_part_does_not_match_filename_boundary()\n- def test_list_relevant_files_unbounded_includes_deeply_nested_file(tmp_path)\n- def test_create_workset_threads_workflow_into_intent(tmp_path)\n- def test_refresh_workset_reuses_persisted_workflow(tmp_path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.repository.files\n- imports forge.worksets.candidate\n- imports forge.worksets.query\n- imports forge.worksets.scoring\n- imports forge.worksets.suggest\n- imports forge.worksets.query\n- imports forge.worksets.query\n- imports forge.worksets.manager\n- imports forge.worksets.manager\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for workset candidate selection (Phase 2B).\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\n\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.repository.files import list_relevant_files\nfrom forge.worksets.candidate import WorksetSuggestion\nfrom forge.worksets.query import parse_query\nfrom forge.worksets.scoring import (\n    SCORE_FILENAME_TERM,\n    _matched_terms,\n    _term_points,\n    file_category,\n    is_test_query,\n    score_candidate,\n    tokenize_query,\n)\nfrom forge.worksets.suggest import suggest_candidates\n\nrunner = CliRunner()\n... (lines omitted) ...\ndef test_is_test_query_positive():\n    assert is_test_query([\"timeout\", \"tests\", \"regression\"])\n    assert is_test_query([\"test\", \"config\"])\n    assert is_test_query([\"fixture\"])\n\n\ndef test_is_test_query_negative():\n... (lines omitted) ...\n        \"class PaymentControllerTest: pass\\n\"\n    )\n\n    result = suggest_candidates(\"fix PaymentControllerTest\", tmp_path)\n    paths = [c.path.as_posix() for c in result.candidates]\n\n    assert paths.index(\"src/PaymentController.py\") < paths.index(\"tests/PaymentControllerTest.py\")\n... (lines omitted) ...\n    assert \"tests/PaymentControllerTest.py\" in paths\n\n\ndef test_bugfix_query_includes_tests_by_default(tmp_path):\n    (tmp_path / \"src\").mkdir()\n    (tmp_path / \"src\" / \"SessionController.py\").write_text(\"class SessionController: pass\\n\")\n    (tmp_path / \"tests\").mkdir()\n... (lines omitted) ...\n        \"class SessionControllerTest: pass\\n\"\n    )\n\n    result = suggest_candidates(\"fix SessionController\", tmp_path, include_tests=False)\n\n    assert any(c.path.as_posix() == \"tests/SessionControllerTest.py\" for c in result.candidates)\n\n... (lines omitted) ...\n    for name in [\"Dockerfile\", \"README.md\", \"pyproject.toml\", \"package.json\"]:\n        (tmp_path / name).write_text(\"payment configuration\\n\")\n\n    result = suggest_candidates(\"fix PaymentController\", tmp_path, max_results=7)\n    paths = [c.path.as_posix() for c in result.candidates]\n    infra = [p for p in paths if p in {\"Dockerfile\", \"README.md\", \"pyproject.toml\", \"package.json\"}]\n\n... (lines omitted) ...\n```\n\n### tests/test_project_phase2d.py\n\n**Reason selected**\n- match:Content Match content matched 'session' (+1)\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for Phase 2D: repository identity and project metadata.\n- Public functions: test_resolve_root_from_git_root, test_resolve_root_from_nested_subdirectory, test_resolve_root_no_git, test_resolve_root_override, test_resolve_root_override_no_git, test_global_forge_dir, test_forge_paths_from_root, test_forge_paths_to_dict.\n\n**Detected symbols**\n- def test_resolve_root_from_git_root(tmp_path: Path)\n- def test_resolve_root_from_nested_subdirectory(tmp_path: Path)\n- def test_resolve_root_no_git(tmp_path: Path)\n- def test_resolve_root_override(tmp_path: Path)\n- def test_resolve_root_override_no_git(tmp_path: Path)\n- def test_global_forge_dir()\n- def test_forge_paths_from_root(tmp_path: Path)\n- def test_forge_paths_to_dict(tmp_path: Path)\n- def test_build_metadata_shape(tmp_path: Path)\n- def test_save_and_load_metadata(tmp_path: Path)\n- def test_load_metadata_missing(tmp_path: Path)\n- def _git_root(tmp_path: Path)\n- def test_initialize_creates_subdirs(tmp_path: Path)\n- def test_initialize_creates_project_json(tmp_path: Path)\n- def test_initialize_already_exists_raises(tmp_path: Path)\n- def test_initialize_force_overwrites(tmp_path: Path)\n- def test_initialize_force_preserves_created_at(tmp_path: Path)\n- def test_initialize_already_existed_flag(tmp_path: Path)\n- def test_cli_init(tmp_path: Path)\n- def test_cli_init_force(tmp_path: Path)\n- def test_cli_init_already_exists_no_force(tmp_path: Path)\n- def test_cli_project_root(tmp_path: Path)\n- def test_cli_project_root_nested(tmp_path: Path)\n- def test_cli_project_info_uninitialized(tmp_path: Path)\n- def test_cli_project_info_initialized(tmp_path: Path)\n- def test_cli_project_info_json(tmp_path: Path)\n- def test_cli_project_info_json_uninitialized(tmp_path: Path)\n- def test_cli_project_paths(tmp_path: Path)\n- def test_cli_project_paths_json(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports pytest\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.project.initializer\n- imports forge.project.metadata\n- imports forge.project.paths\n- imports forge.project.resolver\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for Phase 2D: repository identity and project metadata.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\n\nimport pytest\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.project.initializer import initialize_project\nfrom forge.project.metadata import build_metadata, load_metadata, save_metadata\nfrom forge.project.paths import ForgePaths, global_forge_dir\nfrom forge.project.resolver import ResolvedRoot, resolve_root\n\nrunner = CliRunner()\n\n# ---------------------------------------------------------------------------\n# resolver\n# ---------------------------------------------------------------------------\n\n\ndef test_resolve_root_from_git_root(tmp_path: Path) -> None:\n    (tmp_path / \".git\").mkdir()\n    result = resolve_root(tmp_path)\n    assert result.root == tmp_path\n    assert result.git_detected is True\n... (lines omitted) ...\n```\n\n### tests/__init__.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Test package.\n\n**Relevant excerpt**\n```py\n\"\"\"Test package.\"\"\"\n```\n\n### tests/test_application_services.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Application service architecture tests.\n- Public functions: test_planning_service_coordinates_model_and_save, test_planning_service_payload_is_adapter_ready, test_workset_context_service_can_render_json_without_saving, test_workset_context_filename_timestamp_is_not_malformed, test_repository_service_preserves_glob_filtered_search.\n\n**Detected symbols**\n- def _make_repo(tmp_path: Path)\n- def _make_workset(tmp_path: Path)\n- def _model_manager()\n- def test_planning_service_coordinates_model_and_save(tmp_path: Path)\n- def test_planning_service_payload_is_adapter_ready(tmp_path: Path)\n- def test_workset_context_service_can_render_json_without_saving(tmp_path: Path)\n- def test_workset_context_filename_timestamp_is_not_malformed(tmp_path: Path)\n- def test_repository_service_preserves_glob_filtered_search(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports unittest.mock\n- imports forge.models.types\n- imports forge.services\n- imports forge.services.planning_service\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Application service architecture tests.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\nfrom unittest.mock import MagicMock\n\nfrom forge.models.types import ModelResponse\nfrom forge.services import repository_service, workset_service\nfrom forge.services.planning_service import PlanningService, generate\nfrom forge.worksets.store import save\n\n\ndef _make_repo(tmp_path: Path) -> None:\n    (tmp_path / \"forge\").mkdir()\n    (tmp_path / \"forge\" / \"models.py\").write_text(\n        \"class ModelManager:\\n    pass\\n\",\n        encoding=\"utf-8\",\n    )\n\n\ndef _make_workset(tmp_path: Path) -> None:\n    _make_repo(tmp_path)\n    save(\n        tmp_path,\n        {\n... (lines omitted) ...\n    \"\"\"Regression for I-09.\n\n    Saved context bundle filenames previously encoded the UTC \"+00:00\" offset\n    as a confusing \"...-0000-00\" suffix because \"+\" was stripped right before\n    the offset digits. The timestamp segment should now be a clean\n    \"<date>T<time>Z\" with no stray \"+\"/extra digit groups.\n    \"\"\"\n... (lines omitted) ...\n```\n\n### tests/test_artifacts.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for the unified engineering artifact registry.\n- Public functions: test_artifact_discovery_enumerates_existing_storage, test_registry_filters_by_type, test_registry_locates_artifact_by_identifier, test_metadata_loading_from_existing_formats, test_relationship_model_is_sparse_and_explicit, test_partial_and_malformed_metadata_do_not_break_discovery, test_registry_does_not_modify_existing_files.\n\n**Detected symbols**\n- def _write_project_metadata(root: Path)\n- def _write_workset(root: Path, name: str = \"auth\")\n- def _write_memory(root: Path)\n- def _write_existing_artifacts(root: Path)\n- def test_artifact_discovery_enumerates_existing_storage(tmp_path: Path)\n- def test_registry_filters_by_type(tmp_path: Path)\n- def test_registry_locates_artifact_by_identifier(tmp_path: Path)\n- def test_metadata_loading_from_existing_formats(tmp_path: Path)\n- def test_relationship_model_is_sparse_and_explicit(tmp_path: Path)\n- def test_partial_and_malformed_metadata_do_not_break_discovery(tmp_path: Path)\n- def test_registry_does_not_modify_existing_files(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports forge.artifacts\n- imports forge.memory.models\n- imports forge.memory.store\n- imports forge.patches.service\n- imports forge.project.metadata\n- imports forge.project.paths\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for the unified engineering artifact registry.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\n\nfrom forge.artifacts import ArtifactRegistry, ArtifactType\nfrom forge.memory.models import MemoryItem, MemoryType\nfrom forge.memory.store import save_item\nfrom forge.patches.service import save_patch_content\nfrom forge.project.metadata import build_metadata, save_metadata\nfrom forge.project.paths import ForgePaths\nfrom forge.worksets.store import save as save_workset\n\n\ndef _write_project_metadata(root: Path) -> None:\n    paths = ForgePaths.from_root(root)\n    save_metadata(paths.project_forge_dir, build_metadata(root, \"forge-test\"))\n\n\ndef _write_workset(root: Path, name: str = \"auth\") -> None:\n    save_workset(\n        root,\n        {\n            \"schema_version\": 1,\n            \"name\": name,\n... (lines omitted) ...\n-old\n+new\n\"\"\",\n        prefix=\"auth\",\n    )\n\n\n... (lines omitted) ...\n```\n\n### tests/test_cli.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- CLI tests.\n- Defines classes: Manager, FakeModelManager, Manager, Manager.\n- Public functions: test_version_command, test_doctor_command_smoke, test_models_command_smoke, config, list_models, test_ask_help_smoke, test_help_sections_include_examples, test_config_show_smoke.\n\n**Detected symbols**\n- def test_version_command()\n- def test_doctor_command_smoke(monkeypatch)\n- def test_models_command_smoke(monkeypatch)\n- class Manager\n- def config(self)\n- def list_models(self)\n- def test_ask_help_smoke()\n- def test_help_sections_include_examples()\n- def test_config_show_smoke(monkeypatch)\n- class FakeModelManager\n- def __init__(self)\n- def use_model(self, model: str)\n- def test_ask_command_uses_model_override(monkeypatch)\n- def test_ask_command_uses_timeout_override(monkeypatch)\n- def test_config_set_default_model_smoke(monkeypatch)\n- def test_ask_command_reports_missing_model(monkeypatch)\n- def failing_manager()\n- class Manager\n- def test_ask_command_formats_provider_errors(monkeypatch)\n- def failing_manager()\n- class Manager\n- def test_ask_command_anchors_prompt_to_local_project_identity(monkeypatch, tmp_path)\n- def test_explain_project_sends_explicit_project_context(monkeypatch, tmp_path)\n- def test_repo_tree_command(tmp_path)\n- def test_repo_detect_command(tmp_path)\n- def test_policy_check_not_found_exits_1(tmp_path)\n- def test_repo_grep_command(monkeypatch, tmp_path)\n- def test_repo_files_command(tmp_path)\n\n**Dependency hints**\n- imports __future__\n- imports types\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.commands.doctor\n- imports forge.config.settings\n- imports forge.models.errors\n- imports forge.models.manager\n- imports forge.models.types\n\n**Relevant excerpt**\n```py\n\"\"\"CLI tests.\"\"\"\n\nfrom __future__ import annotations\n\nfrom types import SimpleNamespace\n\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.commands.doctor import CheckResult\nfrom forge.config.settings import ProviderName\nfrom forge.models.errors import ModelProviderError\nfrom forge.models.manager import ModelNotFoundError\nfrom forge.models.types import ModelInfo, ModelResponse\n\nrunner = CliRunner()\n\n\ndef test_version_command() -> None:\n    result = runner.invoke(app, [\"version\"])\n\n    assert result.exit_code == 0\n    assert \"0.1.0\" in result.stdout\n\n\ndef test_doctor_command_smoke(monkeypatch) -> None:\n    monkeypatch.setattr(\n        \"forge.cli.app.run_doctor\",\n        lambda config: [CheckResult(\"Python >= 3.12\", True, \"3.12.0\")],\n    )\n... (lines omitted) ...\n        [\"policy\", \"check\"],\n        [\"apply\"],\n        [\"workflow\", \"feature\"],\n        [\"workflow\", \"bugfix\"],\n        [\"workflow\", \"refactor\"],\n        [\"workflow\", \"run\"],\n        [\"workflow\", \"templates\"],\n... (lines omitted) ...\n```\n\n### tests/test_config_manager.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Configuration manager tests.\n- Public functions: test_default_config_creation_uses_home_directory, test_load_creates_default_config, test_load_reads_provider_endpoint, test_load_reads_custom_ollama_endpoint, test_load_defaults_ollama_timeout_when_missing, test_load_backfills_max_tokens_and_context_window_for_existing_config, test_load_respects_explicit_max_tokens_and_context_window, test_anthropic_and_openai_get_non_trivial_max_tokens_default.\n\n**Detected symbols**\n- def test_default_config_creation_uses_home_directory(tmp_path, monkeypatch)\n- def test_load_creates_default_config(tmp_path)\n- def test_load_reads_provider_endpoint(tmp_path)\n- def test_load_reads_custom_ollama_endpoint(tmp_path)\n- def test_load_defaults_ollama_timeout_when_missing(tmp_path)\n- def test_load_backfills_max_tokens_and_context_window_for_existing_config(tmp_path)\n- def test_load_respects_explicit_max_tokens_and_context_window(tmp_path)\n- def test_anthropic_and_openai_get_non_trivial_max_tokens_default(tmp_path)\n- def test_render_config_round_trips_max_tokens_and_context_window(tmp_path)\n- def test_load_ignores_invalid_timeout_and_uses_default(tmp_path)\n- def test_load_invalid_provider_fails_clearly(tmp_path)\n- def test_set_default_model_persists_config(tmp_path)\n\n**Dependency hints**\n- imports __future__\n- imports pytest\n- imports forge.config.manager\n- imports forge.config.settings\n\n**Relevant excerpt**\n```py\n\"\"\"Configuration manager tests.\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\n\nfrom forge.config.manager import ConfigManager\nfrom forge.config.settings import ProviderName\n\n\ndef test_default_config_creation_uses_home_directory(tmp_path, monkeypatch) -> None:\n    monkeypatch.setenv(\"HOME\", str(tmp_path))\n    manager = ConfigManager()\n\n    config = manager.load()\n\n    path = tmp_path / \".forge\" / \"config.yaml\"\n    assert config.default_model == \"llama3.1:8b\"\n    assert path.exists()\n    assert \"provider: ollama\" in path.read_text(encoding=\"utf-8\")\n\n\ndef test_load_creates_default_config(tmp_path) -> None:\n    path = tmp_path / \"config.yaml\"\n    manager = ConfigManager(path)\n\n    config = manager.load()\n\n    assert config.provider == ProviderName.OLLAMA\n    assert config.default_model == \"llama3.1:8b\"\n    assert config.providers[\"ollama\"].timeout_seconds == 120\n... (lines omitted) ...\ndef test_load_backfills_max_tokens_and_context_window_for_existing_config(tmp_path) -> None:\n    \"\"\"A config.yaml written before max_tokens/context_window existed (e.g. by\n    an earlier Forge version) must not silently fall back to None \u2014 which,\n    pre-fix, meant Anthropic/OpenAI used a hardcoded 1024-token cap and Ollama\n    used the server's own default context window, both of which can truncate\n    a model's response mid-generation with no visible error.\"\"\"\n    path = tmp_path / \"config.yaml\"\n... (lines omitted) ...\n```\n\n### tests/test_context_bundle.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for Phase 2F: workset context bundle generation.\n- Defines class: Foo.\n- Public functions: test_python_symbol_extraction, bar, baz, test_java_symbol_extraction, test_ts_symbol_extraction, test_unknown_extension_returns_empty, test_summarize_python, test_summarize_markdown.\n\n**Detected symbols**\n- def _make_workset(root: Path, name: str = \"my-ws\", query: ...)\n- def _add_file_entry(root: Path, ws_name: str, rel_path: str,...)\n- def test_python_symbol_extraction()\n- class Foo\n- def bar(x, y)\n- def baz()\n- def test_java_symbol_extraction()\n- def test_ts_symbol_extraction()\n- def test_unknown_extension_returns_empty()\n- def test_summarize_python()\n- def test_summarize_markdown()\n- def test_summarize_yaml()\n- def test_summarize_toml()\n- def test_summarize_json()\n- def test_summarize_java()\n- def test_excerpt_max_lines()\n- def test_excerpt_query_match()\n- def test_excerpt_include_full()\n- def test_excerpt_omit_marker()\n- def test_generate_bundle_basic(tmp_path: Path)\n- def test_generate_bundle_missing_file(tmp_path: Path)\n- def test_generate_bundle_binary_file(tmp_path: Path)\n- def test_token_estimate(tmp_path: Path)\n- def test_render_markdown_shape(tmp_path: Path)\n- def test_render_json_shape(tmp_path: Path)\n- def test_cli_context_markdown(tmp_path: Path)\n- def test_cli_context_json(tmp_path: Path)\n- def test_cli_context_max_lines(tmp_path: Path)\n- def test_cli_context_include_full(tmp_path: Path)\n- def test_cli_context_output_path(tmp_path: Path)\n- def test_cli_context_missing_workset(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.context.bundle\n- imports forge.context.excerpt\n- imports forge.context.render\n- imports forge.context.summarize\n- imports forge.context.symbols\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for Phase 2F: workset context bundle generation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\n\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.context.bundle import generate_bundle\nfrom forge.context.excerpt import extract_excerpts\nfrom forge.context.render import render_json, render_markdown\nfrom forge.context.summarize import summarize_file\nfrom forge.context.symbols import extract_symbols\nfrom forge.worksets.store import save\n\nrunner = CliRunner()\n\n\n# ---------------------------------------------------------------------------\n# Helpers\n# ---------------------------------------------------------------------------\n\n\ndef _make_workset(root: Path, name: str = \"my-ws\", query: str = \"model config\") -> Path:\n    root.mkdir(parents=True, exist_ok=True)\n    data = {\n        \"schema_version\": 1,\n... (lines omitted) ...\n```\n\n### tests/test_dogfood_hardening.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for Phase 6.1 Dogfood Readiness Hardening.\n- Defines class: _FailRunner.\n- Public functions: test_malformed_hunk_count_fails_via_apply_check, test_structural_valid_but_non_applicable_fails, test_valid_applicable_patch_passes, test_validate_json_includes_structural_and_apply_check, test_suggestions_included_on_failure, test_validate_no_git_repo_skips_apply_check, test_cli_patch_validate_json_output, test_cli_patch_validate_fail_exit_code.\n\n**Detected symbols**\n- def _save(root: Path, content: str)\n- def test_malformed_hunk_count_fails_via_apply_check(tmp_path: Path)\n- def test_structural_valid_but_non_applicable_fails(tmp_path: Path)\n- def test_valid_applicable_patch_passes(tmp_path: Path)\n- def test_validate_json_includes_structural_and_apply_check(tmp_path: Path)\n- def test_suggestions_included_on_failure(tmp_path: Path)\n- def test_validate_no_git_repo_skips_apply_check(tmp_path: Path)\n- def test_cli_patch_validate_json_output(tmp_path: Path)\n- def test_cli_patch_validate_fail_exit_code(tmp_path: Path)\n- def test_apply_missing_patch_exits_before_prompt(tmp_path: Path)\n- def test_apply_invalid_patch_exits_before_prompt(tmp_path: Path)\n- def test_apply_yes_still_enforces_policy(tmp_path: Path)\n- def test_apply_force_can_bypass_allowed_policy_failure(tmp_path: Path)\n- def test_workflow_validate_uses_git_service(tmp_path: Path)\n- def _apply_check(patch_path: Path)\n- def test_workflow_validate_failure_includes_next_actions(tmp_path: Path)\n- def test_black_failure_produces_recommendation(tmp_path: Path)\n- def test_ruff_failure_produces_recommendation(tmp_path: Path)\n- def test_pytest_failure_produces_recommendation(tmp_path: Path)\n- def test_npm_test_failure_produces_recommendation(tmp_path: Path)\n- def test_build_failure_produces_recommendation(tmp_path: Path)\n- def test_passed_steps_produce_no_recommendations(tmp_path: Path)\n- def test_executor_populates_recommendations_on_failure(tmp_path: Path)\n- class _FailRunner\n- def test_model_telemetry_level_is_warning_in_non_verbose()\n- def test_verbose_mode_enables_debug_logging()\n- def test_implementation_prompt_labels_existing_files()\n- def test_implementation_prompt_forbids_dev_null_for_existing_files()\n- def test_patch_validate_not_found_exits_1(tmp_path: Path)\n- def test_apply_not_found_exits_1(tmp_path: Path)\n- def test_repository_service_detect_includes_branch(tmp_path: Path)\n- def test_repository_service_detect_branch_none_when_no_git(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports typing\n- imports unittest.mock\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.git.service\n- imports forge.patches.service\n- imports forge.services\n- imports forge.verification.executor\n- imports forge.verification.report\n- imports forge.verification.runner\n- imports forge.services.apply_service\n- imports forge.workflows.engine\n- imports forge.workflows.models\n- imports forge.workflows.registry\n- imports forge.workflows.engine\n- imports forge.workflows.models\n- imports forge.workflows.registry\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for Phase 6.1 Dogfood Readiness Hardening.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\nfrom typing import Any\nfrom unittest.mock import MagicMock, patch\n\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.git.service import GitServiceError\nfrom forge.patches.service import save_patch_content\nfrom forge.services import patch_service\nfrom forge.verification.executor import VerificationExecutor\nfrom forge.verification.report import VerificationStatus\nfrom forge.verification.runner import CommandResult\n\nrunner = CliRunner()\n\n# ---------------------------------------------------------------------------\n# Helpers\n# ---------------------------------------------------------------------------\n\nVALID_PATCH = \"\"\"\\\ndiff --git a/foo.py b/foo.py\n... (lines omitted) ...\n\n\ndef _save(root: Path, content: str) -> str:\n    patch = save_patch_content(root, content, prefix=\"test\")\n    return patch.name\n\n\n... (lines omitted) ...\n```\n\n### tests/test_execution.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for Engineering Execution request preparation.\n- Defines classes: AddMetadataStage, ReadMetadataStage.\n- Public functions: test_execution_request_missing_workset_message_not_duplicated, test_execution_request_creation, test_execution_prompt_generation_reuses_context_sections, test_execution_service_loads_memory, test_execution_service_loads_plan_from_path, test_execution_service_loads_latest_saved_plan, test_execution_service_loads_context_bundle, test_execution_service_does_not_call_provider.\n\n**Detected symbols**\n- def _make_workset(tmp_path: Path, name: str = WORKSET_NAME)\n- def _make_plan(content: str = \"# Forge Implementation P...)\n- def _mock_model_manager(default_model: str = \"qwen2.5\")\n- def test_execution_request_missing_workset_message_not_duplicated(tmp_path)\n- def test_execution_request_creation(tmp_path)\n- def test_execution_prompt_generation_reuses_context_sections(tmp_path)\n- def test_execution_service_loads_memory(tmp_path)\n- def test_execution_service_loads_plan_from_path(tmp_path)\n- def test_execution_service_loads_latest_saved_plan(tmp_path)\n- def test_execution_service_loads_context_bundle(tmp_path)\n- def test_execution_service_does_not_call_provider(tmp_path)\n- def test_execution_pipeline_runs_read_only_stages_in_order(tmp_path)\n- def test_execution_pipeline_propagates_context_between_stages(tmp_path)\n- class AddMetadataStage\n- def run(self, context: ExecutionContext)\n- class ReadMetadataStage\n- def run(self, context: ExecutionContext)\n- def test_execution_pipeline_result_contains_loaded_context_plan_and_memory(tmp_path)\n- def test_execution_pipeline_records_stage_timing(tmp_path)\n- def test_execution_pipeline_reports_failure_status(tmp_path)\n\n**Dependency hints**\n- imports __future__\n- imports datetime\n- imports pathlib\n- imports unittest.mock\n- imports forge.execution\n- imports forge.execution.execution_prompt\n- imports forge.execution.models\n- imports forge.memory.manager\n- imports forge.memory.models\n- imports forge.planning.planner\n- imports forge.planning.store\n- imports forge.worksets.store\n- imports pytest\n- imports forge.execution\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for Engineering Execution request preparation.\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import UTC, datetime\nfrom pathlib import Path\nfrom unittest.mock import MagicMock\n\nfrom forge.execution import (\n    ExecutionPipeline,\n    ExecutionRequest,\n    ExecutionService,\n    ExecutionStage,\n    ExecutionStatus,\n)\nfrom forge.execution.execution_prompt import build_execution_prompt\nfrom forge.execution.models import ExecutionContext\nfrom forge.memory.manager import MemoryManager\nfrom forge.memory.models import MemoryType\nfrom forge.planning.planner import ImplementationPlan\nfrom forge.planning.store import save_plan\nfrom forge.worksets.store import save\n\nTASK = \"Add timeout validation\"\n... (lines omitted) ...\n```\n\n### tests/test_factory.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Provider factory tests.\n- Public functions: test_create_ollama_provider, test_create_openai_provider, test_create_anthropic_provider.\n\n**Detected symbols**\n- def test_create_ollama_provider()\n- def test_create_openai_provider()\n- def test_create_anthropic_provider()\n\n**Dependency hints**\n- imports __future__\n- imports forge.config.settings\n- imports forge.models.anthropic\n- imports forge.models.factory\n- imports forge.models.ollama\n- imports forge.models.openai\n\n**Relevant excerpt**\n```py\n\"\"\"Provider factory tests.\"\"\"\n\nfrom __future__ import annotations\n\nfrom forge.config.settings import ProviderName, Settings\nfrom forge.models.anthropic import AnthropicProvider\nfrom forge.models.factory import create_provider\nfrom forge.models.ollama import OllamaProvider\nfrom forge.models.openai import OpenAIProvider\n\n\ndef test_create_ollama_provider() -> None:\n    provider = create_provider(Settings(provider=ProviderName.OLLAMA))\n\n    assert isinstance(provider, OllamaProvider)\n\n\ndef test_create_openai_provider() -> None:\n    provider = create_provider(Settings(provider=ProviderName.OPENAI, openai_api_key=\"secret\"))\n\n    assert isinstance(provider, OpenAIProvider)\n\n\ndef test_create_anthropic_provider() -> None:\n    provider = create_provider(\n        Settings(provider=ProviderName.ANTHROPIC, anthropic_api_key=\"secret\")\n    )\n\n    assert isinstance(provider, AnthropicProvider)\n```\n\n### tests/test_git_service.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for GitService and git CLI commands.\n- Public functions: tmp_git_repo, test_not_a_git_repo, test_clean_repo, test_dirty_repo_untracked, test_dirty_repo_modified, test_staged_file, test_branch_detection, test_status_to_dict.\n\n**Detected symbols**\n- def tmp_git_repo(tmp_path: Path)\n- def test_not_a_git_repo(tmp_path: Path)\n- def test_clean_repo(tmp_git_repo: Path)\n- def test_dirty_repo_untracked(tmp_git_repo: Path)\n- def test_dirty_repo_modified(tmp_git_repo: Path)\n- def test_staged_file(tmp_git_repo: Path)\n- def test_branch_detection(tmp_git_repo: Path)\n- def test_status_to_dict(tmp_git_repo: Path)\n- def test_cli_git_status_not_repo(tmp_path: Path, monkeypatch)\n- def test_cli_git_status_json_not_repo(tmp_path: Path, monkeypatch)\n- def test_cli_git_status_clean(tmp_git_repo: Path, monkeypatch)\n- def test_cli_git_status_json_clean(tmp_git_repo: Path, monkeypatch)\n- def test_cli_git_branch(tmp_git_repo: Path, monkeypatch)\n- def test_cli_git_branch_not_repo(tmp_path: Path, monkeypatch)\n- def test_cli_git_branch_json(tmp_git_repo: Path, monkeypatch)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports subprocess\n- imports pathlib\n- imports pytest\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.git.service\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for GitService and git CLI commands.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.git.service import GitService\n\nrunner = CliRunner()\n\n\n@pytest.fixture()\ndef tmp_git_repo(tmp_path: Path) -> Path:\n    \"\"\"Initialize a bare git repo with an initial commit.\"\"\"\n    subprocess.run([\"git\", \"init\"], cwd=tmp_path, check=True, capture_output=True)\n    subprocess.run(\n        [\"git\", \"config\", \"user.email\", \"test@example.com\"],\n        cwd=tmp_path, check=True, capture_output=True,\n    )\n    subprocess.run(\n        [\"git\", \"config\", \"user.name\", \"Test\"],\n... (lines omitted) ...\n```\n\n### tests/test_implement.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for forge implement patch generation.\n- Defines class: FakeModelManager.\n- Public functions: config, ask, test_implementation_prompt_requires_unified_diff_only, test_valid_model_diff_is_saved_as_patch, test_invalid_model_response_is_saved_under_invalid_patches, test_output_writes_to_explicit_path, test_cli_json_output_includes_patch_metadata, test_cli_invalid_model_output_exits_nonzero_and_reports_raw_artifact.\n\n**Detected symbols**\n- class FakeModelManager\n- def config(self)\n- def _make_workset(root: Path)\n- def test_implementation_prompt_requires_unified_diff_only(tmp_path: Path)\n- def test_valid_model_diff_is_saved_as_patch(tmp_path: Path)\n- def test_invalid_model_response_is_saved_under_invalid_patches(tmp_path: Path)\n- def test_output_writes_to_explicit_path(tmp_path: Path)\n- def test_cli_json_output_includes_patch_metadata(monkeypatch, tmp_path: Path)\n- def test_no_repository_source_files_are_modified(tmp_path: Path)\n- def test_provider_failure_exits_cleanly(monkeypatch, tmp_path: Path)\n- def test_missing_workset_exits_cleanly(monkeypatch, tmp_path: Path)\n- def test_existing_patch_commands_work_with_generated_patches(monkeypatch, tmp_path: Path)\n- def test_invalid_first_patch_triggers_repair(tmp_path: Path)\n- def test_repair_exhausted_saves_invalid_artifact(tmp_path: Path)\n- def test_repair_prompt_contains_original_patch_and_errors()\n- def test_repair_prompt_includes_targeted_excerpts_when_provided()\n- def test_repair_prompt_omits_targeted_section_when_not_provided()\n- def test_targeted_disk_excerpts_returns_empty_for_no_mismatches()\n- def test_targeted_disk_excerpts_reads_correct_lines(tmp_path: Path)\n- def test_targeted_disk_excerpts_marks_mismatch_line_with_arrow(tmp_path: Path)\n- def test_targeted_disk_excerpts_deduplicates_locations(tmp_path: Path)\n- def test_repair_loop_uses_targeted_excerpts(tmp_path: Path)\n- def _fake_ask(prompt: str, **kwargs: object)\n- def test_srp_truncated_empty_response_gets_actionable_error(tmp_path: Path)\n- def test_srp_empty_response_without_truncation_gets_generic_error(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports datetime\n- imports pathlib\n- imports types\n- imports unittest.mock\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.execution\n- imports forge.execution.execution_prompt\n- imports forge.models.errors\n- imports forge.models.types\n- imports forge.planning.planner\n- imports forge.services.implementation_service\n- imports forge.worksets.store\n- imports forge.execution.execution_prompt\n- imports forge.execution.execution_prompt\n- imports forge.execution.execution_prompt\n- imports forge.services.implementation_service\n- imports forge.services.implementation_service\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for forge implement patch generation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom datetime import UTC, datetime\nfrom pathlib import Path\nfrom types import SimpleNamespace\nfrom unittest.mock import MagicMock, patch\n\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.execution import ExecutionService\nfrom forge.execution.execution_prompt import build_implementation_prompt\nfrom forge.models.errors import ModelProviderError\nfrom forge.models.types import ModelResponse\nfrom forge.planning.planner import ImplementationPlan\nfrom forge.services.implementation_service import ImplementationService\nfrom forge.worksets.store import save\n\nrunner = CliRunner()\n\nTASK = \"Add greeting\"\nWORKSET = \"greeting\"\n\nVALID_DIFF = \"\"\"diff --git a/forge/example.py b/forge/example.py\n... (lines omitted) ...\n\n    targeted = \"### src/Foo.java (lines 160\u2013180)\\n```\\n  165>>>| // Act & Assert\\n```\"\n    prompt = build_repair_prompt(\n        task=\"fix test\",\n        original_patch=\"--- a/Foo.java\\n+++ b/Foo.java\\n@@ -165 +165 @@\\n-old\\n+new\\n\",\n        structural_errors=[],\n        apply_check_error=\"patch failed\",\n... (lines omitted) ...\n    from forge.execution.execution_prompt import build_repair_prompt\n\n    prompt = build_repair_prompt(\n        task=\"fix test\",\n        original_patch=\"not a diff\",\n        structural_errors=[],\n        apply_check_error=\"\",\n... (lines omitted) ...\n        {\n            \"schema_version\": 1,\n            \"name\": \"repair-ws\",\n            \"query\": \"fix Foo\",\n            \"root\": str(tmp_path),\n            \"created_at\": \"2026-06-28T00:00:00+00:00\",\n            \"updated_at\": \"2026-06-28T00:00:00+00:00\",\n... (lines omitted) ...\n    svc._model_manager.ask = _fake_ask  # type: ignore[method-assign]\n\n    svc.implement(\n        tmp_path, \"fix Foo\", \"repair-ws\", repair_attempts=1, output_format=\"unified_diff\"\n    )\n\n    # The repair prompt (second call) must contain the targeted excerpt section\n... (lines omitted) ...\n```\n\n### tests/test_memory.py\n\n**Reason selected**\n- match:Test Match test file included for task (+10)\n- Importance: test file (+7)\n\n**File summary**\n- Python source file.\n- Tests for Epic 3.1: Engineering Memory subsystem.\n- Public functions: test_memory_item_round_trip, test_memory_item_to_dict_shape, test_memory_type_values, test_save_and_load_item, test_save_creates_subdirs, test_save_updates_index, test_load_missing_raises, test_list_items_empty.\n\n**Detected symbols**\n- def test_memory_item_round_trip()\n- def test_memory_item_to_dict_shape()\n- def test_memory_type_values()\n- def test_save_and_load_item(tmp_path: Path)\n- def test_save_creates_subdirs(tmp_path: Path)\n- def test_save_updates_index(tmp_path: Path)\n- def test_load_missing_raises(tmp_path: Path)\n- def test_list_items_empty(tmp_path: Path)\n- def test_list_items_multiple(tmp_path: Path)\n- def test_delete_item(tmp_path: Path)\n- def test_delete_removes_from_index(tmp_path: Path)\n- def test_rebuild_index(tmp_path: Path)\n- def test_duplicate_save_overwrites(tmp_path: Path)\n- def test_missing_memory_dir_list_returns_empty(tmp_path: Path)\n- def test_manager_add_and_get(tmp_path: Path)\n- def test_manager_list_sorted_desc(tmp_path: Path)\n- def test_manager_delete(tmp_path: Path)\n- def test_manager_rebuild(tmp_path: Path)\n- def test_manager_get_missing_raises(tmp_path: Path)\n- def test_search_empty_memory(tmp_path: Path)\n- def test_search_title_match(tmp_path: Path)\n- def test_search_tag_match(tmp_path: Path)\n- def test_search_returns_reasons(tmp_path: Path)\n- def test_search_ranking_order(tmp_path: Path)\n- def test_search_max_results(tmp_path: Path)\n- def test_search_no_match_returns_empty(tmp_path: Path)\n- def test_search_summary_match(tmp_path: Path)\n- def test_similarity_empty_memory(tmp_path: Path)\n- def test_similarity_shared_files(tmp_path: Path)\n- def test_similarity_shared_workset(tmp_path: Path)\n- def test_similarity_shared_tags(tmp_path: Path)\n- def test_similarity_max_results(tmp_path: Path)\n- def test_similarity_reasons_populated(tmp_path: Path)\n- def test_repository_isolation(tmp_path: Path)\n- def test_planning_searches_memory_before_generating(tmp_path: Path)\n- def test_planning_saves_to_memory(tmp_path: Path)\n- def _make_memory_repo(tmp_path: Path)\n- def test_cli_memory_list(tmp_path: Path)\n- def test_cli_memory_list_empty(tmp_path: Path)\n- def test_cli_memory_list_json(tmp_path: Path)\n- def test_cli_memory_show(tmp_path: Path)\n- def test_cli_memory_show_missing(tmp_path: Path)\n- def test_cli_memory_show_json(tmp_path: Path)\n- def test_cli_memory_search(tmp_path: Path)\n- def test_cli_memory_search_no_match(tmp_path: Path)\n- def test_cli_memory_search_json(tmp_path: Path)\n- def test_cli_memory_related(tmp_path: Path)\n- def test_cli_memory_rebuild(tmp_path: Path)\n- def test_cli_memory_rebuild_empty(tmp_path: Path)\n- def _empty_repo(tmp_path: Path)\n- def test_decision_create_basic(tmp_path: Path)\n- def test_investigation_create_basic(tmp_path: Path)\n- def test_decision_can_be_shown(tmp_path: Path)\n- def test_investigation_found_by_search(tmp_path: Path)\n- def test_memory_timeline_lists_entries(tmp_path: Path)\n- def test_memory_timeline_json(tmp_path: Path)\n- def test_decision_create_with_workset(tmp_path: Path)\n- def test_decision_create_with_tags(tmp_path: Path)\n- def test_decision_create_with_file(tmp_path: Path)\n- def test_memory_timeline_empty_state(tmp_path: Path)\n- def test_readme_commands_work(tmp_path: Path)\n- def test_decision_create_json(tmp_path: Path)\n- def test_investigation_create_json(tmp_path: Path)\n\n**Dependency hints**\n- imports __future__\n- imports json\n- imports pathlib\n- imports unittest.mock\n- imports pytest\n- imports typer.testing\n- imports forge.cli.app\n- imports forge.memory.manager\n- imports forge.memory.models\n- imports forge.memory.search\n- imports forge.memory.similarity\n- imports forge.memory.store\n- imports forge.context.bundle\n- imports forge.models.types\n- imports forge.planning.planner\n- imports forge.worksets.store\n- imports forge.context.bundle\n- imports forge.models.types\n- imports forge.planning.planner\n- imports forge.worksets.store\n\n**Relevant excerpt**\n```py\n\"\"\"Tests for Epic 3.1: Engineering Memory subsystem.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom pathlib import Path\nfrom unittest.mock import MagicMock, patch\n\nimport pytest\nfrom typer.testing import CliRunner\n\nfrom forge.cli.app import app\nfrom forge.memory.manager import MemoryManager\nfrom forge.memory.models import MemoryItem, MemoryType\nfrom forge.memory.search import search_memory\nfrom forge.memory.similarity import find_similar\nfrom forge.memory.store import (\n    MemoryStoreError,\n    delete_item,\n    list_items,\n    load_index,\n    load_item,\n    rebuild_index,\n    save_item,\n... (lines omitted) ...\n```\n",
+      "preview": "# Forge Context Bundle: workflow-bugfix-045a8199\n\n## Metadata\n\n- Workset: workflow-bugfix-045a8199\n- Query: fix SessionControllerIntegrationTest\n- Root: /Users/derektaylor/projects/forge\n- Generated: 2026-06-30T22:10:40+00:00\n- Files: 20\n- Character estimate: 282,618\n- Token estimate: 70,647\n\n## Workset Files\n\n| Path | Category | Score | Lines | Chars |\n| --- | --- | ---: | ---: | ---: |\n| forge/worksets/query.py | source | 118 | 224 | 7,564 |\n| forge/worksets/scoring.py | source | 58 | 357 | 12,791 |\n| forge/cli/app.py | source | 18 | 2,690 | 96,241 |\n| forge/project/initializer.py | source | 18 | 128 | 4,042 |\n| forge/project/paths.py | source | 18 | 94 | 2,809 |\n| tests/test_workset_query.py | test | 217 | 46 | 1,737 |\n| tests/test_workset_suggest.py | test | 217 | 564 | 20,585 |\n| tests/test_project_phase2d.py | test | 117 | 299 | 10,573 |\n| tests/__init__.py | test | 107 | 1 | 20 |\n| tests/test_application_services.py | test | 107 | 139 | 4,118 |\n| tests/test_artifacts.py | test | 107 | 170 | 5,723 |\n| tests/test_cli.py | test | 107 | 360 | 11,656 |\n| tests/test_config_manager.py | test | 107 | 209 | 6,536 |\n| tests/test_context_bundle.py | test | 107 | 342 | 11,222 |\n| tests/test_dogfood_hardening.py | test | 107 | 678 | 23,097 |\n| tests/test_execution.py | test | 107 | 322 | 10,543 |\n| tests/test_factory.py | test | 107 | 29 | 891 |\n| tests/test_git_service.py | test | 107 | 156 | 4,882 |\n| tests/test_implement.py | test | 107 | 698 | 23,713 |\n| tests/test_memory.py | test | 107 | 723 | 23,875 |\n\n## File Context\n\n### forge/worksets/query.py\n\n**Reason selected**\n- match:Content Match content matched 'session', 'sessioncontroller', 'sessioncontrollerintegrationtest' (+11)\n- Importance: source file (+8)\n\n**File summary**\n- Python source file.\n- Deterministic query parsing for workset selection.\n- Defines classes: SearchTerm, WorksetQuery.\n- Public functions: tokens, parse_query.\n\n**Detected symbols**\n- class SearchTerm\n- class WorksetQuery\n- def tokens(self)\n- def _intent_from(workflow: str | None, lower_tokens: list...)\n- def _subject_from(identifiers: list[str], raw_tokens: list...)\n- def _looks_like_code_identifier(identifier: str)\n- def _dedupe_terms(terms: list[SearchTerm])\n\n**Dependency hints**\n- imports __future__\n- imports re\n- imports dataclasses\n- imports forge.worksets.identifiers\n\n**Relevant excerpt**\n```py\n\"\"\"Deterministic query parsing for workset selection.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom dataclasses import dataclass, field\n\nfrom forge.worksets.identifiers import (\n    expand_identifier,\n    extract_identifiers,\n    is_test_identifier,\n    split_identifier,\n)\n\nSUPPORTED_INTENTS = {\n    \"feature\",\n    \"bugfix\",\n    \"refactor\",\n    \"documentation\",\n    \"investigation\",\n    \"search\",\n    \"generic\",\n}\n\nACTION_INTENTS = {\n    \"fix\": \"bugfix\",\n    \"repair\": \"bugfix\",\n    \"debug\": \"bugfix\",\n    \"add\": \"feature\",\n    \"implement\": \"feature\",\n    \"create\": \"feature\",\n... (lines omitted) ...\n}\nACTION_VERBS = frozenset(ACTION_INTENTS)\nDOC_TERMS = frozenset({\"doc\", \"docs\", \"documentation\", \"readme\", \"guide\", \"adr\"})\nTEST_TERMS = frozenset({\"test\", \"tests\", \"spec\", \"specs\", \"fixture\", \"fixtures\", \"regression\"})\nCONFIG_TERMS = frozenset({\"config\", \"configuration\", \"settings\", \"yaml\", \"toml\", \"json\"})\nBUILD_TERMS = frozenset({\"build\", \"docker\", \"dockerfile\", \"makefile\", \"gradle\", \"maven\", \"pom\"})\nSTOP_TOKENS = frozenset({\"the\", \"a\", \"an\", \"of\", \"in\", \"to\", \"for\", \"and\", \"or\", \"is\"})\n... (lines omitted) ...\n_TOKEN_RE = re.compile(r\"[A-Za-z0-9]+\")\n\n# Term weights are scoring multipliers (relative to MAX_TERM_WEIGHT) applied in\n# forge.worksets.scoring. A full, distinctive identifier (\"SessionControllerIntegrationTest\")\n# is far more specific than one of its decomposed parts (\"Session\", \"Test\") and must not\n# contribute the same amount of score when it shows up as a content/filename/path match \u2014\n# decomposed parts are common English/engineering words that otherwise flood scoring with\n... (lines omitted) ",
+      "workset_name": "workflow-bugfix-045a8199",
+      "file_count": 20,
+      "total_chars": 282618,
+      "total_tokens": 70647
+    },
+    "plan": {
+      "task": "fix SessionControllerIntegrationTest",
+      "workset": "workflow-bugfix-045a8199",
+      "workset_name": "workflow-bugfix-045a8199",
+      "model": "qwen2.5-coder:7b",
+      "generated_at": "2026-06-30T22:11:05.366541+00:00",
+      "content": "# Forge Implementation Plan\n\n## Task\nRefactor the existing tests to ensure they are passing with the latest changes in the codebase.\n\n## Workset Used\n`tests/test_config_manager.py`, `tests/test_context_bundle.py`, `tests/test_dogfood_hardening.py`, `tests/test_execution.py`, `tests/test_factory.py`, `tests/test_git_service.py`, `tests/test_implement.py`, and `tests/test_memory.py`\n\n## Objective\nEnsure all tests are passing by fixing any issues that may have been introduced with recent changes.\n\n## Current Understanding\nThe current understanding is that some of the tests might be failing due to code refactoring or changes in dependencies. We need to identify the root cause of these failures and fix them accordingly.\n\n## Files Likely to Change\n\n| File | Reason | Change Type |\n| --- | --- | --- |\n| `tests/test_config_manager.py` | Fix issues related to configuration loading and creation | Code refactoring |\n| `tests/test_context_bundle.py` | Fix issues related to workset context bundle generation | Code refactoring |\n| `tests/test_dogfood_hardening.py` | Ensure test coverage for dogfood readiness hardening | Test case addition or modification |\n| `tests/test_execution.py` | Fix issues related to execution request preparation and service loading | Code refactoring |\n| `tests/test_factory.py` | Ensure correct provider creation based on configuration settings | Code refactoring |\n| `tests/test_git_service.py` | Ensure GitService and git CLI commands work as expected | Code refactoring |\n| `tests/test_implement.py` | Fix issues related to implement patch generation and model responses | Code refactoring |\n| `tests/test_memory.py` | Ensure memory subsystem tests are passing with recent changes | Code refactoring |\n\n## Files to Inspect Before Editing\n- Review all the mentioned test files to identify any breaking changes.\n- Check the codebase for recent changes that might affect these tests.\n\n## Proposed Implementation Steps\n\n1. **Review and Identify Failures:**\n   - Run the existing tests using `pytest` and identify which tests are failing.\n   \n2. **Fix Configuration Loading Issues:**\n   - In `tests/test_config_manager.py`, ensure the configuration loading logic is correctly creating default configurations and reading custom settings.\n\n3. **Workset Context Bundle Generation:**\n   - In `tests/test_context_bundle.py`, verify that context bundle generation logic is working as expected for different file types and structures.\n   \n4. **Dogfood Readiness Hardening Tests:**\n   - In `tests/test_dogfood_hardening.py`, add or modify test cases to ensure the patch validation and apply check functionalities are robust.\n   \n5. **Execution Request Preparation and Service Loading:**\n   - In `tests/test_execution.py`, review the execution request preparation logic and service loading mechanism for any issues that might be causing failures.\n\n6. **Provider Factory Tests:**\n   - Ensure the provider creation logic in `tests/test_factory.py` correctly instantiates providers based on configuration settings.\n   \n7. **GitService and CLI Commands:**\n   - Verify that GitService functions are working as expected by checking interactions with git commands.\n   \n8. **Implement Patch Generation:**\n   - In `tests/test_implement.py`, fix the model response handling logic to ensure patches are generated correctly based on valid responses.\n\n9. **Memory Subsystem Tests:**\n   - Ensure all memory subsystem tests in `tests/test_memory.py` pass by fixing any issues related to item saving, loading, and indexing.\n\n## Testing Strategy\n- Run unit tests for each module separately to identify failing cases.\n- Use integration testing to verify that different components work together correctly.\n- Refactor the code incrementally and re-run tests after each change to ensure all tests are passing before moving on to the next step.\n\n## Risks and Edge Cases\n- Risk: Incorrect configuration settings could lead to test failures. Mitigation: Carefully review and update configuration files.\n- Risk: Changes in dependencies might affect test behavior. Mitigation: Use virtual environments and lock files for consistent testing environments.\n- Edge Case: Handling of edge cases in context bundle generation and model responses.\n\n## Questions or Blockers\n- Are there any specific issues or blockers identified that need further discussion before proceeding with the implementation plan?\n\n## Suggested Commit Scope\nEach commit should focus on fixing a single issue or improving a test case. This will make it easier to track changes and identify regressions.\n\n## Follow-Up Work\nAfter all tests are passing, review the code for any potential improvements or optimizations that can be made.\n---\n*This is a plan only. No files were modified.*\n*Workset used: workflow-bugfix-045a8199. Model: qwen2.5-coder:7b.*",
+      "saved_path": "/Users/derektaylor/projects/forge/.forge/plans/workflow-bugfix-045a8199-20260630T221105.md",
+      "memory_used": true,
+      "memory_item_id": "af908c47"
+    },
+    "patch": {
+      "task": "fix SessionControllerIntegrationTest",
+      "workset": "workflow-bugfix-045a8199",
+      "model": "qwen2.5-coder:7b",
+      "status": "rejected",
+      "patch_path": null,
+      "patch_name": null,
+      "valid": false,
+      "affected_files": [],
+      "validation_errors": [
+        "path/to/File.java: file not found."
+      ],
+      "raw_response_path": "/Users/derektaylor/projects/forge/.forge/patches/invalid/20260630T221251Z-fix-sessioncontrollerintegrationtest.txt",
+      "next_command": null,
+      "test_warning": null,
+      "repair_attempts_made": 3
+    }
+  },
+  "metadata": {}
+}

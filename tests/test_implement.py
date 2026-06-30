@@ -126,6 +126,56 @@ def test_implementation_prompt_requires_unified_diff_only(tmp_path: Path) -> Non
     assert "Use paths relative to the repository root" in prompt
 
 
+def test_search_replace_prompt_uses_budgeted_context_and_edit_targets(tmp_path: Path) -> None:
+    from forge.execution.execution_prompt import build_search_replace_prompt
+
+    bundle = SimpleNamespace(
+        workset_name="budget-ws",
+        query="fix Big",
+        root=str(tmp_path),
+        generated_at="2026-01-01T00:00:00Z",
+        files=[
+            SimpleNamespace(
+                path="src/Big.java",
+                category="source",
+                score=90,
+                line_count=500,
+                char_count=20_000,
+                symbols=["Big"],
+                error=None,
+                summary=["large source"],
+                dependency_hints=[],
+                reasons=["identifier:Big (+20)"],
+                excerpts=[f"line {i}" for i in range(1, 401)],
+            ),
+            SimpleNamespace(
+                path="README.md",
+                category="docs",
+                score=20,
+                line_count=50,
+                char_count=1000,
+                symbols=[],
+                error=None,
+                summary=["docs"],
+                dependency_hints=[],
+                reasons=[],
+                excerpts=[f"doc {i}" for i in range(1, 51)],
+            ),
+        ],
+    )
+    plan = SimpleNamespace(content="Update src/Big.java.")
+
+    prompt, warning = build_search_replace_prompt("fix Big.java", bundle, plan, "model-x")
+
+    assert warning is None
+    assert "# Edit Targeting Plan" in prompt
+    assert "| src/Big.java | modify |" in prompt
+    assert "Content mode: focused excerpt" in prompt
+    assert "Reason: large primary target, budget-limited" in prompt
+    assert "### README.md" in prompt
+    assert "Content mode: summary plus excerpt" in prompt
+
+
 def test_valid_model_diff_is_saved_as_patch(tmp_path: Path) -> None:
     _make_workset(tmp_path)
     manager = FakeModelManager()
@@ -532,6 +582,32 @@ def test_repair_prompt_omits_targeted_section_when_not_provided() -> None:
     )
 
     assert "AUTHORITATIVE FILE CONTENT" not in prompt
+
+
+def test_srp_repair_prompt_includes_structured_failures() -> None:
+    from forge.execution.execution_prompt import build_search_replace_repair_prompt
+    from forge.srp.models import SearchReplaceFailureDetail
+
+    prompt = build_search_replace_repair_prompt(
+        task="fix Foo",
+        original_response="src/Foo.java\n<<<<<<< SEARCH\nmissing\n=======\nnew\n>>>>>>> REPLACE",
+        failures=["src/Foo.java: SEARCH content not found in file."],
+        file_details="### src/Foo.java",
+        failure_details=[
+            SearchReplaceFailureDetail(
+                file_path="src/Foo.java",
+                error_type="not_found",
+                search_preview="missing",
+                nearest_match_excerpt="    1>>>| class Foo {}",
+                message="not found",
+            )
+        ],
+    )
+
+    assert "Structured Failure Details" in prompt
+    assert "error_type: not_found" in prompt
+    assert "nearest_match_excerpt" in prompt
+    assert "class Foo" in prompt
 
 
 def test_targeted_disk_excerpts_returns_empty_for_no_mismatches() -> None:

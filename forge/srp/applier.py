@@ -11,7 +11,12 @@ from __future__ import annotations
 import difflib
 from pathlib import Path
 
-from forge.srp.models import BlockApplication, SearchReplaceBlock, SearchReplaceResult
+from forge.srp.models import (
+    BlockApplication,
+    SearchReplaceBlock,
+    SearchReplaceFailureDetail,
+    SearchReplaceResult,
+)
 
 # Number of context lines to include on each side of a change in the produced
 # unified diff.  Three is the git default and what `git apply` expects.
@@ -57,6 +62,7 @@ def apply_blocks(root: Path, blocks: list[SearchReplaceBlock]) -> SearchReplaceR
     applications: list[BlockApplication] = []
     diff_parts: list[str] = []
     errors: list[str] = []
+    failure_details: list[SearchReplaceFailureDetail] = []
     all_ok = True
 
     for file_path in file_order:
@@ -78,7 +84,21 @@ def apply_blocks(root: Path, blocks: list[SearchReplaceBlock]) -> SearchReplaceR
                 continue
             err = f"{file_path}: file not found."
             for block in file_blocks:
-                applications.append(BlockApplication(block=block, applied=False, error=err))
+                detail = _failure_detail(
+                    file_path=file_path,
+                    error_type="file_missing",
+                    block=block,
+                    message=err,
+                )
+                applications.append(
+                    BlockApplication(
+                        block=block,
+                        applied=False,
+                        error=err,
+                        failure_detail=detail,
+                    )
+                )
+                failure_details.append(detail)
             errors.append(err)
             all_ok = False
             continue
@@ -88,7 +108,21 @@ def apply_blocks(root: Path, blocks: list[SearchReplaceBlock]) -> SearchReplaceR
         except OSError as exc:
             err = f"{file_path}: could not read file — {exc}"
             for block in file_blocks:
-                applications.append(BlockApplication(block=block, applied=False, error=err))
+                detail = _failure_detail(
+                    file_path=file_path,
+                    error_type="read_error",
+                    block=block,
+                    message=err,
+                )
+                applications.append(
+                    BlockApplication(
+                        block=block,
+                        applied=False,
+                        error=err,
+                        failure_detail=detail,
+                    )
+                )
+                failure_details.append(detail)
             errors.append(err)
             all_ok = False
             continue
@@ -101,6 +135,8 @@ def apply_blocks(root: Path, blocks: list[SearchReplaceBlock]) -> SearchReplaceR
             applications.append(app)
             if err:
                 errors.append(err)
+                if app.failure_detail is not None:
+                    failure_details.append(app.failure_detail)
                 file_ok = False
                 all_ok = False
                 break  # stop applying further blocks to this file on first failure
@@ -124,6 +160,7 @@ def apply_blocks(root: Path, blocks: list[SearchReplaceBlock]) -> SearchReplaceR
         patch_content=patch_content,
         valid=valid,
         errors=errors,
+        failure_details=failure_details,
     )
 
 
@@ -149,7 +186,37 @@ def _apply_one(
                 f"{file_path}: SEARCH content matches {count} locations — add more "
                 "surrounding context to make it unique."
             )
-            return content, BlockApplication(block=block, applied=False, error=err), err
+            detail = _failure_detail(
+                file_path=file_path,
+                error_type="ambiguous",
+                block=block,
+                content=content,
+                message=err,
+                match_count=count,
+            )
+            return (
+                content,
+                BlockApplication(block=block, applied=False, error=err, failure_detail=detail),
+                err,
+            )
+        if search == replace:
+            err = (
+                f"{file_path}: SEARCH and REPLACE content are identical; "
+                "no file content changed."
+            )
+            detail = _failure_detail(
+                file_path=file_path,
+                error_type="no_change",
+                block=block,
+                content=content,
+                message=err,
+                match_count=1,
+            )
+            return (
+                content,
+                BlockApplication(block=block, applied=False, error=err, failure_detail=detail),
+                err,
+            )
         new_content = content.replace(search, replace, 1)
         return new_content, BlockApplication(block=block, applied=True), None
 
@@ -163,7 +230,37 @@ def _apply_one(
                 f"{file_path}: SEARCH content matches {count} locations — add more "
                 "surrounding context to make it unique."
             )
-            return content, BlockApplication(block=block, applied=False, error=err), err
+            detail = _failure_detail(
+                file_path=file_path,
+                error_type="ambiguous",
+                block=block,
+                content=norm_content,
+                message=err,
+                match_count=count,
+            )
+            return (
+                content,
+                BlockApplication(block=block, applied=False, error=err, failure_detail=detail),
+                err,
+            )
+        if norm_search == replace.replace("\r\n", "\n"):
+            err = (
+                f"{file_path}: SEARCH and REPLACE content are identical; "
+                "no file content changed."
+            )
+            detail = _failure_detail(
+                file_path=file_path,
+                error_type="no_change",
+                block=block,
+                content=norm_content,
+                message=err,
+                match_count=1,
+            )
+            return (
+                content,
+                BlockApplication(block=block, applied=False, error=err, failure_detail=detail),
+                err,
+            )
         new_content = norm_content.replace(norm_search, replace.replace("\r\n", "\n"), 1)
         return new_content, BlockApplication(block=block, applied=True), None
 
@@ -171,7 +268,18 @@ def _apply_one(
         f"{file_path}: SEARCH content not found in file. "
         "Verify that the search string matches the file exactly, including all indentation."
     )
-    return content, BlockApplication(block=block, applied=False, error=err), err
+    detail = _failure_detail(
+        file_path=file_path,
+        error_type="not_found",
+        block=block,
+        content=content,
+        message=err,
+    )
+    return (
+        content,
+        BlockApplication(block=block, applied=False, error=err, failure_detail=detail),
+        err,
+    )
 
 
 def _create_new_file(
@@ -186,6 +294,65 @@ def _create_new_file(
     apps = [BlockApplication(block=b, applied=True) for b in blocks]
     diff = _new_file_diff(file_path, content)
     return diff, apps, []
+
+
+def _failure_detail(
+    *,
+    file_path: str,
+    error_type: str,
+    block: SearchReplaceBlock,
+    message: str,
+    content: str | None = None,
+    match_count: int | None = None,
+) -> SearchReplaceFailureDetail:
+    return SearchReplaceFailureDetail(
+        file_path=file_path,
+        error_type=error_type,  # type: ignore[arg-type]
+        search_preview=_preview(block.search),
+        nearest_match_excerpt=_nearest_match_excerpt(content, block.search) if content else None,
+        match_count=match_count,
+        message=message,
+    )
+
+
+def _preview(text: str, limit: int = 180) -> str:
+    compact = "\n".join(line for line in text.splitlines()[:6])
+    return compact[:limit] + ("..." if len(compact) > limit else "")
+
+
+def _nearest_match_excerpt(content: str, search: str) -> str:
+    """Return a deterministic diagnostic excerpt near the likely target."""
+    file_lines = content.splitlines()
+    if not file_lines:
+        return ""
+    needle = next((line.strip() for line in search.splitlines() if line.strip()), "")
+    approx = 0
+    if needle:
+        for idx, line in enumerate(file_lines):
+            if line.strip() == needle or needle in line.strip():
+                approx = idx
+                break
+        else:
+            needle_lower = needle.lower()
+            for idx, line in enumerate(file_lines):
+                if line.strip().lower() == needle_lower or needle_lower in line.strip().lower():
+                    approx = idx
+                    break
+            else:
+                approx = 0
+
+    if approx == 0 and needle:
+        end = min(40, len(file_lines))
+        start = 0
+    else:
+        start = max(0, approx - 10)
+        end = min(len(file_lines), approx + 11)
+
+    snippet = []
+    for idx in range(start, end):
+        marker = ">>>" if idx == approx else "   "
+        snippet.append(f"{idx + 1:>5}{marker}| {file_lines[idx]}")
+    return "\n".join(snippet)
 
 
 def _unified_diff(file_path: str, original: str, modified: str) -> str:

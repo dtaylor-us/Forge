@@ -248,6 +248,46 @@ class TestParseSearchReplaceBlocks:
 # ---------------------------------------------------------------------------
 
 
+def test_apply_blocks_reports_structured_not_found_detail(tmp_path: Path) -> None:
+    target = tmp_path / "src" / "Foo.java"
+    target.parent.mkdir(parents=True)
+    target.write_text("class Foo {\n    void run() {}\n}\n", encoding="utf-8")
+
+    result = apply_blocks(
+        tmp_path,
+        [
+            SearchReplaceBlock(
+                file_path="src/Foo.java",
+                search="void missing() {}",
+                replace="void missing() { return; }",
+            )
+        ],
+    )
+
+    assert result.valid is False
+    assert len(result.failure_details) == 1
+    detail = result.failure_details[0]
+    assert detail.file_path == "src/Foo.java"
+    assert detail.error_type == "not_found"
+    assert "void missing" in detail.search_preview
+    assert "class Foo" in (detail.nearest_match_excerpt or "")
+
+
+def test_apply_blocks_reports_ambiguous_match_count(tmp_path: Path) -> None:
+    target = tmp_path / "src" / "Foo.java"
+    target.parent.mkdir(parents=True)
+    target.write_text("same\nsame\n", encoding="utf-8")
+
+    result = apply_blocks(
+        tmp_path,
+        [SearchReplaceBlock(file_path="src/Foo.java", search="same", replace="other")],
+    )
+
+    assert result.valid is False
+    assert result.failure_details[0].error_type == "ambiguous"
+    assert result.failure_details[0].match_count == 2
+
+
 class TestApplyBlocks:
     def test_single_block_exact_match(self, tmp_path: Path) -> None:
         f = tmp_path / "src" / "Foo.java"

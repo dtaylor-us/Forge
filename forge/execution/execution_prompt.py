@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from forge.context.bundle import ContextBundle
 from forge.context.excerpt import OMIT_MARKER
+from forge.execution.context_budget import budget_implementation_context
+from forge.execution.edit_plan import derive_edit_plan, render_edit_plan
 from forge.memory.search import MemorySearchResult
 from forge.planning.planner import ImplementationPlan
 from forge.planning.prompts import build_context_sections, build_memory_section
@@ -151,6 +155,10 @@ Generated: {generated_at}
 
 {file_details}
 
+# Edit Targeting Plan
+
+{edit_plan}
+
 # Implementation Plan Or Notes
 
 {implementation_plan}
@@ -268,6 +276,42 @@ def build_numbered_file_details(bundle: ContextBundle) -> str:
     return "\n\n".join(parts)
 
 
+def build_budgeted_numbered_file_details(task: str, bundle: ContextBundle) -> str:
+    """Render implementation context under a deterministic prompt budget."""
+    edit_plan = derive_edit_plan(task, bundle)
+    budgeted = {item.path: item for item in budget_implementation_context(task, bundle, edit_plan)}
+    parts: list[str] = []
+    for f in bundle.files:
+        section: list[str] = [f"### {f.path}"]
+        decision = budgeted.get(f.path)
+        if decision is not None:
+            section.append(f"Content mode: {decision.content_mode}")
+            section.append(f"Reason: {decision.reason}")
+        if f.error:
+            section.append(f"**Error:** {f.error}")
+            parts.append("\n".join(section))
+            continue
+
+        if f.summary:
+            section.append("**Summary:** " + " | ".join(f.summary[:5]))
+        if f.symbols:
+            section.append("**Symbols:** " + ", ".join(f.symbols[:10]))
+        if f.dependency_hints:
+            section.append("**Dependencies:** " + "; ".join(f.dependency_hints[:8]))
+        selected_lines = decision.lines if decision is not None else f.excerpts
+        if selected_lines:
+            section.append(
+                "**File Content (verbatim from disk, with a 'N| ' line-number gutter "
+                "for your reference only — the gutter is NOT part of the file; preserve "
+                "indentation and whitespace after the gutter exactly):**"
+            )
+            section.append(_render_numbered_excerpt_blocks(selected_lines))
+        elif decision is not None:
+            section.append("**File Content:** omitted by implementation context budget.")
+        parts.append("\n".join(section))
+    return "\n\n".join(parts)
+
+
 def _render_numbered_excerpt_blocks(excerpts: list[str]) -> str:
     """Render excerpt lines with a 1-based line-number gutter, preserving omit markers."""
     blocks: list[str] = []
@@ -298,7 +342,8 @@ def build_implementation_prompt(
 ) -> tuple[str, str | None]:
     """Construct a provider prompt that asks only for a raw unified diff."""
     file_table_rows, _ = build_context_sections(bundle)
-    file_details = build_numbered_file_details(bundle)
+    file_details = build_budgeted_numbered_file_details(task, bundle)
+    edit_plan = render_edit_plan(derive_edit_plan(task, bundle))
     result = _IMPLEMENTATION_TEMPLATE.format(
         system_instructions=_IMPLEMENTATION_SYSTEM_INSTRUCTIONS,
         task=task,
@@ -309,6 +354,7 @@ def build_implementation_prompt(
         generated_at=bundle.generated_at,
         file_table_rows=file_table_rows,
         file_details=file_details,
+        edit_plan=edit_plan,
         implementation_plan=implementation_plan.content,
     )
     test_warning: str | None = None
@@ -485,6 +531,10 @@ Generated: {generated_at}
 
 {file_details}
 
+# Edit Targeting Plan
+
+{edit_plan}
+
 # Implementation Plan Or Notes
 
 {implementation_plan}
@@ -553,7 +603,8 @@ def build_search_replace_prompt(
     file_table_rows, _ = build_context_sections(bundle)
     # Use the line-numbered renderer so the model can read SEARCH content
     # directly from the gutter rather than reconstructing it from memory.
-    file_details = build_numbered_file_details(bundle)
+    file_details = build_budgeted_numbered_file_details(task, bundle)
+    edit_plan = render_edit_plan(derive_edit_plan(task, bundle))
     result = _SRP_TEMPLATE.format(
         system_instructions=_SRP_SYSTEM_INSTRUCTIONS,
         task=task,
@@ -564,6 +615,7 @@ def build_search_replace_prompt(
         generated_at=bundle.generated_at,
         file_table_rows=file_table_rows,
         file_details=file_details,
+        edit_plan=edit_plan,
         implementation_plan=implementation_plan.content,
     )
     test_warning: str | None = None
@@ -604,6 +656,7 @@ def build_search_replace_repair_prompt(
     original_response: str,
     failures: list[str],
     file_details: str,
+    failure_details: list[Any] | None = None,
     authoritative_excerpts: str | None = None,
 ) -> str:
     """Build a prompt asking the model to repair failed SEARCH/REPLACE blocks.
@@ -616,6 +669,28 @@ def build_search_replace_repair_prompt(
     failure_lines = (
         "\n".join(f"- {f}" for f in failures) if failures else "(none)"
     )
+    structured_section = ""
+    if failure_details:
+        detail_lines: list[str] = []
+        for detail in failure_details:
+            detail_lines.append(f"### {detail.file_path}")
+            detail_lines.append(f"- error_type: {detail.error_type}")
+            if detail.match_count is not None:
+                detail_lines.append(f"- match_count: {detail.match_count}")
+            if detail.message:
+                detail_lines.append(f"- message: {detail.message}")
+            if detail.search_preview:
+                detail_lines.append("- search_preview:")
+                detail_lines.append("```")
+                detail_lines.append(detail.search_preview)
+                detail_lines.append("```")
+            if detail.nearest_match_excerpt:
+                detail_lines.append("- nearest_match_excerpt:")
+                detail_lines.append("```")
+                detail_lines.append(detail.nearest_match_excerpt)
+                detail_lines.append("```")
+            detail_lines.append("")
+        structured_section = "\n## Structured Failure Details\n" + "\n".join(detail_lines)
     auth_section = ""
     if authoritative_excerpts:
         auth_section = f"""
@@ -641,6 +716,7 @@ The SEARCH/REPLACE blocks you previously generated could not be applied.
 
 ## Application Failures
 {failure_lines}
+{structured_section}
 {auth_section}
 ## Original (Failed) Response
 {original_response}

@@ -1,0 +1,43 @@
+{
+  "id": "af908c47",
+  "type": "plan",
+  "title": "fix SessionControllerIntegrationTest",
+  "created_at": "2026-06-30T22:11:05+00:00",
+  "repository": "/Users/derektaylor/projects/forge",
+  "workset": "workflow-bugfix-045a8199",
+  "tags": [
+    "fix",
+    "sessioncontrollerintegrationtest",
+    "workflow",
+    "bugfix",
+    "045a8199"
+  ],
+  "summary": "Implementation plan for: fix SessionControllerIntegrationTest",
+  "related_files": [
+    "forge/worksets/query.py",
+    "forge/worksets/scoring.py",
+    "forge/cli/app.py",
+    "forge/project/initializer.py",
+    "forge/project/paths.py",
+    "tests/test_workset_query.py",
+    "tests/test_workset_suggest.py",
+    "tests/test_project_phase2d.py",
+    "tests/__init__.py",
+    "tests/test_application_services.py",
+    "tests/test_artifacts.py",
+    "tests/test_cli.py",
+    "tests/test_config_manager.py",
+    "tests/test_context_bundle.py",
+    "tests/test_dogfood_hardening.py",
+    "tests/test_execution.py",
+    "tests/test_factory.py",
+    "tests/test_git_service.py",
+    "tests/test_implement.py",
+    "tests/test_memory.py"
+  ],
+  "related_plans": [],
+  "related_worksets": [
+    "workflow-bugfix-045a8199"
+  ],
+  "source_path": ""
+}

@@ -59,6 +59,22 @@
       ],
       "repository": "/Users/derektaylor/projects/forge",
       "summary": "Implementation plan for: add request tracing"
+    },
+    {
+      "id": "af908c47",
+      "type": "plan",
+      "title": "fix SessionControllerIntegrationTest",
+      "created_at": "2026-06-30T22:11:05+00:00",
+      "workset": "workflow-bugfix-045a8199",
+      "tags": [
+        "fix",
+        "sessioncontrollerintegrationtest",
+        "workflow",
+        "bugfix",
+        "045a8199"
+      ],
+      "repository": "/Users/derektaylor/projects/forge",
+      "summary": "Implementation plan for: fix SessionControllerIntegrationTest"
     }
   ]
 }

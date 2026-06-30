@@ -10,13 +10,12 @@ from typing import Any, Literal
 
 from forge.execution import ExecutionService, ExecutionServiceError
 from forge.execution.execution_prompt import (
+    build_budgeted_numbered_file_details,
     build_implementation_prompt,
-    build_numbered_file_details,
     build_repair_prompt,
     build_search_replace_prompt,
     build_search_replace_repair_prompt,
 )
-from forge.srp import ParseError, SearchReplaceResult, apply_blocks, parse_search_replace_blocks
 from forge.models.manager import ModelManager
 from forge.patches import (
     Patch,
@@ -29,6 +28,7 @@ from forge.patches import (
 )
 from forge.patches.service import inspect_patch
 from forge.planning.planner import ImplementationPlan
+from forge.srp import SearchReplaceResult, apply_blocks, parse_search_replace_blocks
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,7 @@ class ImplementationResult:
     raw_response_path: Path | None = None
     test_warning: str | None = None
     repair_attempts_made: int = 0
+    srp_failure_details: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable result."""
@@ -69,6 +70,7 @@ class ImplementationResult:
             ),
             "test_warning": self.test_warning,
             "repair_attempts_made": self.repair_attempts_made,
+            "srp_failure_details": self.srp_failure_details or [],
         }
 
 
@@ -180,11 +182,11 @@ class ImplementationService:
             timeout_seconds=timeout_seconds,
         )
         current_model = response.model
-        raw_response = response.content
+        raw_response = _strip_markdown_fence(response.content)
         attempts_made = 0
 
         srp_result = _parse_and_apply_srp(root, raw_response, truncated=response.truncated)
-        file_details = _bundle_file_details(request.context_bundle)
+        file_details = _bundle_file_details(task, request.context_bundle)
 
         while not srp_result.valid and attempts_made < repair_attempts:
             attempts_made += 1
@@ -193,6 +195,7 @@ class ImplementationService:
                 task=task,
                 original_response=raw_response,
                 failures=srp_result.errors,
+                failure_details=srp_result.failure_details,
                 file_details=file_details,
                 authoritative_excerpts=auth_excerpts,
             )
@@ -201,7 +204,7 @@ class ImplementationService:
                 model=model,
                 timeout_seconds=timeout_seconds,
             )
-            raw_response = repair_response.content
+            raw_response = _strip_markdown_fence(repair_response.content)
             current_model = repair_response.model
             srp_result = _parse_and_apply_srp(
                 root, raw_response, truncated=repair_response.truncated
@@ -270,6 +273,7 @@ class ImplementationService:
             raw_response_path=invalid_path,
             test_warning=test_warning,
             repair_attempts_made=attempts_made,
+            srp_failure_details=[detail.to_dict() for detail in srp_result.failure_details],
         )
 
     # ------------------------------------------------------------------
@@ -320,7 +324,7 @@ class ImplementationService:
         is_valid = valid and apply_ok
         context_mismatches = [] if is_valid else verify_patch_context(root, current_content)
 
-        file_details = _bundle_file_details(request.context_bundle)
+        file_details = _bundle_file_details(task, request.context_bundle)
         while not is_valid and attempts_made < repair_attempts:
             attempts_made += 1
             targeted_excerpts = _targeted_disk_excerpts(root, context_mismatches)
@@ -425,6 +429,7 @@ def _parse_and_apply_srp(
         valid=result.valid,
         errors=errors,
         raw_response=raw_response,
+        failure_details=result.failure_details,
     )
 
 
@@ -536,7 +541,7 @@ def _apply_check_if_structurally_valid(
     return apply_check_patch_content(root, content)
 
 
-def _bundle_file_details(bundle: Any) -> str:
+def _bundle_file_details(task: str, bundle: Any) -> str:
     """Extract detailed, line-numbered file context from a bundle for repair prompts.
 
     Uses the same "N| " gutter rendering as the initial implementation
@@ -544,10 +549,14 @@ def _bundle_file_details(bundle: Any) -> str:
     ground truth on repair attempts too, instead of repeating the same
     miscounted hunk header it produced the first time.
     """
-    return build_numbered_file_details(bundle)
+    return build_budgeted_numbered_file_details(task, bundle)
 
 
-def _targeted_disk_excerpts(root: Path, context_mismatches: list[str], context_lines: int = 20) -> str:
+def _targeted_disk_excerpts(
+    root: Path,
+    context_mismatches: list[str],
+    context_lines: int = 20,
+) -> str:
     """Extract actual file lines around each mismatch location, read fresh from disk.
 
     The context bundle used for ``file_details`` may be budget-truncated (e.g. only

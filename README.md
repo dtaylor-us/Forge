@@ -266,11 +266,13 @@ forge patch show <generated-patch>
 forge patch validate <generated-patch>
 ```
 
-`forge implement` asks the configured model for a raw unified diff, validates
-the response, and saves valid patches under `.forge/patches/`. It does not
-apply patches, edit source files directly, run verification, or start repair
-loops. Invalid model output is preserved under `.forge/patches/invalid/` for
-review.
+`forge implement` defaults to SEARCH/REPLACE blocks: the model copies exact
+file content to edit, Forge applies those blocks in memory, then Forge
+deterministically generates and validates the unified diff. The legacy
+model-generated diff path remains available with `--output-format unified_diff`,
+but SEARCH/REPLACE is the recommended path because it avoids hunk line-number
+failures. The command does not apply patches or edit source files directly.
+Invalid model output is preserved under `.forge/patches/invalid/` for review.
 
 `forge patch validate` performs a two-phase check: structural format validation
 followed by `git apply --check` against the current working tree. Output
