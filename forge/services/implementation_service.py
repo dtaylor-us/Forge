@@ -183,7 +183,7 @@ class ImplementationService:
         raw_response = response.content
         attempts_made = 0
 
-        srp_result = _parse_and_apply_srp(root, raw_response)
+        srp_result = _parse_and_apply_srp(root, raw_response, truncated=response.truncated)
         file_details = _bundle_file_details(request.context_bundle)
 
         while not srp_result.valid and attempts_made < repair_attempts:
@@ -203,7 +203,9 @@ class ImplementationService:
             )
             raw_response = repair_response.content
             current_model = repair_response.model
-            srp_result = _parse_and_apply_srp(root, raw_response)
+            srp_result = _parse_and_apply_srp(
+                root, raw_response, truncated=repair_response.truncated
+            )
 
         if srp_result.valid and srp_result.patch_content:
             # The SRP applier produced a clean unified diff — validate it
@@ -393,17 +395,35 @@ class ImplementationService:
         )
 
 
-def _parse_and_apply_srp(root: Path, raw_response: str) -> SearchReplaceResult:
-    """Parse SEARCH/REPLACE blocks from ``raw_response`` and apply them to ``root``."""
+def _parse_and_apply_srp(
+    root: Path, raw_response: str, *, truncated: bool = False
+) -> SearchReplaceResult:
+    """Parse SEARCH/REPLACE blocks from ``raw_response`` and apply them to ``root``.
+
+    When the provider reports the response was cut off by an output-length or
+    context-window limit (``truncated``) and parsing finds zero blocks, the
+    generic "no blocks found" error is replaced with a specific, actionable
+    one — without this, a truncated response and a model that simply ignored
+    the requested format look identical to the caller.
+    """
     blocks = parse_search_replace_blocks(raw_response)
     result = apply_blocks(root, blocks)
+    errors = result.errors
+    if truncated and not blocks:
+        errors = [
+            "Model response was truncated (hit the configured output-length or "
+            "context-window limit) before any complete SEARCH/REPLACE block was "
+            "produced. Increase providers.<provider>.max_tokens (and, for Ollama, "
+            "context_window) in ~/.forge/config.yaml.",
+            *errors,
+        ]
     # Preserve the raw response so callers can save it as an artifact on failure.
     return SearchReplaceResult(
         blocks=result.blocks,
         applications=result.applications,
         patch_content=result.patch_content,
         valid=result.valid,
-        errors=result.errors,
+        errors=errors,
         raw_response=raw_response,
     )
 

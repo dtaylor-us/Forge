@@ -600,3 +600,30 @@ def test_workflow_artifacts_discovered(tmp_root: Path):
     artifacts = discover_artifacts(tmp_root)
     workflow_artifacts = [a for a in artifacts if a.artifact_type == ArtifactType.workflow]
     assert any(a.name == "disc1" for a in workflow_artifacts)
+
+
+# ---------------------------------------------------------------------------
+# 12. Patch-stage failure surfaces raw_response_path for diagnosis
+# ---------------------------------------------------------------------------
+
+
+def test_patch_stage_failure_surfaces_raw_response_path(tmp_root: Path, registry: WorkflowRegistry):
+    """When patch generation fails, the saved raw-model-response artifact path
+    must appear in the stage error — without it, diagnosing *why* generation
+    failed (truncation, wrong format, etc.) requires reading source instead
+    of the artifact Forge already wrote to disk."""
+    mocks = _mock_services(patch_valid=False)
+    raw_path = Path("/tmp/.forge/patches/invalid/20260630T000000Z-task.txt")
+    mocks["impl_cls"].return_value.implement.return_value.raw_response_path = raw_path
+
+    engine = WorkflowEngine(tmp_root, registry=registry)
+    import contextlib
+
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_all(mocks):
+            stack.enter_context(cm)
+        run = engine.run(WorkflowTemplate.bugfix, "task")
+
+    stage_map = {s.name: s for s in run.stages}
+    assert stage_map["patch"].status == WorkflowStageStatus.failed
+    assert str(raw_path) in stage_map["patch"].error

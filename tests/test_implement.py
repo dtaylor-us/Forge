@@ -35,9 +35,12 @@ index 1111111..2222222 100644
 
 
 class FakeModelManager:
-    def __init__(self, content: str = VALID_DIFF, *, fail: bool = False) -> None:
+    def __init__(
+        self, content: str = VALID_DIFF, *, fail: bool = False, truncated: bool = False
+    ) -> None:
         self.content = content
         self.fail = fail
+        self.truncated = truncated
         self.prompts: list[tuple[str, str | None, int | None]] = []
 
     def config(self):
@@ -56,6 +59,7 @@ class FakeModelManager:
             content=self.content,
             model=model or "fake-model",
             provider="fake",
+            truncated=self.truncated,
         )
 
 
@@ -125,7 +129,9 @@ def test_implementation_prompt_requires_unified_diff_only(tmp_path: Path) -> Non
 def test_valid_model_diff_is_saved_as_patch(tmp_path: Path) -> None:
     _make_workset(tmp_path)
     manager = FakeModelManager()
-    result = ImplementationService(manager).implement(tmp_path, TASK, WORKSET)
+    result = ImplementationService(manager).implement(
+        tmp_path, TASK, WORKSET, output_format="unified_diff"
+    )
 
     assert result.valid is True
     assert result.status == "accepted"
@@ -160,6 +166,7 @@ def test_output_writes_to_explicit_path(tmp_path: Path) -> None:
         TASK,
         WORKSET,
         output_path=output,
+        output_format="unified_diff",
     )
 
     assert result.valid is True
@@ -173,9 +180,18 @@ def test_cli_json_output_includes_patch_metadata(monkeypatch, tmp_path: Path) ->
 
     result = runner.invoke(
         app,
-        ["implement", TASK, "--workset", WORKSET, "--root", str(tmp_path), "--json"],
+        [
+            "implement",
+            TASK,
+            "--workset",
+            WORKSET,
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "unified_diff",
+            "--json",
+        ],
     )
-
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["task"] == TASK
@@ -239,7 +255,9 @@ def test_no_repository_source_files_are_modified(tmp_path: Path) -> None:
     source = _make_workset(tmp_path)
     before = source.read_text(encoding="utf-8")
 
-    result = ImplementationService(FakeModelManager()).implement(tmp_path, TASK, WORKSET)
+    result = ImplementationService(FakeModelManager()).implement(
+        tmp_path, TASK, WORKSET, output_format="unified_diff"
+    )
 
     assert result.valid is True
     assert source.read_text(encoding="utf-8") == before
@@ -279,7 +297,17 @@ def test_existing_patch_commands_work_with_generated_patches(monkeypatch, tmp_pa
     monkeypatch.setattr("forge.cli.app._model_manager", lambda: FakeModelManager())
     implement = runner.invoke(
         app,
-        ["implement", TASK, "--workset", WORKSET, "--root", str(tmp_path), "--json"],
+        [
+            "implement",
+            TASK,
+            "--workset",
+            WORKSET,
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "unified_diff",
+            "--json",
+        ],
     )
     patch_name = json.loads(implement.output)["patch_name"]
 
@@ -412,7 +440,9 @@ def test_invalid_first_patch_triggers_repair(tmp_path: Path) -> None:
             name="x.patch",
         )
 
-        result = svc.implement(tmp_path, "add subtract", "my-workset", repair_attempts=1)
+        result = svc.implement(
+            tmp_path, "add subtract", "my-workset", repair_attempts=1, output_format="unified_diff"
+        )
 
     assert result.valid is True
     assert result.repair_attempts_made == 1
@@ -445,7 +475,9 @@ def test_repair_exhausted_saves_invalid_artifact(tmp_path: Path) -> None:
         mock_req.return_value.selected_model = "test-model"
         mock_req.return_value.related_memory = None
 
-        result = svc.implement(tmp_path, "add subtract", "my-workset", repair_attempts=2)
+        result = svc.implement(
+            tmp_path, "add subtract", "my-workset", repair_attempts=2, output_format="unified_diff"
+        )
 
     assert result.valid is False
     assert result.repair_attempts_made == 2
@@ -621,9 +653,46 @@ def test_repair_loop_uses_targeted_excerpts(tmp_path: Path) -> None:
     svc = ImplementationService()
     svc._model_manager.ask = _fake_ask  # type: ignore[method-assign]
 
-    svc.implement(tmp_path, "fix Foo", "repair-ws", repair_attempts=1)
+    svc.implement(
+        tmp_path, "fix Foo", "repair-ws", repair_attempts=1, output_format="unified_diff"
+    )
 
     # The repair prompt (second call) must contain the targeted excerpt section
     assert len(prompts_seen) >= 2, "Expected at least one repair attempt"
     repair_prompt = prompts_seen[1]
     assert "AUTHORITATIVE FILE CONTENT AT MISMATCH LOCATIONS" in repair_prompt
+
+
+def test_srp_truncated_empty_response_gets_actionable_error(tmp_path: Path) -> None:
+    """When the SEARCH/REPLACE path parses zero blocks AND the provider
+    reports the response was truncated (output-length/context-window limit),
+    the error must say so specifically — not the generic "no blocks found"
+    message, which looks identical whether the model was cut off mid-token or
+    simply ignored the requested format."""
+    _make_workset(tmp_path)
+    manager = FakeModelManager(
+        "Incomplete output that never reaches a REPLACE marker", truncated=True
+    )
+
+    result = ImplementationService(manager).implement(
+        tmp_path, TASK, WORKSET, repair_attempts=0, output_format="search_replace"
+    )
+
+    assert result.valid is False
+    assert any("truncated" in err.lower() for err in result.validation_errors)
+    assert any("max_tokens" in err or "context_window" in err for err in result.validation_errors)
+
+
+def test_srp_empty_response_without_truncation_gets_generic_error(tmp_path: Path) -> None:
+    """Without the truncation signal, the original generic message is kept —
+    confirms the new diagnostic is additive, not a blanket replacement."""
+    _make_workset(tmp_path)
+    manager = FakeModelManager("Sorry, I can't help with that.", truncated=False)
+
+    result = ImplementationService(manager).implement(
+        tmp_path, TASK, WORKSET, repair_attempts=0, output_format="search_replace"
+    )
+
+    assert result.valid is False
+    assert any("No SEARCH/REPLACE blocks found" in err for err in result.validation_errors)
+    assert not any("truncated" in err.lower() for err in result.validation_errors)

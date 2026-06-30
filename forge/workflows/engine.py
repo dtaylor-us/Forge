@@ -183,9 +183,11 @@ class WorkflowEngine:
             run.patch_path = str(impl.patch_path)
             stage.artifact_refs.append(f"patch:{impl.patch_name}")
         if not impl.valid:
-            raise WorkflowEngineError(
-                f"Patch generation produced an invalid patch: {'; '.join(impl.validation_errors)}"
-            )
+            joined_errors = "; ".join(impl.validation_errors)
+            diagnosis = f"Patch generation produced an invalid patch: {joined_errors}"
+            if impl.raw_response_path:
+                diagnosis += f"\nRaw model response saved at: {impl.raw_response_path}"
+            raise WorkflowEngineError(diagnosis)
         stage.output = {
             "patch_path": result.get("patch_path"),
             "patch_name": result.get("patch_name"),

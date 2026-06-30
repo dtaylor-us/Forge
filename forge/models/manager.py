@@ -135,16 +135,23 @@ class ModelManager:
             configured = timeout_seconds or provider_config.timeout_seconds
             if configured is None:
                 configured = _model_timeout_heuristic(config.default_model, fallback=300)
-            return OllamaProvider(endpoint or "http://localhost:11434", timeout_seconds=configured)
+            return OllamaProvider(
+                endpoint or "http://localhost:11434",
+                timeout_seconds=configured,
+                num_predict=provider_config.max_tokens,
+                context_window=provider_config.context_window,
+            )
         if config.provider == ProviderName.OPENAI:
             return OpenAIProvider(
                 os.getenv("OPENAI_API_KEY"),
                 base_url=endpoint or "https://api.openai.com/v1",
+                max_tokens=provider_config.max_tokens or 8192,
             )
         if config.provider == ProviderName.ANTHROPIC:
             return AnthropicProvider(
                 os.getenv("ANTHROPIC_API_KEY"),
                 base_url=endpoint or "https://api.anthropic.com/v1",
+                max_tokens=provider_config.max_tokens or 8192,
             )
         raise ValueError(f"Unsupported provider: {config.provider}")
 

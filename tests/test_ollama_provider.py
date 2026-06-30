@@ -126,6 +126,56 @@ def test_ask_timeout_override_replaces_provider_timeout() -> None:
     assert FakeHTTPConnection.requests[0]["timeout"] == 240
 
 
+def test_ask_sends_num_ctx_and_num_predict_when_configured() -> None:
+    """Ollama's server-side default context window silently truncates large
+    prompts unless num_ctx is explicitly requested; num_predict caps output
+    length the same way Anthropic/OpenAI's max_tokens does."""
+    FakeHTTPConnection.response = FakeHTTPResponse(200, {"response": "Hello"})
+    provider = OllamaProvider(
+        "http://localhost:11434",
+        num_predict=4096,
+        context_window=8192,
+    )
+
+    provider.ask("Explain dependency injection.", "qwen2.5-coder:32b")
+
+    body = FakeHTTPConnection.requests[0]["body"]
+    assert body["options"] == {"num_ctx": 8192, "num_predict": 4096}
+
+
+def test_ask_omits_options_when_not_configured() -> None:
+    """Default construction (no num_predict/context_window) must not send an
+    options dict at all, preserving the previous request shape exactly."""
+    FakeHTTPConnection.response = FakeHTTPResponse(200, {"response": "Hello"})
+    provider = OllamaProvider("http://localhost:11434")
+
+    provider.ask("Hello", "llama3.1:8b")
+
+    assert "options" not in FakeHTTPConnection.requests[0]["body"]
+
+
+def test_ask_marks_response_truncated_when_done_reason_is_length() -> None:
+    FakeHTTPConnection.response = FakeHTTPResponse(
+        200, {"response": "partial output", "done_reason": "length"}
+    )
+    provider = OllamaProvider("http://localhost:11434", num_predict=128)
+
+    response = provider.ask("Hello", "llama3.1:8b")
+
+    assert response.truncated is True
+
+
+def test_ask_not_truncated_when_done_reason_is_stop() -> None:
+    FakeHTTPConnection.response = FakeHTTPResponse(
+        200, {"response": "complete output", "done_reason": "stop"}
+    )
+    provider = OllamaProvider("http://localhost:11434")
+
+    response = provider.ask("Hello", "llama3.1:8b")
+
+    assert response.truncated is False
+
+
 def test_provider_formats_http_errors() -> None:
     FakeHTTPConnection.response = FakeHTTPResponse(
         404,

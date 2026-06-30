@@ -22,6 +22,14 @@ class ProviderConfig:
 
     endpoint: str | None = None
     timeout_seconds: int | None = None
+    max_tokens: int | None = None
+    """Output length cap. Anthropic/OpenAI: passed as max_tokens /
+    max_output_tokens. Ollama: passed as the num_predict generation option."""
+    context_window: int | None = None
+    """Ollama-only: the num_ctx generation option. Ollama's server-side
+    default (commonly 2048 regardless of what the model itself supports)
+    silently truncates large prompts; this lets a project override it.
+    Ignored by Anthropic/OpenAI, which manage context automatically."""
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,8 @@ class ForgeConfig:
             ProviderName.OLLAMA.value: ProviderConfig(
                 endpoint="http://localhost:11434",
                 timeout_seconds=120,
+                max_tokens=4096,
+                context_window=8192,
             )
         }
     )
@@ -95,11 +105,16 @@ class ConfigManager:
 
 def _default_provider_config(provider: ProviderName) -> ProviderConfig:
     if provider == ProviderName.OLLAMA:
-        return ProviderConfig(endpoint="http://localhost:11434", timeout_seconds=120)
+        return ProviderConfig(
+            endpoint="http://localhost:11434",
+            timeout_seconds=120,
+            max_tokens=4096,
+            context_window=8192,
+        )
     if provider == ProviderName.OPENAI:
-        return ProviderConfig(endpoint="https://api.openai.com/v1")
+        return ProviderConfig(endpoint="https://api.openai.com/v1", max_tokens=8192)
     if provider == ProviderName.ANTHROPIC:
-        return ProviderConfig(endpoint="https://api.anthropic.com/v1")
+        return ProviderConfig(endpoint="https://api.anthropic.com/v1", max_tokens=8192)
     return ProviderConfig()
 
 
@@ -109,22 +124,51 @@ def _provider_configs(value: object) -> dict[str, ProviderConfig]:
             ProviderName.OLLAMA.value: ProviderConfig(
                 endpoint="http://localhost:11434",
                 timeout_seconds=120,
+                max_tokens=4096,
+                context_window=8192,
             )
         }
     providers: dict[str, ProviderConfig] = {}
     for name, raw_config in value.items():
+        provider_name = str(name)
+        defaults = _provider_defaults_for_name(provider_name)
         if not isinstance(raw_config, dict):
-            providers[str(name)] = ProviderConfig()
+            providers[provider_name] = defaults
             continue
         endpoint = raw_config.get("endpoint")
         timeout_seconds = _optional_positive_int(raw_config.get("timeout_seconds"))
-        if str(name) == ProviderName.OLLAMA.value and timeout_seconds is None:
-            timeout_seconds = 120
-        providers[str(name)] = ProviderConfig(
-            endpoint=str(endpoint) if endpoint else None,
+        if timeout_seconds is None:
+            timeout_seconds = defaults.timeout_seconds
+        max_tokens = _optional_positive_int(raw_config.get("max_tokens"))
+        if max_tokens is None:
+            max_tokens = defaults.max_tokens
+        context_window = _optional_positive_int(raw_config.get("context_window"))
+        if context_window is None:
+            context_window = defaults.context_window
+        providers[provider_name] = ProviderConfig(
+            endpoint=str(endpoint) if endpoint else defaults.endpoint,
             timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+            context_window=context_window,
         )
     return providers
+
+
+def _provider_defaults_for_name(name: str) -> ProviderConfig:
+    """Return the built-in defaults for a provider name found in a config file.
+
+    Used to backfill ``max_tokens``/``context_window``/``timeout_seconds`` for
+    existing ``~/.forge/config.yaml`` files written before these fields
+    existed, so an upgrade doesn't silently fall back to ``None`` (which, for
+    Anthropic/OpenAI, previously meant a hardcoded 1024-token cap baked into
+    the provider class, and for Ollama meant the server's own often-too-small
+    default context window).
+    """
+    try:
+        provider = ProviderName(name)
+    except ValueError:
+        return ProviderConfig()
+    return _default_provider_config(provider)
 
 
 def _render_config(config: ForgeConfig) -> str:
@@ -139,6 +183,10 @@ def _render_config(config: ForgeConfig) -> str:
             lines.append(f"    endpoint: {provider.endpoint}")
         if provider.timeout_seconds is not None:
             lines.append(f"    timeout_seconds: {provider.timeout_seconds}")
+        if provider.max_tokens is not None:
+            lines.append(f"    max_tokens: {provider.max_tokens}")
+        if provider.context_window is not None:
+            lines.append(f"    context_window: {provider.context_window}")
     return "\n".join(lines) + "\n"
 
 

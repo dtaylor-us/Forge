@@ -193,3 +193,51 @@ def test_ask_logs_metrics_without_prompt_or_response(tmp_path, monkeypatch) -> N
     assert complete["response_size"] == len("hello")
     assert "sensitive prompt" not in str(logger.events)
     assert "hello" not in str(logger.events)
+
+
+def test_provider_wires_ollama_num_predict_and_context_window(tmp_path) -> None:
+    """ModelManager must pass the configured max_tokens/context_window through
+    to OllamaProvider as num_predict/context_window — otherwise the config
+    fields exist but have no effect and large prompts can still be silently
+    truncated by Ollama's own default context window."""
+    from forge.models.ollama import OllamaProvider
+
+    manager = ModelManager(ConfigManager(tmp_path / "config.yaml"))
+    config = manager.config()
+
+    provider = manager._provider(config)
+
+    assert isinstance(provider, OllamaProvider)
+    assert provider.num_predict == 4096
+    assert provider.context_window == 8192
+
+
+def test_provider_wires_anthropic_max_tokens(tmp_path) -> None:
+    """A fresh anthropic config must not leave AnthropicProvider on its own
+    1024-token class default — that cap silently truncates patch generation
+    output with no error."""
+    from forge.models.anthropic import AnthropicProvider
+
+    path = tmp_path / "config.yaml"
+    path.write_text("provider: anthropic\n", encoding="utf-8")
+    manager = ModelManager(ConfigManager(path))
+    config = manager.config()
+
+    provider = manager._provider(config)
+
+    assert isinstance(provider, AnthropicProvider)
+    assert provider.max_tokens == 8192
+
+
+def test_provider_wires_openai_max_tokens(tmp_path) -> None:
+    from forge.models.openai import OpenAIProvider
+
+    path = tmp_path / "config.yaml"
+    path.write_text("provider: openai\n", encoding="utf-8")
+    manager = ModelManager(ConfigManager(path))
+    config = manager.config()
+
+    provider = manager._provider(config)
+
+    assert isinstance(provider, OpenAIProvider)
+    assert provider.max_tokens == 8192

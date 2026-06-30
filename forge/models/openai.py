@@ -47,8 +47,16 @@ class OpenAIProvider:
             "/responses",
             {"model": model, "input": prompt, "max_output_tokens": self.max_tokens},
         )
+        incomplete_details = payload.get("incomplete_details")
+        truncated = (
+            isinstance(incomplete_details, dict)
+            and incomplete_details.get("reason") == "max_output_tokens"
+        )
         return ModelResponse(
-            content=_extract_response_text(payload), model=model, provider=self.name
+            content=_extract_response_text(payload),
+            model=model,
+            provider=self.name,
+            truncated=truncated,
         )
 
     def _require_configured(self) -> None:

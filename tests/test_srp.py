@@ -183,6 +183,65 @@ class TestParseSearchReplaceBlocks:
         assert blocks[0].search == "old line"
         assert blocks[0].replace == "new line"
 
+    def test_fence_immediately_above_search_marker_does_not_drop_block(self) -> None:
+        """A per-block ```lang fence between the file path and SEARCH marker
+        must not cause the file path to be missed (models often fence each
+        block despite "no Markdown fences" instructions)."""
+        content = textwrap.dedent("""\
+            src/Foo.java
+            ```java
+            <<<<<<< SEARCH
+            old line
+            =======
+            new line
+            >>>>>>> REPLACE
+            ```
+        """)
+        blocks = parse_search_replace_blocks(content)
+        assert len(blocks) == 1
+        assert blocks[0].file_path == "src/Foo.java"
+        assert blocks[0].search == "old line"
+        assert blocks[0].replace == "new line"
+
+    def test_whole_response_wrapped_in_single_outer_fence(self) -> None:
+        """The entire response wrapped in one fence (path inside the fence,
+        directly above SEARCH) must still parse instead of returning zero
+        blocks."""
+        content = "```\n" + textwrap.dedent("""\
+            src/Foo.java
+            <<<<<<< SEARCH
+            old line
+            =======
+            new line
+            >>>>>>> REPLACE
+        """) + "```"
+        blocks = parse_search_replace_blocks(content)
+        assert len(blocks) == 1
+        assert blocks[0].file_path == "src/Foo.java"
+        assert blocks[0].search == "old line"
+        assert blocks[0].replace == "new line"
+
+    def test_multiple_blocks_inside_outer_fence(self) -> None:
+        content = "```text\n" + textwrap.dedent("""\
+            src/Foo.java
+            <<<<<<< SEARCH
+            alpha
+            =======
+            ALPHA
+            >>>>>>> REPLACE
+
+            src/Bar.java
+            <<<<<<< SEARCH
+            beta
+            =======
+            BETA
+            >>>>>>> REPLACE
+        """) + "```"
+        blocks = parse_search_replace_blocks(content)
+        assert len(blocks) == 2
+        assert blocks[0].file_path == "src/Foo.java"
+        assert blocks[1].file_path == "src/Bar.java"
+
 
 # ---------------------------------------------------------------------------
 # Applier tests
@@ -349,14 +408,16 @@ class TestApplyBlocks:
 class TestSearchReplacePrompts:
     def _make_bundle(self) -> object:
         """Build a minimal ContextBundle-like stub."""
-        from forge.context.bundle import ContextBundle, BundleFile
+        from forge.context.bundle import ContextBundle, ContextBundleFile
         from datetime import datetime, timezone
 
-        bf = BundleFile(
+        bf = ContextBundleFile(
             path="src/Foo.java",
             category="source",
-            score=1.0,
-            lines=5,
+            score=1,
+            line_count=5,
+            char_count=60,
+            token_estimate=15,
             symbols=["Foo"],
             excerpts=["public class Foo {", "    void m() {}", "}"],
         )

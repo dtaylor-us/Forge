@@ -17,10 +17,18 @@ class OllamaProvider:
 
     name = "ollama"
 
-    def __init__(self, host: str, timeout_seconds: int = 300) -> None:
+    def __init__(
+        self,
+        host: str,
+        timeout_seconds: int = 300,
+        num_predict: int | None = None,
+        context_window: int | None = None,
+    ) -> None:
         self.host = host.rstrip("/")
         self.endpoint = self.host
         self.timeout_seconds = timeout_seconds
+        self.num_predict = num_predict
+        self.context_window = context_window
 
     def list_models(self) -> list[ModelInfo]:
         payload = self._request("GET", "/api/tags")
@@ -41,16 +49,37 @@ class OllamaProvider:
         model: str,
         timeout_seconds: int | None = None,
     ) -> ModelResponse:
+        options: dict[str, int] = {}
+        # Ollama's server-side default num_ctx (commonly 2048 regardless of
+        # what the model itself supports) silently truncates large prompts —
+        # the model never sees the end of the prompt, let alone has room to
+        # finish a structured response. num_predict caps generation length the
+        # same way max_tokens does for Anthropic/OpenAI. Both are omitted from
+        # the request (left at Ollama's defaults) when not configured.
+        if self.context_window is not None:
+            options["num_ctx"] = self.context_window
+        if self.num_predict is not None:
+            options["num_predict"] = self.num_predict
+        body: dict[str, Any] = {"model": model, "prompt": prompt, "stream": False}
+        if options:
+            body["options"] = options
         payload = self._request(
             "POST",
             "/api/generate",
-            {"model": model, "prompt": prompt, "stream": False},
+            body,
             timeout_seconds=timeout_seconds,
         )
         response = payload.get("response")
         if not isinstance(response, str):
             raise ModelProviderError("Ollama returned an invalid response payload.")
-        return ModelResponse(content=response, model=model, provider=self.name)
+        # Ollama reports why generation stopped via `done_reason`: "stop" means
+        # the model finished naturally; "length" means it was cut off by
+        # num_predict or the context window filling up.
+        done_reason = payload.get("done_reason")
+        truncated = done_reason == "length"
+        return ModelResponse(
+            content=response, model=model, provider=self.name, truncated=truncated
+        )
 
     def is_running(self) -> bool:
         """Return whether the configured Ollama server responds."""

@@ -16,6 +16,7 @@ REPLACE_MARKER = ">>>>>>> REPLACE"
 # hunk lines like " some code" are excluded), and is not one of the markers.
 _FILEPATH_RE = re.compile(r"^[^\s].*[/.].*$")
 _ALL_MARKERS = frozenset({SEARCH_MARKER, SEP_MARKER, REPLACE_MARKER})
+_FENCE_RE = re.compile(r"^```\w*$")
 
 
 class ParseError(Exception):
@@ -42,7 +43,7 @@ def parse_search_replace_blocks(content: str) -> list[SearchReplaceBlock]:
     - Returns an empty list (not an exception) when no blocks are found so that
       callers can use the empty list as a signal to enter the repair loop.
     """
-    lines = content.splitlines(keepends=False)
+    lines = _strip_outer_fence(content).splitlines(keepends=False)
     blocks: list[SearchReplaceBlock] = []
     i = 0
     n = len(lines)
@@ -53,18 +54,23 @@ def parse_search_replace_blocks(content: str) -> list[SearchReplaceBlock]:
             i += 1
             continue
 
-        # Walk backwards from here to find the nearest non-blank, non-marker
-        # line — that is the file path.
+        # Walk backwards from here to find the nearest non-blank, non-marker,
+        # non-fence line — that is the file path. Models frequently wrap
+        # output in ```/```lang fences despite instructions not to; skipping
+        # those lines (the same way blank lines are skipped) keeps the file
+        # path attached to its block instead of silently dropping it.
         file_path: str | None = None
         for j in range(i - 1, -1, -1):
             candidate = lines[j].strip()
             if not candidate:
                 continue  # skip blank separator lines
+            if _FENCE_RE.match(candidate):
+                continue  # skip ``` / ```java fence delimiters
             if candidate in _ALL_MARKERS:
                 break  # bumped into another block's REPLACE marker
             if _FILEPATH_RE.match(candidate):
                 file_path = candidate
-            break  # first non-blank line wins regardless
+            break  # first non-blank, non-fence line wins regardless
 
         if file_path is None:
             # No file path found before this marker — skip it.
@@ -106,6 +112,26 @@ def parse_search_replace_blocks(content: str) -> list[SearchReplaceBlock]:
         )
 
     return blocks
+
+
+def _strip_outer_fence(content: str) -> str:
+    """Strip a single outermost ```/```lang ... ``` fence wrapping the whole response.
+
+    Models sometimes wrap an entire multi-block SEARCH/REPLACE response in one
+    fence despite "no Markdown fences" instructions. Per-block fences (a fence
+    immediately above an individual ``<<<<<<< SEARCH``) are handled separately
+    by skipping fence lines during the backward file-path scan; this handles
+    the case where the fence wraps everything, including the first file path.
+    """
+    stripped = content.strip()
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return content
+    if not _FENCE_RE.match(lines[0].strip()):
+        return content
+    if lines[-1].strip() != "```":
+        return content
+    return "\n".join(lines[1:-1])
 
 
 def _trim_fence_blank(lines: list[str]) -> str:

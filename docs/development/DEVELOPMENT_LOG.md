@@ -1,5 +1,146 @@
 # Dev Log
 
+## 2026-06-30 — SEARCH/REPLACE patch generation: fixed root cause and a default-flip regression
+
+### Summary
+
+Investigated `forge workflow bugfix "fix SessionControllerIntegrationTest"`
+(run `d76798b502274874`) failing at the `patch` stage with `Patch generation
+produced an invalid patch: No SEARCH/REPLACE blocks found in model output`.
+
+`docs/reports/patch-generation-fix-plan-20260630.md` (written earlier today)
+correctly identified that the SEARCH/REPLACE design itself is sound and that
+the bug is upstream I/O plumbing, but its primary root cause — a hardcoded
+1024-token cap in `forge/models/anthropic.py` / `openai.py` never wired
+through `ModelManager` — **does not apply to this run**: every dev-log entry
+today confirms the model in use is local `qwen2.5-coder:32b` via **Ollama**,
+and `ProviderConfig` / `ModelManager._provider()` is the live config path
+(`Settings.from_env()` / `create_provider()` are dead code, never called).
+`OllamaProvider.ask()` sent no `options` at all — no `num_ctx`, no
+`num_predict` — so Ollama's own server-side default context window (commonly
+2048 regardless of what the model itself supports) was silently truncating
+the prompt (a full numbered-gutter rendering of workset files, the most
+expensive part of which is exactly the large Java test file this task
+targets) before the model had room to emit a single complete
+`<<<<<<< SEARCH ... >>>>>>> REPLACE` block. The repair loop re-sent the same
+oversized prompt three more times, so retrying never had a chance to help.
+
+Also found, independently of the above: switching the default `output_format`
+to `"search_replace"` (this morning's earlier entry) broke 9 existing tests in
+`tests/test_implement.py` that build raw-unified-diff fixtures and call
+`.implement()` / invoke the `implement` CLI command without pinning
+`output_format="unified_diff"` — meaning the full suite was not run after that
+change landed. Two `tests/test_srp.py` prompt tests were also failing on
+import (`BundleFile` does not exist; the real class is `ContextBundleFile`
+with different field names), so neither prompt builder had any passing
+coverage.
+
+### Root cause and fix
+
+1. **No `num_ctx`/`num_predict` sent to Ollama.** `forge/config/manager.py`:
+   added `max_tokens` and `context_window` to `ProviderConfig` (defaults:
+   ollama `max_tokens=4096`, `context_window=8192`; anthropic/openai
+   `max_tokens=8192`, replacing the provider classes' own 1024 default).
+   `_provider_configs()` now backfills these for **existing**
+   `~/.forge/config.yaml` files that predate the fields, the same way it
+   already backfilled `timeout_seconds` for ollama — without this, an
+   upgrade would silently keep `None` and the fix would be invisible to
+   anyone who already has a config file on disk. `forge/models/ollama.py`:
+   `OllamaProvider` now accepts `num_predict` / `context_window` and sends
+   them as `options.num_ctx` / `options.num_predict` on `/api/generate`
+   when configured; omitted entirely (previous request shape) when not.
+   `forge/models/manager.py`: `_provider()` threads `provider_config.max_tokens`
+   / `.context_window` through to all three provider constructors.
+
+2. **Truncation was invisible.** `ModelResponse` gained a `truncated: bool`
+   field. Each provider sets it from the signal it already receives but
+   discarded: Ollama's `done_reason == "length"`, Anthropic's
+   `stop_reason == "max_tokens"`, OpenAI's
+   `incomplete_details.reason == "max_output_tokens"`.
+   `implementation_service._parse_and_apply_srp()` now takes a `truncated`
+   flag and, when zero SEARCH/REPLACE blocks are found *and* the response was
+   truncated, prepends a specific, actionable error instead of the generic
+   "no blocks found" message — the two failure modes (cut off mid-token vs.
+   model ignored the format) previously looked identical to the caller.
+
+3. **Workflow failures discarded the diagnostic artifact.** `_stage_patch` in
+   `forge/workflows/engine.py` already had `impl.raw_response_path` (the
+   saved raw model output) available but only used
+   `impl.validation_errors` when raising `WorkflowEngineError`. It now
+   appends the artifact path to the error, so `forge workflow bugfix`
+   surfaces it directly instead of requiring `forge workflow show` /
+   source-reading to find it.
+
+4. **Fence-wrapped SEARCH/REPLACE output silently dropped.**
+   `forge/srp/parser.py`'s backward scan for a block's file path bumped into
+   a ` ``` `/` ```lang ` fence line (models often fence output despite "no
+   Markdown fences" instructions) and gave up, returning zero blocks — same
+   end symptom as truncation. Fixed two ways: (a) the backward scan now
+   skips fence delimiter lines the same way it already skips blanks, so a
+   per-block fence directly above `<<<<<<< SEARCH` no longer hides the path
+   line above it; (b) `parse_search_replace_blocks()` strips a single
+   outermost fence wrapping the *entire* response before scanning, covering
+   the case where the model fences the whole multi-block reply at once.
+
+5. **Default-flip regression.** Pinned `output_format="unified_diff"` on the
+   7 `tests/test_implement.py` cases that specifically exercise legacy
+   unified-diff machinery (`verify_patch_context`, `_targeted_disk_excerpts`,
+   raw-diff content assertions) via direct `.implement()` calls or
+   `--output-format unified_diff` on CLI invocations; left the two
+   format-agnostic invalid-response tests unchanged.
+
+6. **`test_srp.py` prompt-builder tests never ran.** Fixed the
+   `BundleFile` → `ContextBundleFile` import and constructor fields
+   (`score`/`line_count`/`char_count`/`token_estimate` instead of a bare
+   `score: float` + `lines`) so `TestSearchReplacePrompts` actually executes
+   instead of erroring at import.
+
+### Files Modified
+
+- `forge/config/manager.py` — `max_tokens`/`context_window` fields, defaults,
+  parsing/backfill, rendering.
+- `forge/models/types.py` — `ModelResponse.truncated`.
+- `forge/models/ollama.py` — `num_predict`/`context_window` constructor args,
+  `options` payload, `done_reason` → `truncated`.
+- `forge/models/anthropic.py`, `forge/models/openai.py` — `stop_reason` /
+  `incomplete_details` → `truncated`.
+- `forge/models/manager.py` — `_provider()` wires config into all three
+  provider constructors.
+- `forge/srp/parser.py` — fence-tolerant file-path scan, outer-fence strip.
+- `forge/services/implementation_service.py` — `_parse_and_apply_srp(...,
+  truncated=...)` with the truncation-specific diagnostic.
+- `forge/workflows/engine.py` — `raw_response_path` appended to the
+  `_stage_patch` failure message.
+- `tests/test_config_manager.py`, `tests/test_model_manager.py`,
+  `tests/test_ollama_provider.py`, `tests/test_provider_truncation.py` (new),
+  `tests/test_srp.py`, `tests/test_implement.py`, `tests/test_workflow.py` —
+  regression coverage for all of the above, plus the default-flip and
+  `BundleFile` fixes.
+
+### Verification
+
+- `python -m pytest tests/ -q -m "not integration"` (Python 3.12, per
+  project convention) — 592 passed, 3 failed. The 3 failures
+  (`test_anchor_realign_*` in `tests/test_patches.py`) are pre-existing,
+  unrelated to this incident, and live entirely in the deprecated
+  `output_format="unified_diff"` fallback path's anchor-line arithmetic
+  (introduced in this morning's hunk-realignment entry) — left as a known
+  issue rather than fixed here to keep this change scoped to the actual
+  failure.
+- `python -m ruff check` on every touched file — clean (one pre-existing
+  long-line/import-order warning each in `implementation_service.py`,
+  `srp/models.py`, and `workflows/engine.py`, none introduced by this change).
+
+### Known issue (separate, not fixed here)
+
+`realign_patch_hunk_headers`'s anchor-line fallback (`_anchor_line_delta` /
+`_rewrite_hunk_header` in `forge/patches/service.py`) has an off-by-one in
+the single-anchor case — 3 failing tests in `tests/test_patches.py`. This
+only affects the `output_format="unified_diff"` fallback path, which is no
+longer the default; tracked separately rather than fixed in this change.
+
+---
+
 ## 2026-06-30 — SEARCH/REPLACE patch generation (new default)
 
 ### Summary

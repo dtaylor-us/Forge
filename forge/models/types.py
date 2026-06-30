@@ -21,3 +21,9 @@ class ModelResponse:
     content: str
     model: str
     provider: str
+    truncated: bool = False
+    """True when the provider stopped generating because it hit an output
+    length limit (token cap or context window) rather than completing
+    naturally. Used to distinguish "the model ran out of room" from "the
+    model produced a complete but malformed response" — these need very
+    different repair prompts and error messages."""

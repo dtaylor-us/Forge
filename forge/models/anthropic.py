@@ -56,7 +56,10 @@ class AnthropicProvider:
             },
         )
         return ModelResponse(
-            content=_extract_message_text(payload), model=model, provider=self.name
+            content=_extract_message_text(payload),
+            model=model,
+            provider=self.name,
+            truncated=payload.get("stop_reason") == "max_tokens",
         )
 
     def _require_configured(self) -> None:
