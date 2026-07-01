@@ -213,6 +213,11 @@ def test_suggest_max_results(tmp_path):
 
 
 def test_suggest_identifier_finds_related_implementation_from_test_name(tmp_path):
+    # "PaymentControllerTest" exists verbatim in the repo, so the exact-target
+    # locator (forge.worksets.locator) force-locks onto it and reserves it
+    # ahead of everything else, before related-implementation scoring even
+    # runs. The related implementation files must still be discovered and
+    # included, just after the locked exact target rather than before it.
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "PaymentController.py").write_text("class PaymentController: pass\n")
     (tmp_path / "src" / "PaymentService.py").write_text("class PaymentService: pass\n")
@@ -224,7 +229,12 @@ def test_suggest_identifier_finds_related_implementation_from_test_name(tmp_path
     result = suggest_candidates("fix PaymentControllerTest", tmp_path)
     paths = [c.path.as_posix() for c in result.candidates]
 
-    assert paths.index("src/PaymentController.py") < paths.index("tests/PaymentControllerTest.py")
+    assert paths[0] == "tests/PaymentControllerTest.py"
+    locked = next(
+        c for c in result.candidates if c.path.as_posix() == "tests/PaymentControllerTest.py"
+    )
+    assert locked.required
+    assert "src/PaymentController.py" in paths
     assert "src/PaymentService.py" in paths
     assert "tests/PaymentControllerTest.py" in paths
 
@@ -523,6 +533,169 @@ def test_list_relevant_files_unbounded_includes_deeply_nested_file(tmp_path):
     target = Path("archon-api/src/test/java/SessionControllerIntegrationTest.java")
     assert target not in bounded
     assert target in unbounded
+
+
+# ---------------------------------------------------------------------------
+# Exact-target locator stage (forge.worksets.locator)
+#
+# The relationship scorer recognizes related identifiers like
+# "SessionController" but, on its own, never locks onto the exact file the
+# query names — relationship scoring then pulls in same-named concepts from
+# unrelated pillars (lens-api, specweaver-api, axiom-ui) that tie or beat the
+# real target on score. These tests pin the locator stage that runs before
+# normal candidate scoring: it force-includes exact filename-stem matches as
+# required candidates, reserves them ahead of max_results truncation, and
+# derives module affinity from the locked target's path to boost in-module
+# candidates and demote same-named candidates living under other modules.
+# ---------------------------------------------------------------------------
+
+
+def _write(tmp_path: Path, rel_path: str, content: str) -> None:
+    full = tmp_path / rel_path
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+
+
+_ARCHON_TEST_PATH = "archon-api/src/test/java/com/archon/api/SessionControllerIntegrationTest.java"
+_ARCHON_IMPL_PATH = "archon-api/src/main/java/com/archon/api/SessionController.java"
+_LENS_IMPL_PATH = "lens-api/src/main/java/com/lens/api/SessionController.java"
+_SPECWEAVER_IMPL_PATH = "specweaver-api/src/main/java/com/specweaver/api/SessionController.java"
+_AXIOM_IMPL_PATH = "axiom-ui/src/SessionController.ts"
+
+
+def test_exact_test_filename_is_force_included(tmp_path):
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    _write(tmp_path, _LENS_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _SPECWEAVER_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _AXIOM_IMPL_PATH, "export class SessionController {}\n")
+
+    result = suggest_candidates("SessionControllerIntegrationTest", tmp_path)
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert paths[0] == _ARCHON_TEST_PATH
+    target = next(c for c in result.candidates if c.path.as_posix() == _ARCHON_TEST_PATH)
+    assert target.required
+    assert any(r.label.startswith("Primary Match: exact target locked") for r in target.reasons)
+
+
+def test_exact_target_is_preserved_despite_max_results_truncation(tmp_path):
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    # Flood many unrelated modules with weakly-matching decoys (filename-only
+    # "session" overlap) so that, pre-fix, every max_results slot fills up
+    # with "primary"-group source files before the (test-category) exact
+    # target is ever reached.
+    for module in ["lens-api", "specweaver-api", "axiom-ui", "beacon-svc", "delta-svc"]:
+        for i in range(10):
+            _write(
+                tmp_path,
+                f"{module}/src/main/java/com/{module}/api/SessionController{i}.java",
+                f"public class SessionController{i} {{}}\n",
+            )
+
+    result = suggest_candidates(
+        "SessionControllerIntegrationTest", tmp_path, include_tests=True, max_results=20
+    )
+    paths = [c.path.as_posix() for c in result.candidates]
+
+    assert len(result.candidates) <= 20
+    assert _ARCHON_TEST_PATH in paths
+    target = next(c for c in result.candidates if c.path.as_posix() == _ARCHON_TEST_PATH)
+    assert target.required
+
+
+def test_module_affinity_prefers_archon_api_when_exact_target_is_under_it(tmp_path):
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    _write(tmp_path, _ARCHON_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _LENS_IMPL_PATH, "public class SessionController {}\n")
+
+    result = suggest_candidates(
+        "fix SessionControllerIntegrationTest", tmp_path, include_tests=True
+    )
+    by_path = {c.path.as_posix(): c for c in result.candidates}
+
+    archon_impl = by_path[_ARCHON_IMPL_PATH]
+    lens_impl = by_path[_LENS_IMPL_PATH]
+
+    assert archon_impl.confidence > lens_impl.confidence
+    assert any(r.label.startswith("Module Affinity") for r in archon_impl.reasons)
+    assert not any(r.label.startswith("Module Affinity") for r in lens_impl.reasons)
+
+
+def test_unrelated_session_controller_files_in_other_modules_are_demoted(tmp_path):
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    _write(tmp_path, _ARCHON_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _LENS_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _SPECWEAVER_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _AXIOM_IMPL_PATH, "export class SessionController {}\n")
+
+    result = suggest_candidates(
+        "fix SessionControllerIntegrationTest", tmp_path, include_tests=True
+    )
+    paths = [c.path.as_posix() for c in result.candidates]
+    by_path = {c.path.as_posix(): c for c in result.candidates}
+
+    archon_index = paths.index(_ARCHON_IMPL_PATH)
+    assert archon_index < paths.index(_LENS_IMPL_PATH)
+    assert archon_index < paths.index(_SPECWEAVER_IMPL_PATH)
+    assert archon_index < paths.index(_AXIOM_IMPL_PATH)
+
+    archon_impl = by_path[_ARCHON_IMPL_PATH]
+    lens_impl = by_path[_LENS_IMPL_PATH]
+    assert archon_impl.confidence > lens_impl.confidence
+    assert any("outside locked module" in r.label for r in lens_impl.reasons)
+
+
+def test_query_with_integration_test_suffix_sets_include_tests(tmp_path):
+    parsed = parse_query("SessionControllerIntegrationTest")
+    assert parsed.include_tests is True
+
+    # End-to-end: suggest_candidates defaults include_tests=False, but the
+    # query itself must still pull the test file in via the identifier suffix.
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    result = suggest_candidates("SessionControllerIntegrationTest", tmp_path, include_tests=False)
+    paths = [c.path.as_posix() for c in result.candidates]
+    assert _ARCHON_TEST_PATH in paths
+
+
+def test_repo_grep_discoverable_test_file_appears_in_workset_suggest(tmp_path):
+    from forge.services import repository_service
+
+    _write(
+        tmp_path,
+        _ARCHON_TEST_PATH,
+        "public class SessionControllerIntegrationTest {}\n",
+    )
+    _write(tmp_path, _LENS_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _SPECWEAVER_IMPL_PATH, "public class SessionController {}\n")
+    _write(tmp_path, _AXIOM_IMPL_PATH, "export class SessionController {}\n")
+
+    grep_result = repository_service.search(tmp_path, "SessionControllerIntegrationTest")
+    grep_paths = {match["path"] for match in grep_result["matches"]}
+    assert _ARCHON_TEST_PATH in grep_paths
+
+    suggestion = suggest_candidates("fix SessionControllerIntegrationTest", tmp_path)
+    suggest_paths = [c.path.as_posix() for c in suggestion.candidates]
+    assert _ARCHON_TEST_PATH in suggest_paths
 
 
 # ---------------------------------------------------------------------------

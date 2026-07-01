@@ -14,16 +14,27 @@ from forge.repository.files import (
 )
 from forge.worksets.candidate import WorksetCandidate
 from forge.worksets.identifiers import is_test_identifier, normalize_identifier, split_identifier
+from forge.worksets.locator import module_root_of
 from forge.worksets.query import MAX_TERM_WEIGHT, SearchTerm, WorksetQuery, parse_query
 
 # Confidence dominates ranking.
+SCORE_REQUIRED_TARGET = 100
 SCORE_EXACT_IDENTIFIER = 80
 SCORE_EXACT_FILENAME = 65
 SCORE_RELATIONSHIP = 55
+SCORE_MODULE_AFFINITY = 12
 SCORE_FILENAME_TERM = 14
 SCORE_PATH_TERM = 8
 SCORE_CONTENT_MATCH = 6
 SCORE_TEST_MATCH = 10
+
+# A same-named relationship candidate (e.g. another module's "SessionController")
+# found outside the locked exact-target module is almost always an unrelated
+# pillar's same-named concept, not the related implementation file the query
+# means. It still gets surfaced (deterministic discovery favors recall) but at
+# a fraction of the in-module relationship score so it sorts well behind the
+# real module's files instead of tying with them.
+SCORE_RELATIONSHIP_OUT_OF_MODULE = 6
 
 # Importance is intentionally smaller than direct relevance.
 IMPORTANCE_SOURCE = 8
@@ -79,10 +90,25 @@ def score_candidate(
     content_lines: list[str] | None = None,
     *,
     relationship: str | None = None,
+    module_root: str | None = None,
+    required: bool = False,
 ) -> WorksetCandidate:
-    """Score a file path against a parsed query and return an explainable candidate."""
+    """Score a file path against a parsed query and return an explainable candidate.
+
+    `required` marks a file that the deterministic exact-target locator
+    (`forge.worksets.locator.locate_exact_targets`) already force-included —
+    it must never be dropped by downstream ranking/truncation regardless of
+    how it scores here. `module_root` is the unambiguous top-level module
+    derived from those locked targets, used to boost candidates that live in
+    the same module and demote same-named relationship candidates that don't.
+    """
     query = _coerce_query(query_or_tokens)
-    candidate = WorksetCandidate(path=path, score=0, file_category=file_category(path))
+    candidate = WorksetCandidate(
+        path=path, score=0, file_category=file_category(path), required=required
+    )
+
+    if required:
+        _add_confidence(candidate, "Primary Match: exact target locked", SCORE_REQUIRED_TARGET)
 
     stem_normalized = normalize_identifier(path.stem)
     name_lower = path.name.lower()
@@ -109,11 +135,23 @@ def score_candidate(
         _add_confidence(candidate, "Primary Match: exact filename match", SCORE_EXACT_FILENAME)
 
     if relationship:
-        _add_confidence(
-            candidate,
-            f"Relationship: related implementation file ({relationship})",
-            SCORE_RELATIONSHIP,
+        candidate_module = module_root_of(path)
+        out_of_module = (
+            bool(module_root) and bool(candidate_module) and candidate_module != module_root
         )
+        if out_of_module:
+            _add_confidence(
+                candidate,
+                f"Relationship: related implementation file ({relationship}) "
+                f"[outside locked module {module_root!r}]",
+                SCORE_RELATIONSHIP_OUT_OF_MODULE,
+            )
+        else:
+            _add_confidence(
+                candidate,
+                f"Relationship: related implementation file ({relationship})",
+                SCORE_RELATIONSHIP,
+            )
 
     filename_terms = _matched_terms(name_lower, stem_normalized, stem_parts, term_values)
     if filename_terms:
@@ -134,6 +172,13 @@ def score_candidate(
 
     if candidate.file_category == "test" and query.include_tests:
         _add_confidence(candidate, "Test Match: test file included for task", SCORE_TEST_MATCH)
+
+    if module_root and candidate.confidence > 0 and module_root_of(path) == module_root:
+        _add_confidence(
+            candidate,
+            f"Module Affinity: under locked module {module_root!r}",
+            SCORE_MODULE_AFFINITY,
+        )
 
     _add_importance(candidate, path)
     candidate.score = candidate.confidence * 10 + candidate.importance
@@ -335,6 +380,12 @@ def _add_importance(candidate: WorksetCandidate, path: Path) -> None:
 
 
 def _rank_group(candidate: WorksetCandidate) -> str:
+    # Required candidates (the exact-target locator's force-included files,
+    # see forge.worksets.locator) are always placed first by
+    # forge.worksets.ranking.assemble_workset regardless of rank_group, so
+    # rank_group here stays purely about file category/match strength — it is
+    # only used to order required candidates *among themselves* and to order
+    # the remaining optional candidates that follow them.
     reason_labels = [reason.label for reason in candidate.reasons]
     if (
         any(label.startswith("Primary Match") for label in reason_labels)

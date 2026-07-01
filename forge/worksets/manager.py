@@ -40,6 +40,7 @@ def _candidate_to_file_entry(candidate: Any, root: Path) -> dict[str, Any]:
         "confidence": getattr(candidate, "confidence", 0),
         "importance": getattr(candidate, "importance", 0),
         "rank_group": getattr(candidate, "rank_group", "other"),
+        "required": getattr(candidate, "required", False),
         "category": candidate.file_category,
         "reasons": reasons,
         "manual": False,

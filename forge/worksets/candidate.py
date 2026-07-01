@@ -26,6 +26,7 @@ class WorksetCandidate:
     confidence: int = 0
     importance: int = 0
     rank_group: str = "other"
+    required: bool = False
 
     def add_reason(self, label: str, points: int) -> None:
         if any(reason.label == label for reason in self.reasons):

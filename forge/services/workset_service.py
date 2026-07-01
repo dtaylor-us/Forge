@@ -74,6 +74,7 @@ def suggest(
                 "confidence": candidate.confidence,
                 "importance": candidate.importance,
                 "rank_group": candidate.rank_group,
+                "required": candidate.required,
                 "file_category": candidate.file_category,
                 "reasons": [
                     {"label": reason.label, "score": reason.score} for reason in candidate.reasons

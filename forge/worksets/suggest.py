@@ -7,6 +7,7 @@ from pathlib import Path
 from forge.project.resolver import resolve_root
 from forge.repository.files import list_relevant_files
 from forge.worksets.candidate import WorksetCandidate, WorksetSuggestion
+from forge.worksets.locator import locate_exact_targets
 from forge.worksets.query import parse_query
 from forge.worksets.ranking import assemble_workset
 from forge.worksets.relationships import relationship_for_path, relationship_targets
@@ -70,35 +71,64 @@ def suggest_candidates(
     # before scoring can silently drop the very file the query is looking for in a large
     # repository. See list_relevant_files()'s docstring.
     all_files = list_relevant_files(root_path, max_results=None)
+
+    # Exact-target locator stage: runs before normal candidate scoring so a
+    # file the query names verbatim is locked onto deterministically, instead
+    # of competing with same-named relationship matches from unrelated
+    # modules on score alone. See forge.worksets.locator for the rationale.
+    exact_targets, module_root = locate_exact_targets(all_files, parsed_query)
+    required_paths = set(exact_targets)
+
     relationship_names = relationship_targets(parsed_query)
     candidates: list[WorksetCandidate] = []
     content_scan_budget = _CONTENT_SCAN_BUDGET
 
     for rel_path in all_files:
         category = file_category(rel_path)
-        if category == "test" and not parsed_query.include_tests:
+        is_required = rel_path in required_paths
+        if category == "test" and not parsed_query.include_tests and not is_required:
             continue
 
         relationship = relationship_for_path(rel_path, relationship_names)
 
         # Cheap pass: filename/path/identifier signal only, no disk I/O.
-        cheap_candidate = score_candidate(rel_path, parsed_query, None, relationship=relationship)
+        cheap_candidate = score_candidate(
+            rel_path,
+            parsed_query,
+            None,
+            relationship=relationship,
+            module_root=module_root,
+            required=is_required,
+        )
         candidate = cheap_candidate
-        if cheap_candidate.confidence > 0:
+        # Required (locked) targets always get a full content scan regardless
+        # of the budget — there are at most a handful of them, and they must
+        # never be dropped for lack of remaining budget.
+        if cheap_candidate.confidence > 0 or is_required:
             content_lines = _read_content_lines(root_path / rel_path)
             if content_lines is not None:
                 candidate = score_candidate(
-                    rel_path, parsed_query, content_lines, relationship=relationship
+                    rel_path,
+                    parsed_query,
+                    content_lines,
+                    relationship=relationship,
+                    module_root=module_root,
+                    required=is_required,
                 )
         elif content_scan_budget > 0:
             content_scan_budget -= 1
             content_lines = _read_content_lines(root_path / rel_path)
             if content_lines is not None:
                 candidate = score_candidate(
-                    rel_path, parsed_query, content_lines, relationship=relationship
+                    rel_path,
+                    parsed_query,
+                    content_lines,
+                    relationship=relationship,
+                    module_root=module_root,
+                    required=is_required,
                 )
 
-        if candidate.confidence >= _MIN_SCORE:
+        if candidate.confidence >= _MIN_SCORE or candidate.required:
             candidates.append(candidate)
 
     assembled = assemble_workset(candidates, max_results=max_results)
