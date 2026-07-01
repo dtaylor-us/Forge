@@ -10,12 +10,15 @@ from typing import Any, Literal
 
 from forge.edit_targets import EditableTargetSet, select_editable_targets
 from forge.execution import ExecutionService, ExecutionServiceError
+from forge.execution.context_budget import build_target_isolated_bundle
 from forge.execution.execution_prompt import (
     build_budgeted_numbered_file_details,
     build_implementation_prompt,
     build_repair_prompt,
     build_search_replace_prompt,
+    build_search_replace_regenerate_prompt,
     build_search_replace_repair_prompt,
+    build_target_isolated_file_details,
 )
 from forge.models.manager import ModelManager
 from forge.patches import (
@@ -52,6 +55,9 @@ class ImplementationResult:
     srp_failure_details: list[dict[str, Any]] | None = None
     editable_targets: EditableTargetSet | None = None
     rejected_files: list[str] | None = None
+    editable_context_files: list[str] | None = None
+    context_only_files: list[str] | None = None
+    omitted_files: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable result."""
@@ -78,6 +84,14 @@ class ImplementationResult:
                 self.editable_targets.to_dict() if self.editable_targets is not None else None
             ),
             "rejected_files": self.rejected_files or [],
+            # Implementation prompt target isolation diagnostics: which
+            # workset files received full SEARCH/REPLACE-ready content
+            # (editable_context_files), which were summarized only
+            # (context_only_files), and which were left out of the prompt
+            # entirely (omitted_files). See forge.execution.context_budget.
+            "editable_context_files": self.editable_context_files or [],
+            "context_only_files": self.context_only_files or [],
+            "omitted_files": self.omitted_files or [],
         }
 
 
@@ -206,6 +220,10 @@ class ImplementationService:
         )
         request.prompt = prompt
 
+        editable_context_files, context_only_files, omitted_files = _isolation_diagnostics(
+            task, request.context_bundle, editable_targets
+        )
+
         response = self._model_manager.ask(
             prompt=prompt,
             model=model,
@@ -221,19 +239,40 @@ class ImplementationService:
             truncated=response.truncated,
             editable_targets=editable_targets,
         )
-        file_details = _bundle_file_details(task, request.context_bundle)
+        # Target-isolated: only approved editable files ever get full,
+        # SEARCH/REPLACE-ready content here; everything else is summary-only
+        # or omitted entirely. Repair/regenerate prompts reuse this same
+        # rendering so a failed attempt never causes the full workset to be
+        # resent.
+        file_details = build_target_isolated_file_details(
+            task, request.context_bundle, editable_targets
+        )
 
-        while not srp_result.valid and not rejected_files and attempts_made < repair_attempts:
+        while not srp_result.valid and attempts_made < repair_attempts:
             attempts_made += 1
-            auth_excerpts = _srp_authoritative_excerpts(root, srp_result)
-            repair_prompt = build_search_replace_repair_prompt(
-                task=task,
-                original_response=raw_response,
-                failures=srp_result.errors,
-                failure_details=srp_result.failure_details,
-                file_details=file_details,
-                authoritative_excerpts=auth_excerpts,
-            )
+            if rejected_files:
+                # The model targeted files outside the approved set. Do not
+                # try to repair those specific edits — ask it to solve the
+                # task again using only approved editable files, without
+                # resending any content for the rejected files.
+                repair_prompt = build_search_replace_regenerate_prompt(
+                    task=task,
+                    original_response=raw_response,
+                    rejected_files=rejected_files,
+                    editable_targets=editable_targets,
+                    file_details=file_details,
+                )
+            else:
+                auth_excerpts = _srp_authoritative_excerpts(root, srp_result)
+                repair_prompt = build_search_replace_repair_prompt(
+                    task=task,
+                    original_response=raw_response,
+                    failures=srp_result.errors,
+                    failure_details=srp_result.failure_details,
+                    file_details=file_details,
+                    authoritative_excerpts=auth_excerpts,
+                    editable_targets=editable_targets,
+                )
             repair_response = self._model_manager.ask(
                 prompt=repair_prompt,
                 model=model,
@@ -272,6 +311,9 @@ class ImplementationService:
                     test_warning=test_warning,
                     repair_attempts_made=attempts_made,
                     editable_targets=editable_targets,
+                    editable_context_files=editable_context_files,
+                    context_only_files=context_only_files,
+                    omitted_files=omitted_files,
                 )
             # SRP applied OK but the resulting diff is still invalid (edge case).
             # Fall through to rejected result below.
@@ -295,6 +337,9 @@ class ImplementationService:
                 test_warning=test_warning,
                 repair_attempts_made=attempts_made,
                 editable_targets=editable_targets,
+                editable_context_files=editable_context_files,
+                context_only_files=context_only_files,
+                omitted_files=omitted_files,
             )
 
         # SRP itself failed (parse error or block not found).
@@ -316,6 +361,9 @@ class ImplementationService:
             srp_failure_details=[detail.to_dict() for detail in srp_result.failure_details],
             editable_targets=editable_targets,
             rejected_files=rejected_files,
+            editable_context_files=editable_context_files,
+            context_only_files=context_only_files,
+            omitted_files=omitted_files,
         )
 
     # ------------------------------------------------------------------
@@ -669,6 +717,24 @@ def _bundle_file_details(task: str, bundle: Any) -> str:
     miscounted hunk header it produced the first time.
     """
     return build_budgeted_numbered_file_details(task, bundle)
+
+
+def _isolation_diagnostics(
+    task: str, bundle: Any, editable_targets: EditableTargetSet
+) -> tuple[list[str], list[str], list[str]]:
+    """Compute the editable/context/omitted file-path split for JSON diagnostics.
+
+    Mirrors the same target-isolated split used to build the SEARCH/REPLACE
+    prompt (``build_target_isolated_bundle``) so ``ImplementationResult.to_dict()``
+    can report exactly which files received full editable content, which were
+    summarized only, and which were left out of the prompt entirely.
+    """
+    prompt_context = build_target_isolated_bundle(task, bundle, editable_targets)
+    return (
+        [f.path for f in prompt_context.editable_files],
+        [f.path for f in prompt_context.context_files],
+        [f.path for f in prompt_context.omitted_files],
+    )
 
 
 def _targeted_disk_excerpts(

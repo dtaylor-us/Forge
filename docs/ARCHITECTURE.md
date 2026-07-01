@@ -150,6 +150,79 @@ metadata includes `editable_targets` and `rejected_files`. If a required target
 is missing, patch generation fails before the model call with workset recovery
 commands.
 
+### Implementation Prompt Target Isolation
+
+Editable target enforcement is a validation gate applied to what the model
+*submits*. It does not, on its own, stop the model from being *shown* full
+content for files it should not touch — a workset built for a bugfix task
+legitimately contains DTOs, repositories, and adjacent controllers the model
+needs to read to reason about the fix, but is not allowed to edit. Handing all
+of that content to the model in SEARCH/REPLACE-ready form invites edits to
+those files, which are then rejected after the fact instead of never being
+attempted.
+
+**Workset files are not the same set as editable prompt files.** Forge
+computes a third, narrower split — `ImplementationPromptContext`
+(`forge/execution/context_budget.py`) — every time it builds a SEARCH/REPLACE
+prompt, driven by the already-computed `EditableTargetSet`:
+
+- **Editable files** — the approved editable targets. These, and only these,
+  receive full, budgeted, line-numbered, SEARCH/REPLACE-ready content. Content
+  budgeting (`budget_implementation_context`) runs over this subset alone, so
+  a highly-scored non-editable file can never consume the "full content"
+  budget an approved target needs.
+- **Context files** — workset files that share a top-level module directory
+  with at least one approved editable target (for example a DTO or repository
+  next to the controller being fixed). These get a short, non-SEARCH-ready
+  summary: category, symbols, and a one-line reason. No verbatim source, no
+  line numbers.
+- **Omitted files** — workset files under a different top-level module than
+  any approved target (for example a UI package when the fix is scoped to an
+  API module). These are left out of the implementation prompt entirely,
+  noted only in an optional "Omitted Workset Files" diagnostic section. A
+  root-level file such as `README.md` is never treated as cross-module purely
+  for lacking a directory — module comparison only applies when both sides
+  have one.
+- When approved targets have no shared module root at all (a flat repository,
+  or a task with no strong identifier where most of the workset is already
+  approved via `allowed_context`), nothing is classified as cross-module and
+  everything left over is treated as context, not omitted.
+
+`build_search_replace_prompt` renders this as three prompt sections —
+"Editable File Content" (SEARCH-ready), "Context-Only Files" (summary table,
+explicitly labeled non-editable), and an optional "Omitted Workset Files"
+diagnostic — replacing what used to be a single "Detailed File Context"
+section built from the entire workset. The prompt wording is strict rather
+than advisory: "You may ONLY emit SEARCH/REPLACE blocks for files listed under
+Approved Editable Files. Any block for any other file will be rejected."
+
+Repair and regeneration follow-ups reuse the same split via
+`build_target_isolated_file_details`, so a failed attempt never causes the
+full workset to be resent. The two follow-up prompts serve different failure
+modes:
+
+- `build_search_replace_repair_prompt` — the model targeted an approved file
+  but its SEARCH content didn't match (the pre-existing repair path). Now also
+  includes an "Approved Editable Files" section so the repair attempt stays
+  scoped instead of implicitly reopening the full workset.
+- `build_search_replace_regenerate_prompt` — the model emitted blocks for
+  disallowed files. Rather than trying to repair those specific edits, this
+  names the rejected files explicitly and asks the model to solve the task
+  again using only the approved editable files; it never resends content for
+  the rejected files. `ImplementationService` selects between the two based on
+  whether the previous attempt's `rejected_files` list is non-empty.
+
+`ImplementationResult.to_dict()` (and workflow run artifacts) expose the split
+as `editable_context_files`, `context_only_files`, and `omitted_files`, so a
+failed run can be diagnosed without re-deriving which files the prompt
+actually offered as editable.
+
+This reuses the existing editable-target selector, context budgeting, edit
+plan, and SRP applier; it does not add embeddings, semantic search, or a new
+editable-target algorithm. Editable target enforcement (rejecting blocks for
+disallowed files after the fact) remains the safety gate — prompt target
+isolation reduces how often that gate has to fire.
+
 ### Provider Abstractions
 
 Provider abstractions live under `forge/models/`. They normalize Ollama, OpenAI,
@@ -401,6 +474,10 @@ are emitted as `ArtifactRelationship` entries.
 - No patch is automatically applied. The workflow stops before `apply`.
 - SEARCH/REPLACE blocks are constrained by the approved editable target set;
   wrong-file edits are rejected before patch application or validation.
+- The implementation prompt itself is target-isolated (see "Implementation
+  Prompt Target Isolation" above): only approved editable targets receive
+  full content, so the model is discouraged from attempting wrong-file edits
+  in the first place, not just rejected after the fact.
 - The engine imports services inside stage methods (lazy imports) to keep the
   module boundary clean and allow service-level mocking in tests.
 - `WorkflowEngine` never calls models directly. All model calls remain inside

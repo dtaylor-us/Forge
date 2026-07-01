@@ -1,5 +1,85 @@
 # Dev Log
 
+## 2026-07-01 — Implementation Prompt Target Isolation
+
+### Summary
+
+Fixed the remaining `forge workflow bugfix "fix SessionControllerIntegrationTest"`
+failure mode: editable target enforcement (2026-06-30, below) correctly *rejects*
+model edits to files outside the approved target set, but the implementation
+prompt was still handing the model full, SEARCH/REPLACE-ready content for every
+workset file — DTOs, an unrelated workshop model, a repository, and a
+cross-module controller — not just the two approved targets. The model kept
+being invited to edit files it was never allowed to touch, and Forge kept
+rejecting the result after the fact instead of never inviting the edit.
+
+Root cause: **workset files != editable prompt files**. `build_search_replace_prompt`
+rendered its "Detailed File Context" section from the entire workset via
+`build_budgeted_numbered_file_details`, independent of the already-computed
+`EditableTargetSet`. Budget scoring (`budget_implementation_context`) could also
+spend its "full content" quota on a highly-scored non-editable file before an
+approved target got a look-in.
+
+### What changed
+
+- Added `ImplementationPromptContext` and `build_target_isolated_bundle` to
+  `forge/execution/context_budget.py`. Given a workset bundle and an
+  `EditableTargetSet`, it splits workset files into three tiers:
+  - **editable** — approved targets; content budgeting now runs over this
+    subset alone, so a non-editable file can never steal the full-content
+    budget an approved target needs.
+  - **context** — files sharing a top-level module directory with an approved
+    target (e.g. a DTO next to the controller being fixed); summarized only
+    (category, symbols, one-line reason), never verbatim, never line-numbered.
+  - **omitted** — files under a different top-level module than any approved
+    target (e.g. a UI package for an API-scoped fix); left out of the prompt
+    entirely, noted only in an optional diagnostic section. A root-level file
+    (`README.md`) is never treated as cross-module purely for lacking a
+    directory of its own.
+- Rewrote the SEARCH/REPLACE prompt template (`forge/execution/execution_prompt.py`)
+  to replace the single "Detailed File Context" section with three: "Editable
+  File Content" (SEARCH-ready, editable files only), "Context-Only Files"
+  (summary table, explicitly labeled non-editable), and an optional "Omitted
+  Workset Files" diagnostic. Wording is strict throughout: "You may ONLY emit
+  SEARCH/REPLACE blocks for files listed under Approved Editable Files. Any
+  block for any other file will be rejected." No permissive "unless
+  unavoidable" language.
+- Added `build_target_isolated_file_details()`, shared by the main prompt and
+  both follow-up prompts, so repair/regeneration never resends the full
+  workset.
+- Added `build_search_replace_regenerate_prompt()` for the specific failure
+  mode where the model targeted disallowed files: instead of trying to repair
+  those edits, it names the rejected files, shows only approved-file content,
+  and asks the model to solve the task again using only approved targets.
+  `build_search_replace_repair_prompt()` (SEARCH-content-mismatch repairs)
+  gained an `editable_targets` parameter and now also includes an "Approved
+  Editable Files" section. `ImplementationService._implement_search_replace`
+  now selects between the two based on whether the previous attempt's
+  `rejected_files` is non-empty, and the repair loop runs for that case too
+  (previously a disallowed-file response failed immediately with zero repair
+  attempts).
+- `ImplementationResult.to_dict()` now reports `editable_context_files`,
+  `context_only_files`, and `omitted_files` alongside the existing
+  `editable_targets` / `rejected_files` diagnostics.
+
+### Verification
+
+- `pytest tests/` — 625 passed, 4 skipped (pre-existing environment-gated
+  skips, unrelated to this change).
+- `ruff check .` — all checks passed.
+- New coverage: `tests/test_context_budget.py` (unit tests for
+  `build_target_isolated_bundle`: approved/context/omitted classification,
+  root-level-file handling, no-module-root fallback, budget isolation) plus
+  new cases in `tests/test_implement.py` reproducing the
+  `SessionControllerIntegrationTest` bug report end to end — approved targets
+  get full content, `SessionDto.java` / `WorkshopSession.java` /
+  `WorkshopSessionRepository.java` / `WorkshopSessionDto.java` are
+  context-only, `lens-api/.../ReviewSessionController.java` is omitted — plus
+  repair/regenerate prompt tests and a disallowed-file-then-recovery
+  integration test.
+
+---
+
 ## 2026-06-30 — Editable Target Enforcement
 
 ### Summary

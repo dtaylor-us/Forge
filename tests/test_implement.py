@@ -17,7 +17,7 @@ from forge.models.errors import ModelProviderError
 from forge.models.types import ModelResponse
 from forge.planning.planner import ImplementationPlan
 from forge.services.implementation_service import ImplementationService
-from forge.worksets.store import save
+from forge.worksets.store import load, save
 
 runner = CliRunner()
 
@@ -176,8 +176,14 @@ def test_search_replace_prompt_uses_budgeted_context_and_edit_targets(tmp_path: 
     assert "| src/Big.java | modify |" in prompt
     assert "Content mode: focused excerpt" in prompt
     assert "Reason: large primary target, budget-limited" in prompt
-    assert "### README.md" in prompt
-    assert "Content mode: summary plus excerpt" in prompt
+    # README.md is not an approved editable target (no strong identifier match
+    # for it), so it must appear only in the context-only summary table — no
+    # "###" file-content header, no verbatim/line-numbered source.
+    assert "# Context-Only Files" in prompt
+    assert "You may NOT emit SEARCH/REPLACE blocks for them." in prompt
+    assert "| README.md | docs |" in prompt
+    assert "### README.md" not in prompt
+    assert "doc 1" not in prompt
 
 
 def test_valid_model_diff_is_saved_as_patch(tmp_path: Path) -> None:
@@ -928,3 +934,472 @@ def test_required_edit_target_missing_fails_before_model_call(tmp_path: Path) ->
     )
     assert result.editable_targets is not None
     assert result.editable_targets.missing_required == ["SessionControllerIntegrationTest"]
+
+
+# ---------------------------------------------------------------------------
+# Implementation prompt target isolation
+#
+# Workset files != editable prompt files. These tests reproduce the
+# `forge workflow bugfix "fix SessionControllerIntegrationTest"` failure
+# described in the target-isolation spec: the workset legitimately contains
+# DTOs, a repository, an unrelated workshop model, and a cross-module
+# controller alongside the two approved editable targets. The implementation
+# prompt must hand out full, SEARCH/REPLACE-ready content only for the
+# approved targets.
+# ---------------------------------------------------------------------------
+
+
+def _isolation_fixture_files() -> list[SimpleNamespace]:
+    def _mk(path: str, *, category: str = "source", score: int = 50) -> SimpleNamespace:
+        return SimpleNamespace(
+            path=path,
+            category=category,
+            score=score,
+            line_count=10,
+            char_count=200,
+            symbols=[path.rsplit("/", 1)[-1].split(".")[0]],
+            error=None,
+            summary=[f"{path} summary"],
+            dependency_hints=[],
+            reasons=[],
+            excerpts=[f"// {path} line {i}" for i in range(1, 11)],
+        )
+
+    return [
+        _mk(
+            "archon-api/src/test/java/com/archon/api/SessionControllerIntegrationTest.java",
+            category="test",
+            score=100,
+        ),
+        _mk("archon-api/src/main/java/com/archon/api/controller/SessionController.java", score=90),
+        _mk("archon-api/src/main/java/com/archon/api/dto/SessionDto.java", score=60),
+        _mk(
+            "archon-api/src/main/java/com/archon/api/workshop/domain/model/WorkshopSession.java",
+            score=55,
+        ),
+        _mk(
+            "archon-api/src/main/java/com/archon/api/workshop/domain/repository/"
+            "WorkshopSessionRepository.java",
+            score=55,
+        ),
+        _mk(
+            "archon-api/src/main/java/com/archon/api/workshop/dto/WorkshopSessionDto.java",
+            score=55,
+        ),
+        _mk(
+            "lens-api/src/main/java/com/lens/api/controller/ReviewSessionController.java",
+            score=40,
+        ),
+    ]
+
+
+def test_srp_prompt_isolates_editable_targets_from_cross_module_context() -> None:
+    """Reproduces the SessionControllerIntegrationTest bug report end to end."""
+    from forge.edit_targets import select_editable_targets
+    from forge.execution.execution_prompt import build_search_replace_prompt
+
+    files = _isolation_fixture_files()
+    bundle = SimpleNamespace(
+        workset_name="session-fix",
+        query="fix SessionControllerIntegrationTest",
+        root="/repo",
+        generated_at="2026-06-30T00:00:00Z",
+        files=files,
+    )
+    plan = SimpleNamespace(content="Fix the failing integration test.")
+    task = "fix SessionControllerIntegrationTest"
+    editable_targets = select_editable_targets(task, bundle)
+
+    prompt, _ = build_search_replace_prompt(
+        task, bundle, plan, "model-x", editable_targets=editable_targets
+    )
+
+    approved = [
+        "archon-api/src/test/java/com/archon/api/SessionControllerIntegrationTest.java",
+        "archon-api/src/main/java/com/archon/api/controller/SessionController.java",
+    ]
+    non_editable = [
+        "archon-api/src/main/java/com/archon/api/dto/SessionDto.java",
+        "archon-api/src/main/java/com/archon/api/workshop/domain/model/WorkshopSession.java",
+        "archon-api/src/main/java/com/archon/api/workshop/domain/repository/"
+        "WorkshopSessionRepository.java",
+        "archon-api/src/main/java/com/archon/api/workshop/dto/WorkshopSessionDto.java",
+        "lens-api/src/main/java/com/lens/api/controller/ReviewSessionController.java",
+    ]
+
+    # Approved editable targets get a "###" content header and their
+    # verbatim, line-numbered source.
+    for path in approved:
+        assert f"### {path}" in prompt
+        assert f"// {path} line 1" in prompt
+
+    # None of the non-editable files ever get a content header or their
+    # verbatim source, whether they are same-module context or cross-module
+    # omitted files.
+    for path in non_editable:
+        assert f"### {path}" not in prompt
+        assert f"// {path} line 1" not in prompt
+
+    # Same-module DTO/repository/model files are surfaced as context-only.
+    assert "# Context-Only Files" in prompt
+    assert "SessionDto.java" in prompt
+    assert "WorkshopSession.java" in prompt
+    assert "WorkshopSessionRepository.java" in prompt
+    assert "WorkshopSessionDto.java" in prompt
+
+    # The cross-module lens-api controller is omitted from the prompt
+    # entirely, surfaced only in the diagnostic omitted-files section.
+    assert "# Omitted Workset Files" in prompt
+    assert "lens-api/src/main/java/com/lens/api/controller/ReviewSessionController.java" in prompt
+
+
+def test_workflow_bugfix_prompt_never_sends_full_content_for_non_targets(tmp_path: Path) -> None:
+    """Same scenario, exercised through ImplementationService.implement end to end."""
+    files_meta = []
+    for f in _isolation_fixture_files():
+        abs_path = tmp_path / f.path
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_text("\n".join(f.excerpts) + "\n", encoding="utf-8")
+        files_meta.append(
+            {
+                "path": f.path,
+                "score": f.score,
+                "category": f.category,
+                "reasons": [],
+                "manual": False,
+            }
+        )
+    save(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "name": "session-fix",
+            "query": "fix SessionControllerIntegrationTest",
+            "root": str(tmp_path),
+            "created_at": "2026-06-30T00:00:00+00:00",
+            "updated_at": "2026-06-30T00:00:00+00:00",
+            "include_tests": True,
+            "max_results": 20,
+            "files": files_meta,
+        },
+    )
+    manager = FakeModelManager("no valid blocks")
+
+    ImplementationService(manager).implement(
+        tmp_path,
+        "fix SessionControllerIntegrationTest",
+        "session-fix",
+        repair_attempts=0,
+        output_format="search_replace",
+    )
+
+    assert len(manager.prompts) == 1
+    sent_prompt = manager.prompts[0][0]
+    assert (
+        "### archon-api/src/main/java/com/archon/api/controller/SessionController.java"
+        in sent_prompt
+    )
+    for path in (
+        "archon-api/src/main/java/com/archon/api/dto/SessionDto.java",
+        "archon-api/src/main/java/com/archon/api/workshop/domain/model/WorkshopSession.java",
+        "lens-api/src/main/java/com/lens/api/controller/ReviewSessionController.java",
+    ):
+        assert f"### {path}" not in sent_prompt
+
+
+def test_feature_workflow_without_strong_identifier_still_gets_full_content() -> None:
+    """Regression: tasks without a strong identifier still get editable content."""
+    from forge.edit_targets import select_editable_targets
+    from forge.execution.execution_prompt import build_search_replace_prompt
+
+    files = [
+        SimpleNamespace(
+            path="forge/services/foo_service.py",
+            category="source",
+            score=40,
+            line_count=20,
+            char_count=400,
+            symbols=["FooService"],
+            error=None,
+            summary=["foo service"],
+            dependency_hints=[],
+            reasons=[],
+            excerpts=[f"line {i}" for i in range(1, 21)],
+        ),
+        SimpleNamespace(
+            path="forge/services/bar_service.py",
+            category="source",
+            score=35,
+            line_count=15,
+            char_count=300,
+            symbols=["BarService"],
+            error=None,
+            summary=["bar service"],
+            dependency_hints=[],
+            reasons=[],
+            excerpts=[f"line {i}" for i in range(1, 16)],
+        ),
+    ]
+    bundle = SimpleNamespace(
+        workset_name="feature-ws",
+        query="add caching to services",
+        root="/repo",
+        generated_at="2026-06-30T00:00:00Z",
+        files=files,
+    )
+    plan = SimpleNamespace(content="Add caching.")
+    task = "add caching to services"
+    editable_targets = select_editable_targets(task, bundle)
+
+    prompt, _ = build_search_replace_prompt(
+        task, bundle, plan, "model-x", editable_targets=editable_targets
+    )
+
+    assert "### forge/services/foo_service.py" in prompt
+    assert "### forge/services/bar_service.py" in prompt
+    assert "# Omitted Workset Files" not in prompt
+
+
+def test_docs_workflow_edits_readme_when_explicitly_targeted() -> None:
+    """Regression: an explicitly-targeted doc file remains editable."""
+    from forge.edit_targets import select_editable_targets
+    from forge.execution.execution_prompt import build_search_replace_prompt
+
+    files = [
+        SimpleNamespace(
+            path="README.md",
+            category="docs",
+            score=50,
+            line_count=10,
+            char_count=200,
+            symbols=[],
+            error=None,
+            summary=["readme"],
+            dependency_hints=[],
+            reasons=[],
+            excerpts=[f"doc line {i}" for i in range(1, 11)],
+        ),
+    ]
+    bundle = SimpleNamespace(
+        workset_name="docs-ws",
+        query="update README",
+        root="/repo",
+        generated_at="2026-06-30T00:00:00Z",
+        files=files,
+    )
+    plan = SimpleNamespace(content="Update the README.")
+    # Lowercase "readme" avoids being parsed as a strong (code) identifier —
+    # see forge.edit_targets.selector._is_strong_identifier — so this task
+    # exercises the "no strong identifier, but explicitly targeted doc file"
+    # branch of select_editable_targets.
+    task = "update readme with new install steps"
+    editable_targets = select_editable_targets(task, bundle)
+
+    prompt, _ = build_search_replace_prompt(
+        task, bundle, plan, "model-x", editable_targets=editable_targets
+    )
+
+    assert "### README.md" in prompt
+    assert "doc line 1" in prompt
+
+
+def test_srp_repair_prompt_includes_approved_editable_files() -> None:
+    from forge.edit_targets.models import EditableTarget, EditableTargetSet
+    from forge.execution.execution_prompt import build_search_replace_repair_prompt
+
+    targets = EditableTargetSet(
+        task="fix Foo",
+        workset_name="ws",
+        targets=[
+            EditableTarget(
+                path="src/Foo.java",
+                reason="exact identifier match: Foo",
+                confidence="primary",
+                required=True,
+            )
+        ],
+    )
+
+    prompt = build_search_replace_repair_prompt(
+        task="fix Foo",
+        original_response="src/Foo.java\n<<<<<<< SEARCH\nmissing\n=======\nnew\n>>>>>>> REPLACE",
+        failures=["src/Foo.java: SEARCH content not found in file."],
+        file_details="### src/Foo.java",
+        editable_targets=targets,
+    )
+
+    assert "Approved Editable Files" in prompt
+    assert "src/Foo.java" in prompt
+    assert "exact identifier match: Foo" in prompt
+
+
+def test_regenerate_prompt_asks_for_regeneration_using_approved_targets_only() -> None:
+    from forge.edit_targets.models import EditableTarget, EditableTargetSet
+    from forge.execution.execution_prompt import build_search_replace_regenerate_prompt
+
+    targets = EditableTargetSet(
+        task="fix Foo",
+        workset_name="ws",
+        targets=[
+            EditableTarget(
+                path="src/Foo.java",
+                reason="exact identifier match: Foo",
+                confidence="primary",
+                required=True,
+            )
+        ],
+    )
+
+    prompt = build_search_replace_regenerate_prompt(
+        task="fix Foo",
+        original_response="bad/Other.java\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE",
+        rejected_files=["bad/Other.java"],
+        editable_targets=targets,
+        file_details="### src/Foo.java\nContent mode: full content",
+    )
+
+    assert "Patch Regeneration Request" in prompt
+    assert "bad/Other.java" in prompt
+    assert "src/Foo.java" in prompt
+    assert "solve the task again using only the approved editable files" in prompt
+    assert "do not target these again" in prompt.lower()
+
+
+def test_srp_block_for_context_only_same_module_file_is_rejected(tmp_path: Path) -> None:
+    """A same-module (non-cross-module) context-only file is still rejected."""
+    _make_session_workset(tmp_path)
+    dto = tmp_path / "archon-api/src/main/java/com/acme/SessionDto.java"
+    dto.parent.mkdir(parents=True, exist_ok=True)
+    dto.write_text(
+        "package com.acme;\n\npublic class SessionDto {\n    String id;\n}\n",
+        encoding="utf-8",
+    )
+    data = load(tmp_path, "session-fix")
+    data["files"].append(
+        {
+            "path": "archon-api/src/main/java/com/acme/SessionDto.java",
+            "score": 60,
+            "category": "source",
+            "reasons": [],
+            "manual": False,
+        }
+    )
+    save(tmp_path, data)
+
+    response = """archon-api/src/main/java/com/acme/SessionDto.java
+<<<<<<< SEARCH
+    String id;
+=======
+    String id;
+    String status;
+>>>>>>> REPLACE
+"""
+    manager = FakeModelManager(response)
+
+    with patch("forge.services.implementation_service.apply_blocks") as apply_mock:
+        result = ImplementationService(manager).implement(
+            tmp_path,
+            "fix SessionControllerIntegrationTest",
+            "session-fix",
+            repair_attempts=0,
+            output_format="search_replace",
+        )
+
+    apply_mock.assert_not_called()
+    assert result.valid is False
+    assert result.status == "rejected"
+    assert result.rejected_files == ["archon-api/src/main/java/com/acme/SessionDto.java"]
+    assert result.context_only_files is not None
+    assert "archon-api/src/main/java/com/acme/SessionDto.java" in result.context_only_files
+
+
+def test_implementation_result_json_includes_isolation_diagnostics(tmp_path: Path) -> None:
+    _make_session_workset(tmp_path)
+    response = """archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java
+<<<<<<< SEARCH
+class SessionControllerIntegrationTest {
+    void passes() {}
+}
+=======
+class SessionControllerIntegrationTest {
+    void passes() {}
+    void failsBeforeFix() {}
+}
+>>>>>>> REPLACE
+"""
+    manager = FakeModelManager(response)
+
+    result = ImplementationService(manager).implement(
+        tmp_path,
+        "fix SessionControllerIntegrationTest",
+        "session-fix",
+        repair_attempts=0,
+        output_format="search_replace",
+    )
+
+    data = result.to_dict()
+    assert (
+        "archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java"
+        in data["editable_context_files"]
+    )
+    assert (
+        "archon-api/src/main/java/com/acme/SessionController.java"
+        in data["editable_context_files"]
+    )
+    assert "axiom-ui/src/views/specweaver/SessionView.tsx" in data["omitted_files"]
+
+
+def test_srp_disallowed_file_regenerates_and_recovers(tmp_path: Path) -> None:
+    """A disallowed-file attempt triggers regeneration (not repair) and can still succeed."""
+    _make_session_workset(tmp_path)
+
+    disallowed_response = MagicMock(
+        content=(
+            "axiom-ui/src/views/specweaver/SessionView.tsx\n"
+            "<<<<<<< SEARCH\n"
+            "export function SessionView() { return null; }\n"
+            "=======\n"
+            "export function SessionView() { return <div />; }\n"
+            ">>>>>>> REPLACE\n"
+        ),
+        model="test-model",
+        truncated=False,
+    )
+    recovered_response = MagicMock(
+        content=(
+            "archon-api/src/test/java/com/acme/SessionControllerIntegrationTest.java\n"
+            "<<<<<<< SEARCH\n"
+            "class SessionControllerIntegrationTest {\n"
+            "    void passes() {}\n"
+            "}\n"
+            "=======\n"
+            "class SessionControllerIntegrationTest {\n"
+            "    void passes() {}\n"
+            "    void failsBeforeFix() {}\n"
+            "}\n"
+            ">>>>>>> REPLACE\n"
+        ),
+        model="test-model",
+        truncated=False,
+    )
+    manager = MagicMock()
+    manager.config.return_value.default_model = "test-model"
+    manager.ask.side_effect = [disallowed_response, recovered_response]
+
+    result = ImplementationService(manager).implement(
+        tmp_path,
+        "fix SessionControllerIntegrationTest",
+        "session-fix",
+        repair_attempts=1,
+        output_format="search_replace",
+    )
+
+    assert result.valid is True
+    assert result.repair_attempts_made == 1
+    assert manager.ask.call_count == 2
+    second_prompt = manager.ask.call_args_list[1].kwargs["prompt"]
+    assert "Patch Regeneration Request" in second_prompt
+    assert "axiom-ui/src/views/specweaver/SessionView.tsx" in second_prompt
+    # The rejected file's on-disk content must never be resent in the
+    # editable/context file-details section of the regenerate prompt.
+    assert "### axiom-ui/src/views/specweaver/SessionView.tsx" not in second_prompt

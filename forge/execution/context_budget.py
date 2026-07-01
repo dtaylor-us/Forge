@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from forge.context.bundle import ContextBundle, ContextBundleFile
 from forge.context.excerpt import OMIT_MARKER
-from forge.execution.edit_plan import EditPlan
+from forge.edit_targets import EditableTargetSet
+from forge.execution.edit_plan import EditPlan, derive_edit_plan
 
 implementation_context_window = 12_000
 max_full_files = 6
@@ -251,4 +253,120 @@ def _is_infrastructure_file(file: ContextBundleFile) -> bool:
         or lowered.startswith((".github/", "infra/", "deploy/", "deployment/"))
         or lowered.endswith(("dockerfile", "makefile"))
         or "dockerfile" in lowered
+    )
+
+
+# ---------------------------------------------------------------------------
+# Implementation prompt target isolation
+#
+# Workset files != editable prompt files. A workset intentionally carries
+# broader context than the model is allowed to edit (related DTOs, adjacent
+# controllers, cross-module callers). Handing that same full, SEARCH/REPLACE-
+# ready content to the model invites it to emit edits for files outside the
+# approved editable target set — which Forge then has to reject after the
+# fact. This section produces a deterministic three-way split so implementation
+# prompts only ever hand out full content for approved editable targets.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImplementationPromptContext:
+    """Editable vs. context-only vs. omitted split of a workset for one prompt.
+
+    ``editable_files`` are the only files that receive full, budgeted,
+    SEARCH/REPLACE-ready content (rendered with the "N| " line-number
+    gutter). ``context_files`` are workset files relevant to understanding
+    the change but not approved for editing — they get summaries, symbols,
+    and dependency hints only, never verbatim source. ``omitted_files`` are
+    workset files outside the approved target's module that are left out of
+    the prompt entirely; they are retained here purely for diagnostics.
+    """
+
+    editable_files: list[BudgetedFileContext]
+    context_files: list[ContextBundleFile]
+    omitted_files: list[ContextBundleFile]
+    approved_paths: set[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable diagnostic summary."""
+        return {
+            "editable_context_files": [f.path for f in self.editable_files],
+            "context_only_files": [f.path for f in self.context_files],
+            "omitted_files": [f.path for f in self.omitted_files],
+            "approved_paths": sorted(self.approved_paths),
+        }
+
+
+def _normalize_path(path: str) -> str:
+    return path.strip().replace("\\", "/").lstrip("./")
+
+
+def _module_root(path: str) -> str | None:
+    """Return the top-level directory of ``path``, or ``None`` for a root-level file.
+
+    Root-level files (e.g. ``README.md``) do not belong to any particular
+    module, so they are never treated as "cross-module" on their own — only
+    files that sit under a *different* top-level directory than the approved
+    editable targets are.
+    """
+    parts = _normalize_path(path).split("/", 1)
+    return parts[0] if len(parts) > 1 else None
+
+
+def build_target_isolated_bundle(
+    task: str,
+    bundle: ContextBundle,
+    editable_targets: EditableTargetSet,
+    config: ContextBudgetConfig | None = None,
+) -> ImplementationPromptContext:
+    """Split ``bundle`` into editable / context-only / omitted files.
+
+    Editable-file content budgeting (full content vs. focused excerpt) is
+    computed over the editable subset only, so a large or highly-scored
+    non-editable workset file can never consume the "full content" budget
+    that an approved editable target needs.
+
+    Non-editable files are classified by module: files that share a
+    top-level directory with at least one approved editable target are
+    "context" (relevant, summarized, non-editable); files under an entirely
+    different top-level directory are "omitted" (left out of the prompt).
+    When no approved target has a module root (e.g. a flat repository, or a
+    task without a strong identifier where most workset files are already
+    approved), nothing is treated as cross-module and everything left over
+    is "context".
+    """
+    approved = editable_targets.allowed_paths()
+    primary_roots = {
+        root
+        for target in editable_targets.targets
+        if (root := _module_root(target.path)) is not None
+    }
+
+    editable_bundle_files = [f for f in bundle.files if _normalize_path(f.path) in approved]
+    context_files: list[ContextBundleFile] = []
+    omitted_files: list[ContextBundleFile] = []
+    for f in bundle.files:
+        if _normalize_path(f.path) in approved:
+            continue
+        root = _module_root(f.path)
+        if primary_roots and root is not None and root not in primary_roots:
+            omitted_files.append(f)
+        else:
+            context_files.append(f)
+
+    editable_sub_bundle = ContextBundle(
+        workset_name=bundle.workset_name,
+        query=bundle.query,
+        root=bundle.root,
+        generated_at=bundle.generated_at,
+        files=editable_bundle_files,
+    )
+    edit_plan = derive_edit_plan(task, editable_sub_bundle)
+    editable_files = budget_implementation_context(task, editable_sub_bundle, edit_plan, config)
+
+    return ImplementationPromptContext(
+        editable_files=editable_files,
+        context_files=context_files,
+        omitted_files=omitted_files,
+        approved_paths=approved,
     )

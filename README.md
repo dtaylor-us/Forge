@@ -282,6 +282,20 @@ and related implementation files are limited to the same module when possible.
 Blocks for unrelated context files, for example UI files in another package, are
 rejected before Forge attempts to apply them.
 
+That enforcement is a safety net for what the model *submits*; Forge also
+isolates what the model *sees*. The implementation prompt is built with three
+tiers, computed once per request: approved editable targets get full,
+line-numbered, SEARCH/REPLACE-ready content; other files in the same module
+(DTOs, repositories, adjacent classes the model may need to read but not edit)
+get a short summary — category, symbols, a one-line reason — with no verbatim
+source and no line numbers; and files outside the approved target's module
+(e.g. a UI package when the fix is scoped to an API module) are left out of
+the prompt entirely, noted only in an "Omitted Workset Files" diagnostic
+section. Repair and regeneration follow-ups reuse the same split, so a failed
+attempt never causes the full workset to be resent. `forge implement --json`
+and workflow run artifacts report the split as `editable_context_files`,
+`context_only_files`, and `omitted_files` for debugging.
+
 `forge patch validate` performs a two-phase check: structural format validation
 followed by `git apply --check` against the current working tree. Output
 includes `structural_valid`, `apply_check_valid`, validation errors, and
